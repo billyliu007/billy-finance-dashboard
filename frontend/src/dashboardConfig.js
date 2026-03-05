@@ -1,30 +1,43 @@
 const DEFAULT_CONFIG = {
-  valueColumnIndex: 1,
-  totalComponents: [
+  detailItems: [
     {
-      key: 'sgd_assets_in_cny',
-      cellRef: 'B26',
-      labelMatch: 'SGD Assets Total (As in RMB)',
-      displayName: 'SGD Assets Total (As in RMB)',
+      key: 'sgd_cash',
+      cellRef: 'B3',
+      displayName: 'SGD Cash (DBS Savings)',
+      type: 'asset',
+      category: 'Cash',
+      currency: 'SGD',
     },
     {
-      key: 'usd_assets_in_cny',
-      cellRef: 'B29',
-      labelMatch: 'USD Assets Total (As in RMB)',
-      displayName: 'USD Assets Total (As in RMB)',
+      key: 'USD_cash',
+      cellRef: 'B12',
+      displayName: 'USD Cash (Moomoo)',
+      type: 'asset',
+      category: 'Cash',
+      currency: 'USD',
     },
     {
-      key: 'cny_assets_total',
-      cellRef: 'B30',
-      labelMatch: 'RMB Assets Total',
-      displayName: 'RMB Assets Total',
+      key: 'USDT/USDC_cash',
+      cellRef: 'B11',
+      displayName: 'USDT/USDC(Binance)',
+      type: 'asset',
+      category: 'Cash',
+      currency: 'USD',
+    },
+    {
+      key: 'cny_cash_debt',
+      cellRef: 'B17',
+      displayName: 'CNY Cash Debt',
+      type: 'liability',
+      category: 'Debt',
+      currency: 'CNY',
     },
   ],
-  breakdown: {
-    labelColumnIndex: 0,
-    valueColumnIndex: 1,
-    percentColumnIndex: 2,
-  },
+  forexRange: "'Forex'!A1:C20",
+  forexRates: [
+    { currency: 'SGD', cellRef: 'C1' },
+    { currency: 'USD', cellRef: 'C2' },
+  ],
 };
 
 function parseJsonConfig(raw) {
@@ -44,14 +57,18 @@ function normalizeConfig(userConfig) {
   const merged = {
     ...DEFAULT_CONFIG,
     ...userConfig,
-    breakdown: {
-      ...DEFAULT_CONFIG.breakdown,
-      ...(userConfig.breakdown || {}),
-    },
   };
 
-  if (!Array.isArray(merged.totalComponents) || merged.totalComponents.length === 0) {
-    merged.totalComponents = DEFAULT_CONFIG.totalComponents;
+  if (!Array.isArray(merged.detailItems)) {
+    merged.detailItems = DEFAULT_CONFIG.detailItems;
+  }
+
+  if (!Array.isArray(merged.forexRates) || merged.forexRates.length === 0) {
+    merged.forexRates = DEFAULT_CONFIG.forexRates;
+  }
+
+  if (typeof merged.forexRange !== 'string' || merged.forexRange.trim() === '') {
+    merged.forexRange = DEFAULT_CONFIG.forexRange;
   }
 
   return merged;

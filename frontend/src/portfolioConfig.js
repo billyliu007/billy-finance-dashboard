@@ -10,6 +10,14 @@ const DEFAULT_CONFIG = {
       currentPriceCell: 'F28',
     },
     {
+      key: 'eth',
+      name: 'ETH',
+      category: 'Crypto Assets',
+      qtyCell: 'D36',
+      purchasePriceCell: 'C36',
+      currentPriceCell: 'F36',
+    },
+    {
       key: 'qqq',
       name: 'QQQ',
       category: 'Stock Assets',

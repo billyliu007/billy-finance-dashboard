@@ -1,0 +1,41 @@
+import KpiIcon from '../KpiIcon';
+import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters';
+
+export default function NetWorthSummaryCard({ hideValues, totalNetWorth, netWorthBounds, componentValues, missingComponents }) {
+  return (
+    <div className="kpiCard">
+      <p className="kpiLabel">
+        <KpiIcon type="networth" />
+        <span>Total Net Worth</span>
+      </p>
+      <p className={`kpiValue ${totalNetWorth >= 0 ? 'pos' : 'neg'}`}>
+        {formatMaybeHidden(hideValues, formatCny, totalNetWorth)}
+      </p>
+      {netWorthBounds && (
+        <div className="kpiDeltaRow">
+          <span className={`kpiDeltaItem ${netWorthBounds.pctToAth >= 0 ? 'pos' : 'neg'}`}>
+            <KpiIcon type="ath" />
+            vs ATH: {formatPercent(netWorthBounds.pctToAth)}
+          </span>
+          <span className={`kpiDeltaItem ${netWorthBounds.pctToAtl >= 0 ? 'pos' : 'neg'}`}>
+            <KpiIcon type="atl" />
+            vs ATL: {formatPercent(netWorthBounds.pctToAtl)}
+          </span>
+        </div>
+      )}
+
+      <ul className="kpiBreakdown">
+        {componentValues.map((component) => (
+          <li key={component.key}>
+            <span>{component.name}</span>
+            <strong className={component.value >= 0 ? 'pos' : 'neg'}>
+              {component.found ? formatMaybeHidden(hideValues, formatCny, component.value) : 'Not found'}
+            </strong>
+          </li>
+        ))}
+      </ul>
+
+      {missingComponents.length > 0 && <p className="kpiSource">Missing rows: {missingComponents.join(', ')}</p>}
+    </div>
+  );
+}
