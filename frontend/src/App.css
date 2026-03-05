@@ -260,6 +260,14 @@ h1 {
   letter-spacing: 0.01em;
 }
 
+.tableCard h3 {
+  margin: 14px 0 8px;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .portfolioCharts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -357,7 +365,7 @@ tbody tr:hover td {
   }
 
   .sideNav nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .mainContent {

@@ -61,19 +61,25 @@ export function aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fx
   const usdCashTotal = usdAssets.reduce((sum, item) => sum + item.value, 0);
   const usdRate = fxRates.USD;
   const usdAssetsInCny = Number.isFinite(usdRate) ? (usdCashTotal + usdPositionsTotal) * usdRate : 0;
+  const sgdFound = sgdAssets.length > 0 && sgdAssets.every((item) => item.cnyValue != null);
+  const cnyFound = cnyRows.length > 0;
+  const usdFound = Number.isFinite(usdRate) && (usdAssets.length > 0 || usdPositionsTotal > 0);
 
   return {
     sgd_assets_in_cny: {
-      found: sgdAssets.length > 0 && sgdAssets.every((item) => item.cnyValue != null),
+      found: sgdFound,
       value: sgdAssetsInCny,
+      reason: sgdFound ? null : sgdAssets.length === 0 ? 'No SGD cash rows' : 'Missing SGD/CNY rate',
     },
     cny_assets_total: {
-      found: cnyRows.length > 0,
+      found: cnyFound,
       value: cnyAssetsTotal,
+      reason: cnyFound ? null : 'No CNY cash rows',
     },
     usd_assets_in_cny: {
-      found: Number.isFinite(usdRate) && (usdAssets.length > 0 || usdPositionsTotal > 0),
+      found: usdFound,
       value: usdAssetsInCny,
+      reason: usdFound ? null : !Number.isFinite(usdRate) ? 'Missing USD/CNY rate' : 'No USD cash or positions',
     },
   };
 }

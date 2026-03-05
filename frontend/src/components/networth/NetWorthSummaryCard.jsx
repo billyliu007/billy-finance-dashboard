@@ -1,7 +1,13 @@
 import KpiIcon from '../KpiIcon';
 import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters';
 
-export default function NetWorthSummaryCard({ hideValues, totalNetWorth, netWorthBounds, componentValues, missingComponents }) {
+export default function NetWorthSummaryCard({
+  hideValues,
+  totalNetWorth,
+  netWorthBounds,
+  componentValues,
+  missingInputs,
+}) {
   return (
     <div className="kpiCard">
       <p className="kpiLabel">
@@ -35,7 +41,7 @@ export default function NetWorthSummaryCard({ hideValues, totalNetWorth, netWort
         ))}
       </ul>
 
-      {missingComponents.length > 0 && <p className="kpiSource">Missing rows: {missingComponents.join(', ')}</p>}
+      {missingInputs.length > 0 && <p className="kpiSource">Missing inputs: {missingInputs.join(', ')}</p>}
     </div>
   );
 }

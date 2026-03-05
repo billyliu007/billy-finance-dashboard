@@ -5,6 +5,7 @@ import PerformanceCharts from '../components/networth/PerformanceCharts';
 import PerformanceKpis from '../components/networth/PerformanceKpis';
 import { CASHFLOW_RANGE, NET_WORTH_COMPONENTS } from '../constants';
 import useSheetData from '../hooks/useSheetData';
+import useSheetsData from '../hooks/useSheetsData';
 import DASHBOARD_CONFIG from '../dashboardConfig';
 import PORTFOLIO_CONFIG from '../portfolioConfig';
 import { buildDynamicDomain, parseMoney, percentFromReference } from '../utils/formatters';
@@ -16,16 +17,34 @@ import {
   computeUsdPositionsTotal,
 } from '../utils/netWorth';
 
-function OverviewPanel({ hideValues }) {
-  const { headers, rows, isLoading, error } = useSheetData();
-  const { rows: cashflowRows } = useSheetData(CASHFLOW_RANGE);
-  const forexRange = DASHBOARD_CONFIG.forexRange || "'Forex'!A1:C20";
-  const { headers: forexHeaders, rows: forexRows } = useSheetData(forexRange);
-  const { headers: portfolioHeaders, rows: portfolioRows } = useSheetData(PORTFOLIO_CONFIG.range);
+const EMPTY_ROWS = [];
 
-  const fxRates = useMemo(() => {
-    return buildFxRates(forexHeaders, forexRows, DASHBOARD_CONFIG.forexRates);
-  }, [forexHeaders, forexRows]);
+function OverviewPanel({ hideValues }) {
+  const netWorthRange = DASHBOARD_CONFIG.netWorthRange || "'Net Worth'!A1:Z1000";
+  const forexRange = DASHBOARD_CONFIG.forexRange || "'Forex'!A1:C20";
+
+  const { sheets, isLoading, error } = useSheetsData([
+    netWorthRange,
+    forexRange,
+    PORTFOLIO_CONFIG.range,
+  ]);
+  const { rows: cashflowRows } = useSheetData(CASHFLOW_RANGE);
+
+  const netWorthSheet = sheets[0] || { headers: [], rows: [] };
+  const forexSheet = sheets[1] || { headers: [], rows: [] };
+  const portfolioSheet = sheets[2] || { headers: [], rows: [] };
+
+  const headers = netWorthSheet.headers || EMPTY_ROWS;
+  const rows = netWorthSheet.rows || EMPTY_ROWS;
+  const forexHeaders = forexSheet.headers || EMPTY_ROWS;
+  const forexRows = forexSheet.rows || EMPTY_ROWS;
+  const portfolioHeaders = portfolioSheet.headers || EMPTY_ROWS;
+  const portfolioRows = portfolioSheet.rows || EMPTY_ROWS;
+
+  const fxRates = useMemo(
+    () => buildFxRates(forexHeaders, forexRows, DASHBOARD_CONFIG.forexRates),
+    [forexHeaders, forexRows],
+  );
 
   const detailRows = useMemo(
     () =>
@@ -47,22 +66,26 @@ function OverviewPanel({ hideValues }) {
     [portfolioHeaders, portfolioRows],
   );
 
-  const aggregatedTotalsByKey = useMemo(() => {
-    return aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates);
-  }, [visibleDetailRows, usdPositionsTotal, fxRates]);
+  const aggregatedTotalsByKey = useMemo(
+    () => aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates),
+    [visibleDetailRows, usdPositionsTotal, fxRates],
+  );
 
   const componentValues = useMemo(
     () =>
       NET_WORTH_COMPONENTS.map((component) => ({
         key: component.key,
         name: component.displayName,
-        ...(aggregatedTotalsByKey[component.key] || { found: false, value: 0 }),
+        ...(aggregatedTotalsByKey[component.key] || { found: false, value: 0, reason: 'Missing data' }),
       })),
     [aggregatedTotalsByKey],
   );
 
-  const missingComponents = useMemo(
-    () => componentValues.filter((item) => !item.found).map((item) => item.name),
+  const missingInputs = useMemo(
+    () =>
+      componentValues
+        .filter((item) => !item.found)
+        .map((item) => `${item.name}: ${item.reason || 'Missing data'}`),
     [componentValues],
   );
 
@@ -114,7 +137,7 @@ function OverviewPanel({ hideValues }) {
               totalNetWorth={totalNetWorth}
               netWorthBounds={netWorthBounds}
               componentValues={componentValues}
-              missingComponents={missingComponents}
+              missingInputs={missingInputs}
             />
 
             <CashTableCard hideValues={hideValues} rows={visibleDetailRows} />

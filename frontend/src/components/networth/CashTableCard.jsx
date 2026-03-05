@@ -7,7 +7,7 @@ export default function CashTableCard({ hideValues, rows }) {
 
   return (
     <article className="tableCard">
-      <h2>Cash</h2>
+      <h2>Cash & Cash Debt</h2>
       <div className="tableWrap">
         <table>
           <thead>

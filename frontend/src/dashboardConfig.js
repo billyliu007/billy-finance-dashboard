@@ -1,4 +1,5 @@
 const DEFAULT_CONFIG = {
+  netWorthRange: "'Net Worth'!A1:Z1000",
   detailItems: [
     {
       key: 'sgd_cash',
@@ -65,6 +66,10 @@ function normalizeConfig(userConfig) {
 
   if (!Array.isArray(merged.forexRates) || merged.forexRates.length === 0) {
     merged.forexRates = DEFAULT_CONFIG.forexRates;
+  }
+
+  if (typeof merged.netWorthRange !== 'string' || merged.netWorthRange.trim() === '') {
+    merged.netWorthRange = DEFAULT_CONFIG.netWorthRange;
   }
 
   if (typeof merged.forexRange !== 'string' || merged.forexRange.trim() === '') {
