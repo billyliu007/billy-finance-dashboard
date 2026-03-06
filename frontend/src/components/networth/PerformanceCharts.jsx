@@ -12,9 +12,90 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useEffect, useState } from 'react';
 import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters';
 
+function formatDateOnlyLabel(rawValue) {
+  const raw = String(rawValue || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  if (raw.includes('T')) {
+    return raw.split('T')[0];
+  }
+
+  if (raw.includes(' ')) {
+    return raw.split(' ')[0];
+  }
+
+  return raw;
+}
+
+function MarkerLabel({ viewBox, value, color, side = 'top', offsetY = 0 }) {
+  if (!viewBox || !value) {
+    return null;
+  }
+
+  const labelText = String(value);
+  const approxCharWidth = 6.5;
+  const boxWidth = Math.max(68, Math.round(labelText.length * approxCharWidth + 12));
+  const boxHeight = 20;
+  let x = viewBox.x - boxWidth / 2;
+  let y = viewBox.y - 30 + offsetY;
+
+  if (side === 'left') {
+    x = viewBox.x - boxWidth - 10;
+    y = viewBox.y - boxHeight / 2 + offsetY;
+  } else if (side === 'right') {
+    x = viewBox.x + 10;
+    y = viewBox.y - boxHeight / 2 + offsetY;
+  } else if (side === 'bottom') {
+    x = viewBox.x - boxWidth / 2;
+    y = viewBox.y + 10 + offsetY;
+  }
+
+  x = Math.max(4, x);
+  y = Math.max(4, y);
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={boxWidth}
+        height={boxHeight}
+        rx={6}
+        fill="rgba(2, 6, 23, 0.88)"
+        stroke={color}
+        strokeWidth={1}
+      />
+      <text
+        x={x + boxWidth / 2}
+        y={y + 13}
+        textAnchor="middle"
+        fill="#e2e8f0"
+        fontSize={11}
+        fontWeight={600}
+      >
+        {labelText}
+      </text>
+    </g>
+  );
+}
+
 export default function PerformanceCharts({ hideValues, cashflowData, derivedSeries, netWorthDomain }) {
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 980px)');
+    const update = () => setIsSmallScreen(mediaQuery.matches);
+
+    update();
+    mediaQuery.addEventListener('change', update);
+    return () => mediaQuery.removeEventListener('change', update);
+  }, []);
+
   const latestPoint = cashflowData.length > 0 ? cashflowData[cashflowData.length - 1] : null;
   const highPoint = cashflowData.length > 0
     ? cashflowData.reduce((acc, item) => (item.netWorth > acc.netWorth ? item : acc), cashflowData[0])
@@ -43,11 +124,38 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
     existing.labels.push(label);
   });
 
-  const markerSummary = [
-    { key: 'latest', label: 'Latest', point: latestPoint, colorClass: 'trendLatest' },
-    { key: 'high', label: 'High', point: highPoint, colorClass: 'trendHigh' },
-    { key: 'low', label: 'Low', point: lowPoint, colorClass: 'trendLow' },
-  ].filter((item) => item.point);
+  const dateIndexByDate = new Map(cashflowData.map((item, index) => [item.date, index]));
+  const markerEntries = Array.from(markerByPoint.values()).map((marker) => {
+    const isHigh = marker.labels.includes('High');
+    const positionIndex = dateIndexByDate.get(marker.point.date) ?? 0;
+    const side = isHigh
+      ? 'top'
+      : positionIndex > cashflowData.length * 0.65
+        ? 'left'
+        : 'right';
+
+    return {
+      ...marker,
+      side,
+      offsetY: 0,
+    };
+  });
+
+  const latestMarker = markerEntries.find((item) => item.labels.includes('Latest'));
+  const lowMarker = markerEntries.find((item) => item.labels.includes('Low'));
+  const netWorthSpan = Math.max(
+    1,
+    (highPoint?.netWorth ?? 0) - (lowPoint?.netWorth ?? 0),
+  );
+  const isLatestLowTooClose = latestMarker
+    && lowMarker
+    && latestMarker !== lowMarker
+    && Math.abs(latestMarker.point.netWorth - lowMarker.point.netWorth) < netWorthSpan * 0.09;
+
+  if (isLatestLowTooClose) {
+    latestMarker.offsetY = -16;
+    lowMarker.offsetY = 16;
+  }
 
   return (
     <div className="portfolioCharts">
@@ -55,15 +163,16 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
         <h2>Net Worth Trend</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cashflowData} margin={{ top: 28, right: 18, left: 24, bottom: 8 }}>
+            <LineChart data={cashflowData} margin={{ top: 28, right: 12, left: isSmallScreen ? 6 : 24, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 12 }} />
+              <XAxis dataKey="date" tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis
                 domain={netWorthDomain}
-                tickFormatter={(value) => formatMaybeHidden(hideValues, formatCny, Number(value) || 0, '')}
-                tick={{ fill: '#94a3b8', fontSize: 12 }}
-                width={120}
-                tickMargin={6}
+                tick={isSmallScreen ? false : { fill: '#94a3b8', fontSize: 12 }}
+                tickLine={!isSmallScreen}
+                tickFormatter={isSmallScreen ? undefined : (value) => formatMaybeHidden(hideValues, formatCny, Number(value) || 0, '')}
+                width={isSmallScreen ? 8 : 120}
+                tickMargin={isSmallScreen ? 0 : 6}
               />
               <Tooltip
                 formatter={(value) => formatMaybeHidden(hideValues, formatCny, Number(value) || 0)}
@@ -77,33 +186,29 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                 itemStyle={{ color: '#e2e8f0' }}
               />
               <Line type="monotone" dataKey="netWorth" stroke="#22d3ee" strokeWidth={2.5} dot={false} />
-              {Array.from(markerByPoint.values()).map((marker) => (
+              {markerEntries.map((marker) => (
                 <ReferenceDot
                   key={`${marker.point.date}-${marker.point.netWorth}`}
                   x={marker.point.date}
                   y={marker.point.netWorth}
-                  r={4}
+                  r={5}
                   fill={marker.color}
                   stroke="#0b1220"
-                  strokeWidth={1.5}
-                  label={{
-                    value: `${marker.labels.join('/')} ${formatMaybeHidden(hideValues, formatCny, marker.point.netWorth, 'Hidden')}`,
-                    position: 'insideTop',
-                    fill: '#cbd5e1',
-                    fontSize: 11,
-                  }}
+                  strokeWidth={2}
+                  className={marker.labels.includes('Latest') ? 'trendDot trendDotLatest' : 'trendDot'}
+                  label={(props) => (
+                    <MarkerLabel
+                      viewBox={props.viewBox}
+                      color={marker.color}
+                      side={marker.side}
+                      offsetY={marker.offsetY}
+                      value={`${marker.labels.join('/')} ${formatMaybeHidden(hideValues, formatCny, marker.point.netWorth, 'Hidden')}`}
+                    />
+                  )}
                 />
               ))}
             </LineChart>
           </ResponsiveContainer>
-        </div>
-        <div className="trendMarkers">
-          {markerSummary.map((item) => (
-            <p key={item.key} className={item.colorClass}>
-              <span>{item.label}</span>
-              <strong>{formatMaybeHidden(hideValues, formatCny, item.point.netWorth, 'Hidden')}</strong>
-            </p>
-          ))}
         </div>
       </article>
 
@@ -113,7 +218,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={derivedSeries} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 12 }} />
+              <XAxis dataKey="date" tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis tickFormatter={(value) => `${value}%`} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <Tooltip
                 formatter={(value) => formatPercent(Number(value) || 0)}

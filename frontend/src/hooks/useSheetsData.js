@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { API_BASE_URL } from '../constants';
+import { fetchJson, getSheetLoadErrorMessage, isAbortError } from '../utils/api';
 
 export default function useSheetsData(ranges) {
   const normalizedRanges = Array.isArray(ranges)
@@ -33,19 +33,14 @@ export default function useSheetsData(ranges) {
         const params = new URLSearchParams();
         params.set('ranges', stableRanges.join(','));
 
-        const response = await fetch(`${API_BASE_URL}/api/sheets?${params.toString()}`, {
+        const data = await fetchJson('/api/sheets', {
+          params,
           signal: controller.signal,
         });
-
-        if (!response.ok) {
-          throw new Error('Backend returned an error response.');
-        }
-
-        const data = await response.json();
         setSheets(Array.isArray(data.sheets) ? data.sheets : []);
       } catch (err) {
-        if (err.name !== 'AbortError') {
-          setError('Could not load sheet data. Verify backend and Google Sheet settings.');
+        if (!isAbortError(err)) {
+          setError(getSheetLoadErrorMessage());
         }
       } finally {
         setIsLoading(false);

@@ -1,3 +1,5 @@
+import { parseJsonObject } from './utils/config';
+
 const DEFAULT_CONFIG = {
   netWorthRange: "'Net Worth'!A1:Z1000",
   detailItems: [
@@ -41,19 +43,6 @@ const DEFAULT_CONFIG = {
   ],
 };
 
-function parseJsonConfig(raw) {
-  if (!raw) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 function normalizeConfig(userConfig) {
   const merged = {
     ...DEFAULT_CONFIG,
@@ -79,6 +68,6 @@ function normalizeConfig(userConfig) {
   return merged;
 }
 
-const DASHBOARD_CONFIG = normalizeConfig(parseJsonConfig(import.meta.env.VITE_DASHBOARD_CONFIG));
+const DASHBOARD_CONFIG = normalizeConfig(parseJsonObject(import.meta.env.VITE_DASHBOARD_CONFIG));
 
 export default DASHBOARD_CONFIG;

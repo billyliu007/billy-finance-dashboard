@@ -15,6 +15,14 @@ import {
 import { HOLDING_COLORS } from '../../constants';
 import { formatMaybeHidden, formatMoney } from '../../utils/formatters';
 
+function HoldingAxisTick({ y, payload }) {
+  return (
+    <text x={0} y={y} dy={5} fill="#cbd5e1" fontSize={12} textAnchor="start">
+      {payload.value}
+    </text>
+  );
+}
+
 export default function PortfolioCharts({ hideValues, allocationData, chartData, assetColorMap }) {
   return (
     <div className="portfolioCharts">
@@ -63,14 +71,21 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
         <h2>Unrealized P/L by Holding</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
+            <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 18, left: 0, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis
                 type="number"
                 tickFormatter={(value) => formatMaybeHidden(hideValues, formatMoney, Number(value) || 0, '')}
                 tick={{ fill: '#94a3b8', fontSize: 12 }}
               />
-              <YAxis type="category" dataKey="name" width={100} tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={74}
+                interval={0}
+                tick={<HoldingAxisTick />}
+                tickLine={false}
+              />
               <Tooltip
                 formatter={(value) => formatMaybeHidden(hideValues, formatMoney, Number(value) || 0)}
                 contentStyle={{

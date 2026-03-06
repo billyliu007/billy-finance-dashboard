@@ -1,3 +1,5 @@
+import { parseJsonObject } from './utils/config';
+
 const DEFAULT_CONFIG = {
   range: "'Crypto/Stock Portfolio'!A1:Z400",
   assets: [
@@ -44,19 +46,6 @@ const DEFAULT_CONFIG = {
   ],
 };
 
-function parseJsonConfig(raw) {
-  if (!raw) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 function normalizeConfig(userConfig) {
   const merged = {
     ...DEFAULT_CONFIG,
@@ -70,6 +59,6 @@ function normalizeConfig(userConfig) {
   return merged;
 }
 
-const PORTFOLIO_CONFIG = normalizeConfig(parseJsonConfig(import.meta.env.VITE_PORTFOLIO_CONFIG));
+const PORTFOLIO_CONFIG = normalizeConfig(parseJsonObject(import.meta.env.VITE_PORTFOLIO_CONFIG));
 
 export default PORTFOLIO_CONFIG;

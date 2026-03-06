@@ -10,7 +10,6 @@ import DASHBOARD_CONFIG from '../dashboardConfig';
 import PORTFOLIO_CONFIG from '../portfolioConfig';
 import {
   buildDynamicDomain,
-  parseMoney,
   percentFromReference,
 } from '../utils/formatters';
 import { findComponentValue } from '../utils/sheet';
@@ -19,7 +18,13 @@ import {
   buildDetailRows,
   buildFxRates,
   computeUsdPositionsTotal,
+  mapCashDetailRowsToTableRows,
 } from '../utils/netWorth';
+import {
+  buildDerivedChangeSeries,
+  parseCashflowRows,
+  summarizeCashflow,
+} from '../utils/cashflow';
 
 const EMPTY_ROWS = [];
 
@@ -65,18 +70,7 @@ function OverviewPanel({ hideValues }) {
 
   const visibleDetailRows = useMemo(() => detailRows.filter((item) => item.found), [detailRows]);
   const holdingsRows = useMemo(
-    () =>
-      visibleDetailRows.map((item) => ({
-        key: `cash_${item.key}`,
-        className: item.category,
-        instrument: item.name,
-        currency: item.currency,
-        amountLocal: item.value,
-        fxRate: item.fxRate,
-        amountCny: item.cnyValue,
-        amountClass: item.value >= 0 ? 'pos' : 'neg',
-        amountCnyClass: item.cnyValue == null ? '' : item.cnyValue >= 0 ? 'pos' : 'neg',
-      })),
+    () => mapCashDetailRowsToTableRows(visibleDetailRows),
     [visibleDetailRows],
   );
 
@@ -113,16 +107,7 @@ function OverviewPanel({ hideValues }) {
     [componentValues],
   );
 
-  const cashflowData = useMemo(
-    () =>
-      cashflowRows
-        .map((row) => ({
-          date: String(row[0] || '').trim(),
-          netWorth: parseMoney(row[1]),
-        }))
-        .filter((item) => item.date !== '' && item.netWorth !== 0),
-    [cashflowRows],
-  );
+  const cashflowData = useMemo(() => parseCashflowRows(cashflowRows), [cashflowRows]);
 
   const netWorthBounds = useMemo(() => {
     if (cashflowData.length === 0) {
@@ -170,56 +155,10 @@ function OverviewPanel({ hideValues }) {
 function PerformancePanel({ hideValues }) {
   const { rows, isLoading, error } = useSheetData(CASHFLOW_RANGE);
 
-  const cashflowData = useMemo(
-    () =>
-      rows
-        .map((row) => {
-          const date = String(row[0] || '').trim();
-          const netWorth = parseMoney(row[1]);
-          return { date, netWorth };
-        })
-        .filter((item) => item.date !== '' && item.netWorth !== 0),
-    [rows],
-  );
+  const cashflowData = useMemo(() => parseCashflowRows(rows), [rows]);
 
-  const derivedSeries = useMemo(
-    () =>
-      cashflowData.map((item, index) => {
-        if (index === 0) {
-          return { ...item, derivedChangePct: 0 };
-        }
-        const prev = cashflowData[index - 1];
-        const derivedChangePct = prev.netWorth === 0 ? 0 : ((item.netWorth - prev.netWorth) / prev.netWorth) * 100;
-        return { ...item, derivedChangePct };
-      }),
-    [cashflowData],
-  );
-
-  const summary = useMemo(() => {
-    if (cashflowData.length === 0) {
-      return {
-        latest: { date: '-', netWorth: 0 },
-        peak: { date: '-', netWorth: 0 },
-        bottom: { date: '-', netWorth: 0 },
-        latestPeriodChangePct: 0,
-        latestPeriodSubtitle: '-',
-      };
-    }
-
-    const latest = cashflowData[cashflowData.length - 1];
-    const peak = cashflowData.reduce((acc, item) => (item.netWorth > acc.netWorth ? item : acc), cashflowData[0]);
-    const bottom = cashflowData.reduce((acc, item) => (item.netWorth < acc.netWorth ? item : acc), cashflowData[0]);
-    const prev = cashflowData.length > 1 ? cashflowData[cashflowData.length - 2] : null;
-    const latestPeriodChangePct = prev ? ((latest.netWorth - prev.netWorth) / prev.netWorth) * 100 : 0;
-
-    return {
-      latest,
-      peak,
-      bottom,
-      latestPeriodChangePct,
-      latestPeriodSubtitle: prev ? `${prev.date} -> ${latest.date}` : latest.date,
-    };
-  }, [cashflowData]);
+  const derivedSeries = useMemo(() => buildDerivedChangeSeries(cashflowData), [cashflowData]);
+  const summary = useMemo(() => summarizeCashflow(cashflowData), [cashflowData]);
 
   const netWorthDomain = useMemo(() => buildDynamicDomain(cashflowData, 'netWorth'), [cashflowData]);
 

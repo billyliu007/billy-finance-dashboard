@@ -83,3 +83,17 @@ export function aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fx
     },
   };
 }
+
+export function mapCashDetailRowsToTableRows(visibleDetailRows) {
+  return visibleDetailRows.map((item) => ({
+    key: `cash_${item.key}`,
+    className: item.category,
+    instrument: item.name,
+    currency: item.currency,
+    amountLocal: item.value,
+    fxRate: item.fxRate,
+    amountCny: item.cnyValue,
+    amountClass: item.value >= 0 ? 'pos' : 'neg',
+    amountCnyClass: item.cnyValue == null ? '' : item.cnyValue >= 0 ? 'pos' : 'neg',
+  }));
+}
