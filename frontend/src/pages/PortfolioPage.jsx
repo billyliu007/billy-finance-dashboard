@@ -30,7 +30,7 @@ export default function PortfolioPage({ hideValues }) {
         {!isLoading && error && <p className="error">{error}</p>}
         {!isLoading && !error && data?.isEmpty && <p>No portfolio rows found in the configured range.</p>}
 
-        {!isLoading && !error && !data?.isEmpty && (
+        {!isLoading && !error && data && !data.isEmpty && (
           <>
             <PortfolioKpis hideValues={hideValues} totals={data.totals} totalPnlPct={data.totalPnlPct} />
             <PortfolioCharts

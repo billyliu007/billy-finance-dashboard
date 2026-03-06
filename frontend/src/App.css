@@ -357,6 +357,22 @@ tbody tr:hover td {
   padding: 10px 12px;
 }
 
+.buildFooter {
+  position: fixed;
+  right: 10px;
+  bottom: 8px;
+  font-size: 10px;
+  color: rgba(191, 219, 254, 0.74);
+  background: rgba(7, 14, 28, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  padding: 2px 7px;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+}
+
 .recharts-legend-item-text {
   color: #cdd9ef !important;
 }

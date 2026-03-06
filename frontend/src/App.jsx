@@ -4,11 +4,34 @@ import NetWorthPage from './pages/NetWorthPage';
 import PortfolioPage from './pages/PortfolioPage';
 import './App.css';
 
+function resolveBuildVersion() {
+  const explicitVersion = import.meta.env.VITE_APP_VERSION;
+  if (explicitVersion) {
+    return String(explicitVersion);
+  }
+
+  if (import.meta.env.DEV) {
+    return 'dev-local';
+  }
+
+  if (typeof document === 'undefined') {
+    return '';
+  }
+
+  const scriptTag = Array.from(document.querySelectorAll('script[src]'))
+    .find((script) => /index-[A-Za-z0-9_-]+\.js$/.test(script.getAttribute('src') || ''));
+
+  const source = scriptTag?.getAttribute('src') || '';
+  const match = /index-([A-Za-z0-9_-]+)\.js$/.exec(source);
+  return match?.[1] || 'unknown';
+}
+
 export default function App() {
   const [hideValues, setHideValues] = useState(() => {
     const saved = localStorage.getItem('hide_values_enabled');
     return saved === 'true';
   });
+  const [buildVersion] = useState(() => resolveBuildVersion());
 
   useEffect(() => {
     localStorage.setItem('hide_values_enabled', String(hideValues));
@@ -44,6 +67,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/net-worth" replace />} />
         </Routes>
       </main>
+      {buildVersion && <span className="buildFooter">v {buildVersion}</span>}
     </div>
   );
 }
