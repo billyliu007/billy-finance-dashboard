@@ -43,13 +43,19 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
     existing.labels.push(label);
   });
 
+  const markerSummary = [
+    { key: 'latest', label: 'Latest', point: latestPoint, colorClass: 'trendLatest' },
+    { key: 'high', label: 'High', point: highPoint, colorClass: 'trendHigh' },
+    { key: 'low', label: 'Low', point: lowPoint, colorClass: 'trendLow' },
+  ].filter((item) => item.point);
+
   return (
     <div className="portfolioCharts">
       <article className="chartCard">
         <h2>Net Worth Trend</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cashflowData} margin={{ top: 8, right: 18, left: 24, bottom: 8 }}>
+            <LineChart data={cashflowData} margin={{ top: 28, right: 18, left: 24, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis
@@ -82,7 +88,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                   strokeWidth={1.5}
                   label={{
                     value: `${marker.labels.join('/')} ${formatMaybeHidden(hideValues, formatCny, marker.point.netWorth, 'Hidden')}`,
-                    position: 'top',
+                    position: 'insideTop',
                     fill: '#cbd5e1',
                     fontSize: 11,
                   }}
@@ -90,6 +96,14 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
               ))}
             </LineChart>
           </ResponsiveContainer>
+        </div>
+        <div className="trendMarkers">
+          {markerSummary.map((item) => (
+            <p key={item.key} className={item.colorClass}>
+              <span>{item.label}</span>
+              <strong>{formatMaybeHidden(hideValues, formatCny, item.point.netWorth, 'Hidden')}</strong>
+            </p>
+          ))}
         </div>
       </article>
 
