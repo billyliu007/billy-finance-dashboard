@@ -9,7 +9,7 @@ export default function CashTableCard({ hideValues, rows }) {
     <article className="tableCard">
       <h2>Cash & Cash Debt</h2>
       <div className="tableWrap">
-        <table>
+        <table className="cashMobileCompact">
           <thead>
             <tr>
               <th>Class</th>
@@ -23,21 +23,21 @@ export default function CashTableCard({ hideValues, rows }) {
           <tbody>
             {rows.map((item) => (
               <tr key={item.key}>
-                <td>{item.category}</td>
-                <td>{item.name}</td>
-                <td>{item.currency}</td>
-                <td className={item.value >= 0 ? 'pos' : 'neg'}>
-                  {formatMaybeHidden(hideValues, (v) => formatCurrencyValue(v, item.currency), item.value)}
+                <td data-label="Class">{item.className}</td>
+                <td data-label="Instrument">{item.instrument}</td>
+                <td data-label="CCY">{item.currency}</td>
+                <td data-label="Amount (Local)" className={item.amountClass}>
+                  {formatMaybeHidden(hideValues, (v) => formatCurrencyValue(v, item.currency), item.amountLocal)}
                 </td>
-                <td>
+                <td data-label="FX Rate (to CNY)">
                   {item.fxRate == null
                     ? 'Rate missing'
                     : formatMaybeHidden(hideValues, formatFxRate, item.fxRate)}
                 </td>
-                <td className={item.cnyValue == null ? '' : item.cnyValue >= 0 ? 'pos' : 'neg'}>
-                  {item.cnyValue == null
+                <td data-label="Amount (CNY)" className={item.amountCnyClass}>
+                  {item.amountCny == null
                     ? 'Rate missing'
-                    : formatMaybeHidden(hideValues, formatCny, item.cnyValue)}
+                    : formatMaybeHidden(hideValues, formatCny, item.amountCny)}
                 </td>
               </tr>
             ))}

@@ -1,6 +1,21 @@
 import KpiIcon from '../KpiIcon';
 import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters';
 
+function renderKpiName(name) {
+  const suffix = ' (As in CNY)';
+  if (!String(name).endsWith(suffix)) {
+    return name;
+  }
+
+  const base = name.slice(0, -suffix.length);
+  return (
+    <>
+      <span>{base}</span>
+      <span className="kpiNameSuffix">{suffix}</span>
+    </>
+  );
+}
+
 export default function NetWorthSummaryCard({
   hideValues,
   totalNetWorth,
@@ -33,7 +48,7 @@ export default function NetWorthSummaryCard({
       <ul className="kpiBreakdown">
         {componentValues.map((component) => (
           <li key={component.key}>
-            <span>{component.name}</span>
+            <span className="kpiName">{renderKpiName(component.name)}</span>
             <strong className={component.value >= 0 ? 'pos' : 'neg'}>
               {component.found ? formatMaybeHidden(hideValues, formatCny, component.value) : 'Not found'}
             </strong>

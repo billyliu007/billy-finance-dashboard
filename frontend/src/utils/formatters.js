@@ -40,6 +40,15 @@ export function formatCurrencyValue(value, currency = 'USD') {
   const normalized = normalizeCurrencyCode(currency);
   const locale = normalized === 'CNY' ? 'zh-CN' : 'en-US';
 
+  if (normalized === 'SGD') {
+    const abs = Math.abs(value);
+    const numberPart = new Intl.NumberFormat('en-US', {
+      maximumFractionDigits: 2,
+    }).format(abs);
+    const sign = value < 0 ? '-' : '';
+    return `${sign}S$${numberPart}`;
+  }
+
   try {
     return new Intl.NumberFormat(locale, {
       style: 'currency',

@@ -11,7 +11,7 @@ export default function PortfolioPositionsTable({ hideValues, rows }) {
     <article className="tableCard">
       <h2>Positions</h2>
       <div className="tableWrap">
-        <table>
+        <table className="positionsMobileCompact">
           <thead>
             <tr>
               <th>Asset</th>
@@ -29,16 +29,20 @@ export default function PortfolioPositionsTable({ hideValues, rows }) {
           <tbody>
             {rows.map((item) => (
               <tr key={item.key}>
-                <td>{item.name}</td>
-                <td>{item.category}</td>
-                <td>{formatMaybeHidden(hideValues, formatQty, item.qty)}</td>
-                <td>{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</td>
-                <td>{formatMaybeHidden(hideValues, formatMoney, item.totalPurchaseCost)}</td>
-                <td>{formatMaybeHidden(hideValues, formatMoney, item.currentPrice)}</td>
-                <td>{formatMaybeHidden(hideValues, formatMoney, item.currentValue)}</td>
-                <td>{formatPercentUnsigned(item.weightPct)}</td>
-                <td className={item.pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, item.pnl)}</td>
-                <td className={item.pnl >= 0 ? 'pos' : 'neg'}>{formatPercent(item.pnlPct)}</td>
+                <td data-label="Asset">{item.name}</td>
+                <td data-label="Asset Type">{item.category}</td>
+                <td data-label="Quantity">{formatMaybeHidden(hideValues, formatQty, item.qty)}</td>
+                <td data-label="Avg Cost per Unit">{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</td>
+                <td data-label="Cost Basis">{formatMaybeHidden(hideValues, formatMoney, item.totalPurchaseCost)}</td>
+                <td data-label="Market Price">{formatMaybeHidden(hideValues, formatMoney, item.currentPrice)}</td>
+                <td data-label="Market Value">{formatMaybeHidden(hideValues, formatMoney, item.currentValue)}</td>
+                <td data-label="Portfolio Weight (%)">{formatPercentUnsigned(item.weightPct)}</td>
+                <td data-label="Unrealized Gain/Loss" className={item.pnl >= 0 ? 'pos' : 'neg'}>
+                  {formatMaybeHidden(hideValues, formatMoney, item.pnl)}
+                </td>
+                <td data-label="Unrealized Return (%)" className={item.pnl >= 0 ? 'pos' : 'neg'}>
+                  {formatPercent(item.pnlPct)}
+                </td>
               </tr>
             ))}
           </tbody>

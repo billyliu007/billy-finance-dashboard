@@ -175,10 +175,23 @@ h1 {
   color: #d5e7ff;
 }
 
+.kpiBreakdown li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kpiNameSuffix {
+  display: inline;
+  font-size: 0.85em;
+  color: #9fb8d8;
+  font-weight: 500;
+}
+
 .kpiBreakdown strong {
   font-weight: 700;
   color: #ecfeff;
   font-variant-numeric: tabular-nums;
+  flex: none;
 }
 
 .kpiBreakdown strong.pos {
@@ -372,6 +385,13 @@ tbody tr:hover td {
     padding: 16px;
   }
 
+  .dashboardPanel,
+  .kpiCard,
+  .tableCard {
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .portfolioCharts,
   .kpiRow {
     grid-template-columns: 1fr;
@@ -379,5 +399,83 @@ tbody tr:hover td {
 
   .chartArea {
     height: 320px;
+  }
+
+  .kpiNameSuffix {
+    display: block;
+  }
+
+  .cashMobileCompact th:nth-child(1),
+  .cashMobileCompact td:nth-child(1),
+  .cashMobileCompact th:nth-child(3),
+  .cashMobileCompact td:nth-child(3),
+  .cashMobileCompact th:nth-child(5),
+  .cashMobileCompact td:nth-child(5),
+  .cashMobileCompact th:nth-child(6),
+  .cashMobileCompact td:nth-child(6) {
+    display: none;
+  }
+
+  .cashMobileCompact {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .cashMobileCompact th,
+  .cashMobileCompact td {
+    padding: 9px 8px;
+    font-size: 0.82rem;
+  }
+
+  .cashMobileCompact th:nth-child(2),
+  .cashMobileCompact td:nth-child(2) {
+    width: 68%;
+  }
+
+  .cashMobileCompact th:nth-child(4),
+  .cashMobileCompact td:nth-child(4) {
+    width: 32%;
+  }
+
+  .positionsMobileCompact th:nth-child(2),
+  .positionsMobileCompact td:nth-child(2),
+  .positionsMobileCompact th:nth-child(3),
+  .positionsMobileCompact td:nth-child(3),
+  .positionsMobileCompact th:nth-child(4),
+  .positionsMobileCompact td:nth-child(4),
+  .positionsMobileCompact th:nth-child(5),
+  .positionsMobileCompact td:nth-child(5),
+  .positionsMobileCompact th:nth-child(6),
+  .positionsMobileCompact td:nth-child(6),
+  .positionsMobileCompact th:nth-child(7),
+  .positionsMobileCompact td:nth-child(7),
+  .positionsMobileCompact th:nth-child(8),
+  .positionsMobileCompact td:nth-child(8),
+  .positionsMobileCompact th:nth-child(9),
+  .positionsMobileCompact td:nth-child(9) {
+    display: none;
+  }
+
+  .positionsMobileCompact {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .positionsMobileCompact th,
+  .positionsMobileCompact td {
+    padding: 9px 8px;
+    font-size: 0.82rem;
+  }
+
+  .positionsMobileCompact th:nth-child(1),
+  .positionsMobileCompact td:nth-child(1) {
+    width: 55%;
+  }
+
+  .positionsMobileCompact th:nth-child(10),
+  .positionsMobileCompact td:nth-child(10) {
+    width: 45%;
   }
 }

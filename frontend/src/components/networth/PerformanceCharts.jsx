@@ -5,6 +5,7 @@ import {
   Cell,
   Line,
   LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -14,10 +15,38 @@ import {
 import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters';
 
 export default function PerformanceCharts({ hideValues, cashflowData, derivedSeries, netWorthDomain }) {
+  const latestPoint = cashflowData.length > 0 ? cashflowData[cashflowData.length - 1] : null;
+  const highPoint = cashflowData.length > 0
+    ? cashflowData.reduce((acc, item) => (item.netWorth > acc.netWorth ? item : acc), cashflowData[0])
+    : null;
+  const lowPoint = cashflowData.length > 0
+    ? cashflowData.reduce((acc, item) => (item.netWorth < acc.netWorth ? item : acc), cashflowData[0])
+    : null;
+
+  const markerByPoint = new Map();
+  [
+    { point: latestPoint, label: 'Latest', color: '#22d3ee' },
+    { point: highPoint, label: 'High', color: '#22c55e' },
+    { point: lowPoint, label: 'Low', color: '#fb7185' },
+  ].forEach(({ point, label, color }) => {
+    if (!point) {
+      return;
+    }
+
+    const key = `${point.date}|${point.netWorth}`;
+    const existing = markerByPoint.get(key);
+    if (!existing) {
+      markerByPoint.set(key, { point, labels: [label], color });
+      return;
+    }
+
+    existing.labels.push(label);
+  });
+
   return (
     <div className="portfolioCharts">
       <article className="chartCard">
-        <h2>Net Worth Time Series</h2>
+        <h2>Net Worth Trend</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={cashflowData} margin={{ top: 8, right: 18, left: 24, bottom: 8 }}>
@@ -42,6 +71,23 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                 itemStyle={{ color: '#e2e8f0' }}
               />
               <Line type="monotone" dataKey="netWorth" stroke="#22d3ee" strokeWidth={2.5} dot={false} />
+              {Array.from(markerByPoint.values()).map((marker) => (
+                <ReferenceDot
+                  key={`${marker.point.date}-${marker.point.netWorth}`}
+                  x={marker.point.date}
+                  y={marker.point.netWorth}
+                  r={4}
+                  fill={marker.color}
+                  stroke="#0b1220"
+                  strokeWidth={1.5}
+                  label={{
+                    value: `${marker.labels.join('/')} ${formatMaybeHidden(hideValues, formatCny, marker.point.netWorth, 'Hidden')}`,
+                    position: 'top',
+                    fill: '#cbd5e1',
+                    fontSize: 11,
+                  }}
+                />
+              ))}
             </LineChart>
           </ResponsiveContainer>
         </div>

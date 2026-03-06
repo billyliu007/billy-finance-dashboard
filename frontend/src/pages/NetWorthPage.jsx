@@ -8,7 +8,11 @@ import useSheetData from '../hooks/useSheetData';
 import useSheetsData from '../hooks/useSheetsData';
 import DASHBOARD_CONFIG from '../dashboardConfig';
 import PORTFOLIO_CONFIG from '../portfolioConfig';
-import { buildDynamicDomain, parseMoney, percentFromReference } from '../utils/formatters';
+import {
+  buildDynamicDomain,
+  parseMoney,
+  percentFromReference,
+} from '../utils/formatters';
 import { findComponentValue } from '../utils/sheet';
 import {
   aggregateComputedTotals,
@@ -60,6 +64,21 @@ function OverviewPanel({ hideValues }) {
   );
 
   const visibleDetailRows = useMemo(() => detailRows.filter((item) => item.found), [detailRows]);
+  const holdingsRows = useMemo(
+    () =>
+      visibleDetailRows.map((item) => ({
+        key: `cash_${item.key}`,
+        className: item.category,
+        instrument: item.name,
+        currency: item.currency,
+        amountLocal: item.value,
+        fxRate: item.fxRate,
+        amountCny: item.cnyValue,
+        amountClass: item.value >= 0 ? 'pos' : 'neg',
+        amountCnyClass: item.cnyValue == null ? '' : item.cnyValue >= 0 ? 'pos' : 'neg',
+      })),
+    [visibleDetailRows],
+  );
 
   const usdPositionsTotal = useMemo(
     () => computeUsdPositionsTotal(PORTFOLIO_CONFIG.assets, portfolioHeaders, portfolioRows),
@@ -140,7 +159,7 @@ function OverviewPanel({ hideValues }) {
               missingInputs={missingInputs}
             />
 
-            <CashTableCard hideValues={hideValues} rows={visibleDetailRows} />
+            <CashTableCard hideValues={hideValues} rows={holdingsRows} />
           </>
         )}
       </div>
