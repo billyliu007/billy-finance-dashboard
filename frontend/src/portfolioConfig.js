@@ -37,7 +37,7 @@ const DEFAULT_CONFIG = {
     },
     {
       key: 'tsla',
-      name: 'Tesla',
+      name: 'TSLA',
       category: 'Stock Assets',
       qtyCell: 'D43',
       purchasePriceCell: 'C43',

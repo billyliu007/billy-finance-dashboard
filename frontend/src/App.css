@@ -476,8 +476,6 @@ tbody tr:hover td {
   .positionsMobileCompact td:nth-child(5),
   .positionsMobileCompact th:nth-child(6),
   .positionsMobileCompact td:nth-child(6),
-  .positionsMobileCompact th:nth-child(7),
-  .positionsMobileCompact td:nth-child(7),
   .positionsMobileCompact th:nth-child(8),
   .positionsMobileCompact td:nth-child(8),
   .positionsMobileCompact th:nth-child(9),
@@ -499,12 +497,17 @@ tbody tr:hover td {
 
   .positionsMobileCompact th:nth-child(1),
   .positionsMobileCompact td:nth-child(1) {
-    width: 55%;
+    width: 42%;
+  }
+
+  .positionsMobileCompact th:nth-child(7),
+  .positionsMobileCompact td:nth-child(7) {
+    width: 30%;
   }
 
   .positionsMobileCompact th:nth-child(10),
   .positionsMobileCompact td:nth-child(10) {
-    width: 45%;
+    width: 28%;
   }
 
   .kpiBreakdown li {

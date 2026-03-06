@@ -92,8 +92,13 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
     const update = () => setIsSmallScreen(mediaQuery.matches);
 
     update();
-    mediaQuery.addEventListener('change', update);
-    return () => mediaQuery.removeEventListener('change', update);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', update);
+      return () => mediaQuery.removeEventListener('change', update);
+    }
+
+    mediaQuery.addListener(update);
+    return () => mediaQuery.removeListener(update);
   }, []);
 
   const latestPoint = cashflowData.length > 0 ? cashflowData[cashflowData.length - 1] : null;

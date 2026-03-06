@@ -40,6 +40,8 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 innerRadius={55}
                 outerRadius={95}
                 paddingAngle={2}
+                labelLine={false}
+                label={({ percent }) => `${((percent || 0) * 100).toFixed(1)}%`}
               >
                 {allocationData.map((entry, index) => (
                   <Cell

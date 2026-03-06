@@ -1,6 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import { google } from 'googleapis';
+import DASHBOARD_CONFIG from './config/dashboardConfig.js';
+import PORTFOLIO_CONFIG from './config/portfolioConfig.js';
+import { buildNetWorthPayload } from './services/netWorthService.js';
+import { buildPortfolioPayload } from './services/portfolioService.js';
 
 const SHEETS_READONLY_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 const DEFAULT_SHEET_RANGE = 'Sheet1!A1:Z100';
@@ -127,6 +131,40 @@ export default function createApp() {
       return res.status(500).json({
         message: FETCH_ERROR_MESSAGE,
       });
+    }
+  });
+
+  app.get('/api/dashboard/net-worth', async (_req, res) => {
+    try {
+      const ranges = [
+        DASHBOARD_CONFIG.netWorthRange,
+        DASHBOARD_CONFIG.forexRange,
+        PORTFOLIO_CONFIG.range,
+        DASHBOARD_CONFIG.cashflowRange,
+      ];
+      const sheetsData = await fetchMultipleSheetRows(ranges);
+      const [netWorthSheet, forexSheet, portfolioSheet, cashflowSheet] = sheetsData;
+      const payload = buildNetWorthPayload({
+        netWorthSheet,
+        forexSheet,
+        portfolioSheet,
+        cashflowSheet,
+      });
+      return res.json(payload);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: FETCH_ERROR_MESSAGE });
+    }
+  });
+
+  app.get('/api/dashboard/portfolio', async (_req, res) => {
+    try {
+      const portfolioSheet = await fetchSheetRows(PORTFOLIO_CONFIG.range);
+      const payload = buildPortfolioPayload(portfolioSheet);
+      return res.json(payload);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: FETCH_ERROR_MESSAGE });
     }
   });
 
