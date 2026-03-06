@@ -7,13 +7,16 @@ import {
   Pie,
   PieChart,
   ReferenceLine,
+  Rectangle,
   ResponsiveContainer,
+  Sector,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import { useMemo, useState } from 'react';
 import { HOLDING_COLORS } from '../../constants';
-import { formatMaybeHidden, formatMoney } from '../../utils/formatters';
+import { formatMaybeHidden, formatMoney, formatPercent } from '../../utils/formatters';
 
 function HoldingAxisTick({ y, payload }) {
   return (
@@ -23,7 +26,110 @@ function HoldingAxisTick({ y, payload }) {
   );
 }
 
+function PnlTooltip({ active, payload, hideValues }) {
+  if (!active || !payload || payload.length === 0) {
+    return null;
+  }
+
+  const point = payload[0]?.payload;
+  if (!point) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        backgroundColor: '#0b1220',
+        border: '1px solid #334155',
+        borderRadius: '10px',
+        color: '#e2e8f0',
+        padding: '8px 10px',
+      }}
+    >
+      <p style={{ margin: 0, color: '#f8fafc', fontWeight: 600 }}>{point.name}</p>
+      <p style={{ margin: '4px 0 0' }}>
+        P/L: {formatMaybeHidden(hideValues, formatMoney, Number(point.pnl) || 0)}
+      </p>
+      <p style={{ margin: '2px 0 0' }}>
+        Return: {hideValues ? 'Hidden' : formatPercent(Number(point.pnlPct) || 0)}
+      </p>
+    </div>
+  );
+}
+
+function ActiveAllocationShape(props) {
+  const {
+    cx,
+    cy,
+    startAngle,
+    endAngle,
+    innerRadius,
+    outerRadius,
+    fill,
+  } = props;
+
+  return (
+    <g style={{ filter: 'drop-shadow(0 0 10px rgba(56,189,248,0.45))' }}>
+      <Sector
+        cx={cx}
+        cy={cy}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius + 8}
+        fill={fill}
+        stroke="#67e8f9"
+        strokeWidth={2}
+      />
+      <Sector
+        cx={cx}
+        cy={cy}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        innerRadius={outerRadius + 10}
+        outerRadius={outerRadius + 13}
+        fill="#67e8f9"
+        fillOpacity={0.7}
+        stroke="none"
+      />
+    </g>
+  );
+}
+
+function ActivePnlBar(props) {
+  const {
+    x,
+    y,
+    width,
+    height,
+    fill,
+  } = props;
+
+  return (
+    <Rectangle
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      radius={4}
+      fill={fill}
+      stroke="#67e8f9"
+      strokeWidth={2}
+      style={{ filter: 'drop-shadow(0 0 8px rgba(56,189,248,0.45))' }}
+    />
+  );
+}
+
 export default function PortfolioCharts({ hideValues, allocationData, chartData, assetColorMap }) {
+  const [activePieIndex, setActivePieIndex] = useState(-1);
+  const pieCells = useMemo(
+    () => allocationData.map((entry, index) => ({
+      key: `${entry.name}-alloc-${index}`,
+      fill: assetColorMap.get(entry.name) || HOLDING_COLORS[index % HOLDING_COLORS.length],
+    })),
+    [allocationData, assetColorMap],
+  );
+
   return (
     <div className="portfolioCharts">
       <article className="chartCard">
@@ -40,13 +146,17 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 innerRadius={55}
                 outerRadius={95}
                 paddingAngle={2}
+                activeIndex={activePieIndex}
+                activeShape={<ActiveAllocationShape />}
+                onMouseEnter={(_, index) => setActivePieIndex(index)}
+                onMouseLeave={() => setActivePieIndex(-1)}
                 labelLine={false}
                 label={({ percent }) => `${((percent || 0) * 100).toFixed(1)}%`}
               >
-                {allocationData.map((entry, index) => (
+                {pieCells.map((cell) => (
                   <Cell
-                    key={`${entry.name}-alloc-${index}`}
-                    fill={assetColorMap.get(entry.name) || HOLDING_COLORS[index % HOLDING_COLORS.length]}
+                    key={cell.key}
+                    fill={cell.fill}
                     stroke="#0b1220"
                     strokeWidth={2}
                   />
@@ -89,7 +199,8 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 tickLine={false}
               />
               <Tooltip
-                formatter={(value) => formatMaybeHidden(hideValues, formatMoney, Number(value) || 0)}
+                content={<PnlTooltip hideValues={hideValues} />}
+                cursor={false}
                 contentStyle={{
                   backgroundColor: '#0b1220',
                   border: '1px solid #334155',
@@ -100,7 +211,7 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 itemStyle={{ color: '#e2e8f0' }}
               />
               <ReferenceLine x={0} stroke="#64748b" />
-              <Bar dataKey="pnl" radius={[4, 4, 4, 4]}>
+              <Bar dataKey="pnl" radius={[4, 4, 4, 4]} activeBar={<ActivePnlBar />}>
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`${entry.name}-pnl-${index}`}

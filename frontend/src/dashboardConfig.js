@@ -6,7 +6,7 @@ const DEFAULT_CONFIG = {
     {
       key: 'sgd_cash',
       cellRef: 'B3',
-      displayName: 'SGD Cash (DBS Savings)',
+      displayName: 'DBS Savings Account',
       type: 'asset',
       category: 'Cash',
       currency: 'SGD',
@@ -14,7 +14,7 @@ const DEFAULT_CONFIG = {
     {
       key: 'USD_cash',
       cellRef: 'B12',
-      displayName: 'USD Cash (Moomoo)',
+      displayName: 'Moomoo Investment Account',
       type: 'asset',
       category: 'Cash',
       currency: 'USD',
@@ -22,7 +22,7 @@ const DEFAULT_CONFIG = {
     {
       key: 'USDT/USDC_cash',
       cellRef: 'B11',
-      displayName: 'USDT/USDC(Binance)',
+      displayName: 'Binance USDT/USDC Wallet',
       type: 'asset',
       category: 'Cash',
       currency: 'USD',

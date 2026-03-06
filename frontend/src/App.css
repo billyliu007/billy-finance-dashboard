@@ -282,6 +282,217 @@ h1 {
   letter-spacing: 0.06em;
 }
 
+.portfolioMobileDetailsCard {
+  display: none;
+}
+
+.detailsHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.detailsHeaderRow h2 {
+  margin: 0;
+}
+
+.detailsToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--line-soft);
+  background: rgba(15, 23, 42, 0.45);
+  color: #cfe2ff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detailsToggleBtn:hover {
+  background: rgba(14, 116, 144, 0.2);
+  border-color: rgba(94, 234, 212, 0.35);
+}
+
+.detailsChevron {
+  display: inline-flex;
+  transition: transform 120ms ease;
+}
+
+.detailsChevron.isOpen {
+  transform: rotate(180deg);
+}
+
+@keyframes livePriceBlink {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.45;
+    transform: translateY(-1px);
+  }
+}
+
+.positionCardStack {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.positionClassGroup {
+  padding: 0;
+}
+
+.positionClassHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 2px 8px;
+}
+
+.positionClassHeader h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8bc5ef;
+}
+
+.positionClassHeader span {
+  font-size: 0.72rem;
+  color: #9fb8d8;
+}
+
+.positionClassCards {
+  display: grid;
+  gap: 8px;
+}
+
+.positionDetailCard {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  padding: 10px;
+}
+
+.positionDetailCard header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.positionNameCol {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.positionDetailCard h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #f8fbff;
+}
+
+.positionMarketPrice {
+  font-size: 0.72rem;
+  color: #7ee7ff;
+  white-space: nowrap;
+  animation: livePriceBlink 1.2s ease-in-out infinite;
+  text-shadow: 0 0 8px rgba(34, 211, 238, 0.55);
+}
+
+.positionPnlDock {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+  gap: 1px;
+  flex: none;
+}
+
+.positionPnlDock strong {
+  font-size: 1.02rem;
+  line-height: 1.1;
+}
+
+.positionPnlDock span {
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.positionQuickGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.positionQuickItem {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.88);
+  padding: 8px;
+}
+
+.positionQuickItem span {
+  display: block;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9fb8d8;
+}
+
+.positionQuickItem strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #e2efff;
+  font-variant-numeric: tabular-nums;
+}
+
+.positionMetaList {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.positionMetaList div {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.65);
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.positionMetaList dt {
+  margin: 0;
+  font-size: 0.64rem;
+  color: #9fb8d8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.positionMetaList dd {
+  margin: 0;
+  color: #dbeafe;
+  font-size: 0.74rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .portfolioCharts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -524,6 +735,14 @@ tbody tr:hover td {
   .positionsMobileCompact th:nth-child(10),
   .positionsMobileCompact td:nth-child(10) {
     width: 28%;
+  }
+
+  .portfolioPositionsCard {
+    display: none;
+  }
+
+  .portfolioMobileDetailsCard {
+    display: block;
   }
 
   .kpiBreakdown li {

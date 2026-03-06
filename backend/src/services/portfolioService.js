@@ -41,7 +41,11 @@ export function buildPortfolioPayload({ headers = [], rows = [] }) {
   );
 
   const totalPnlPct = totals.cost === 0 ? 0 : (totals.pnl / totals.cost) * 100;
-  const chartData = visiblePositions.map((position) => ({ name: position.name, pnl: position.pnl }));
+  const chartData = visiblePositions.map((position) => ({
+    name: position.name,
+    pnl: position.pnl,
+    pnlPct: position.pnlPct,
+  }));
   const allocationData = visiblePositions
     .filter((position) => position.currentValue > 0)
     .map((position) => ({ name: position.name, value: position.currentValue }));

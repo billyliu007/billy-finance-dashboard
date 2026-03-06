@@ -7,6 +7,7 @@ import {
   LineChart,
   ReferenceDot,
   ReferenceLine,
+  Rectangle,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -81,6 +82,68 @@ function MarkerLabel({ viewBox, value, color, side = 'top', offsetY = 0 }) {
         {labelText}
       </text>
     </g>
+  );
+}
+
+function ActivePeriodBar(props) {
+  const {
+    x,
+    y,
+    width,
+    height,
+    fill,
+  } = props;
+
+  return (
+    <Rectangle
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      radius={4}
+      fill={fill}
+      stroke="#67e8f9"
+      strokeWidth={2}
+      style={{ filter: 'drop-shadow(0 0 8px rgba(56,189,248,0.45))' }}
+    />
+  );
+}
+
+function PeriodReturnTooltip({ active, payload, hideValues }) {
+  if (!active || !payload || payload.length === 0) {
+    return null;
+  }
+
+  const point = payload[0]?.payload;
+  if (!point) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        backgroundColor: '#0b1220',
+        border: '1px solid #334155',
+        borderRadius: '10px',
+        color: '#e2e8f0',
+        padding: '8px 10px',
+      }}
+    >
+      <p style={{ margin: 0, color: '#f8fafc', fontWeight: 600 }}>{point.date}</p>
+      <p style={{ margin: '4px 0 0' }}>
+        Prev month-end:{' '}
+        {point.previousNetWorth == null
+          ? '-'
+          : formatMaybeHidden(hideValues, formatCny, Number(point.previousNetWorth) || 0)}
+      </p>
+      <p style={{ margin: '2px 0 0' }}>
+        Current month-end:{' '}
+        {formatMaybeHidden(hideValues, formatCny, Number(point.currentNetWorth) || 0)}
+      </p>
+      <p style={{ margin: '2px 0 0' }}>
+        MoM Return: {hideValues ? 'Hidden' : formatPercent(Number(point.derivedChangePct) || 0)}
+      </p>
+    </div>
   );
 }
 
@@ -218,7 +281,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
       </article>
 
       <article className="chartCard">
-        <h2>Period Return (%)</h2>
+        <h2>Monthly Return (Month-End, %)</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={derivedSeries} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
@@ -226,7 +289,8 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
               <XAxis dataKey="date" tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis tickFormatter={(value) => `${value}%`} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <Tooltip
-                formatter={(value) => formatPercent(Number(value) || 0)}
+                content={<PeriodReturnTooltip hideValues={hideValues} />}
+                cursor={false}
                 contentStyle={{
                   backgroundColor: '#0b1220',
                   border: '1px solid #334155',
@@ -237,7 +301,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                 itemStyle={{ color: '#e2e8f0' }}
               />
               <ReferenceLine y={0} stroke="#64748b" />
-              <Bar dataKey="derivedChangePct" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="derivedChangePct" radius={[4, 4, 0, 0]} activeBar={<ActivePeriodBar />}>
                 {derivedSeries.map((entry, index) => (
                   <Cell key={`${entry.date}-${index}`} fill={entry.derivedChangePct >= 0 ? '#22c55e' : '#fb7185'} />
                 ))}

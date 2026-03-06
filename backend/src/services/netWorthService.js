@@ -122,14 +122,71 @@ function parseCashflowRows(rows) {
 function buildDerivedChangeSeries(cashflowData) {
   return cashflowData.map((item, index) => {
     if (index === 0) {
-      return { ...item, derivedChangePct: 0 };
+      return {
+        ...item,
+        derivedChangePct: 0,
+        previousDate: null,
+        previousNetWorth: null,
+        currentDate: item.date,
+        currentNetWorth: item.netWorth,
+      };
     }
 
     const previous = cashflowData[index - 1];
     const derivedChangePct =
       previous.netWorth === 0 ? 0 : ((item.netWorth - previous.netWorth) / previous.netWorth) * 100;
-    return { ...item, derivedChangePct };
+    return {
+      ...item,
+      derivedChangePct,
+      previousDate: previous.date,
+      previousNetWorth: previous.netWorth,
+      currentDate: item.date,
+      currentNetWorth: item.netWorth,
+    };
   });
+}
+
+function normalizeMonthKey(rawDate) {
+  const value = String(rawDate || '').trim();
+  if (!value) {
+    return '';
+  }
+
+  // Supports ISO/date-time strings and plain date strings from sheets.
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
+
+  const datePart = value.includes('T') ? value.split('T')[0] : value.split(' ')[0];
+  const [year, month] = datePart.split('-');
+  if (!year || !month) {
+    return '';
+  }
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function buildMonthEndSeries(cashflowData) {
+  const latestByMonth = new Map();
+
+  cashflowData.forEach((item, index) => {
+    const monthKey = normalizeMonthKey(item.date);
+    if (!monthKey) {
+      return;
+    }
+
+    // Keep the last point seen for the month (month-end in chronological sheet data).
+    latestByMonth.set(monthKey, { ...item, monthKey, order: index });
+  });
+
+  return Array.from(latestByMonth.values())
+    .sort((a, b) => a.order - b.order)
+    .map((item) => ({
+      date: item.monthKey,
+      netWorth: item.netWorth,
+    }));
 }
 
 function summarizeCashflow(cashflowData) {
@@ -185,7 +242,8 @@ export function buildNetWorthPayload({ netWorthSheet, forexSheet, portfolioSheet
     .map((item) => `${item.name}: ${item.reason || 'Missing data'}`);
   const totalNetWorth = componentValues.reduce((sum, component) => sum + component.value, 0);
   const cashflowData = parseCashflowRows(cashflowRows);
-  const derivedSeries = buildDerivedChangeSeries(cashflowData);
+  const monthEndSeries = buildMonthEndSeries(cashflowData);
+  const derivedSeries = buildDerivedChangeSeries(monthEndSeries);
   const summary = summarizeCashflow(cashflowData);
   const netWorthDomain = buildDynamicDomain(cashflowData, 'netWorth');
 

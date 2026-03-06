@@ -36,11 +36,11 @@ export default function NetWorthSummaryCard({
         <div className="kpiDeltaRow">
           <span className={`kpiDeltaItem ${netWorthBounds.pctToAth >= 0 ? 'pos' : 'neg'}`}>
             <KpiIcon type="ath" />
-            vs ATH: {formatPercent(netWorthBounds.pctToAth)}
+            vs All-Time High: {formatPercent(netWorthBounds.pctToAth)}
           </span>
           <span className={`kpiDeltaItem ${netWorthBounds.pctToAtl >= 0 ? 'pos' : 'neg'}`}>
             <KpiIcon type="atl" />
-            vs ATL: {formatPercent(netWorthBounds.pctToAtl)}
+            vs All-Time Low: {formatPercent(netWorthBounds.pctToAtl)}
           </span>
         </div>
       )}
