@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../constants';
+import { API_BASE_URL } from '../constants.js';
 
 const DEFAULT_ERROR_MESSAGE = 'Could not load sheet data. Verify backend and Google Sheet settings.';
 
@@ -11,7 +11,16 @@ export async function fetchJson(path, { signal, params } = {}) {
   const response = await fetch(`${API_BASE_URL}${path}${query}`, { signal });
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.message && typeof body.message === 'string') {
+        message = body.message;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
   }
 
   return response.json();

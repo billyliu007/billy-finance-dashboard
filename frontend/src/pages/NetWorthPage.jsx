@@ -1,8 +1,8 @@
-import CashTableCard from '../components/networth/CashTableCard';
-import NetWorthSummaryCard from '../components/networth/NetWorthSummaryCard';
-import PerformanceCharts from '../components/networth/PerformanceCharts';
-import PerformanceKpis from '../components/networth/PerformanceKpis';
-import useApiData from '../hooks/useApiData';
+import CashTableCard from '../components/networth/CashTableCard.jsx';
+import NetWorthSummaryCard from '../components/networth/NetWorthSummaryCard.jsx';
+import PerformanceCharts from '../components/networth/PerformanceCharts.jsx';
+import PerformanceKpis from '../components/networth/PerformanceKpis.jsx';
+import useApiData from '../hooks/useApiData.js';
 
 function OverviewPanel({ hideValues, overview, isLoading, error }) {
   return (

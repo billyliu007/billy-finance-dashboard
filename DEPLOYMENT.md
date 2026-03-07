@@ -29,7 +29,7 @@ git push -u origin main
 1. Go to Render dashboard.
 2. Choose **New +** -> **Blueprint**.
 3. Connect your GitHub repo.
-4. Render will detect [`render.yaml`](/Users/billyliu/Documents/New%20project/render.yaml) and create two services:
+4. Render will detect [`render.yaml`](render.yaml) and create two services:
    - `billy-finance-backend`
    - `billy-finance-frontend`
 

@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { HOLDING_COLORS } from '../constants';
-import PortfolioCharts from '../components/portfolio/PortfolioCharts';
-import PortfolioKpis from '../components/portfolio/PortfolioKpis';
-import PortfolioPositionsTable from '../components/portfolio/PortfolioPositionsTable';
-import useApiData from '../hooks/useApiData';
+import { HOLDING_COLORS } from '../constants.js';
+import PortfolioCharts from '../components/portfolio/PortfolioCharts.jsx';
+import PortfolioKpis from '../components/portfolio/PortfolioKpis.jsx';
+import PortfolioPositionsTable from '../components/portfolio/PortfolioPositionsTable.jsx';
+import useApiData from '../hooks/useApiData.js';
 
 export default function PortfolioPage({ hideValues }) {
   const { data, isLoading, error } = useApiData('/api/dashboard/portfolio');

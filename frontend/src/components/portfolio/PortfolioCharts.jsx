@@ -15,8 +15,8 @@ import {
   YAxis,
 } from 'recharts';
 import { useMemo, useState } from 'react';
-import { HOLDING_COLORS } from '../../constants';
-import { formatMaybeHidden, formatMoney, formatPercent } from '../../utils/formatters';
+import { HOLDING_COLORS } from '../../constants.js';
+import { formatMaybeHidden, formatMoney, formatPercent } from '../../utils/formatters.js';
 
 function HoldingAxisTick({ y, payload }) {
   return (

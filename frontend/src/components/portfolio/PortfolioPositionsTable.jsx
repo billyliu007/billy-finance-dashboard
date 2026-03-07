@@ -5,7 +5,7 @@ import {
   formatPercent,
   formatPercentUnsigned,
   formatQty,
-} from '../../utils/formatters';
+} from '../../utils/formatters.js';
 
 export default function PortfolioPositionsTable({ hideValues, rows }) {
   const [showMobileDetails, setShowMobileDetails] = useState(true);

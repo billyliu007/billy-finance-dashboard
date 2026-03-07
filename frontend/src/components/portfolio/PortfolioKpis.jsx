@@ -1,4 +1,4 @@
-import { formatMaybeHidden, formatMoney, formatPercent } from '../../utils/formatters';
+import { formatMaybeHidden, formatMoney, formatPercent } from '../../utils/formatters.js';
 
 export default function PortfolioKpis({ hideValues, totals, totalPnlPct }) {
   return (

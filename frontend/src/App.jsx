@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import NetWorthPage from './pages/NetWorthPage';
-import PortfolioPage from './pages/PortfolioPage';
+import NetWorthPage from './pages/NetWorthPage.jsx';
+import PortfolioPage from './pages/PortfolioPage.jsx';
 import './App.css';
 
 function resolveBuildVersion() {

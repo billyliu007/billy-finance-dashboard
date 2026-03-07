@@ -10,11 +10,3 @@ export const HOLDING_COLORS = [
   '#f87171',
   '#facc15',
 ];
-
-export const CASHFLOW_RANGE = "'Cashflow'!A1:C400";
-
-export const NET_WORTH_COMPONENTS = [
-  { key: 'sgd_assets_in_cny', displayName: 'SGD Assets Total (As in CNY)' },
-  { key: 'usd_assets_in_cny', displayName: 'USD Assets Total (As in CNY)' },
-  { key: 'cny_assets_total', displayName: 'CNY Assets Total' },
-];

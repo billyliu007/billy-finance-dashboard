@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchJson, getSheetLoadErrorMessage, isAbortError } from '../utils/api';
+import { fetchJson, getSheetLoadErrorMessage, isAbortError } from '../utils/api.js';
 
 export default function useApiData(path) {
   const [data, setData] = useState(null);
@@ -17,7 +17,7 @@ export default function useApiData(path) {
         setData(response);
       } catch (err) {
         if (!isAbortError(err)) {
-          setError(getSheetLoadErrorMessage());
+          setError(err?.message || getSheetLoadErrorMessage());
         }
       } finally {
         setIsLoading(false);

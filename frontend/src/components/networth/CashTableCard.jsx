@@ -1,4 +1,4 @@
-import { formatCny, formatCurrencyValue, formatFxRate, formatMaybeHidden } from '../../utils/formatters';
+import { formatCny, formatCurrencyValue, formatFxRate, formatMaybeHidden } from '../../utils/formatters.js';
 
 export default function CashTableCard({ hideValues, rows }) {
   if (!rows.length) {

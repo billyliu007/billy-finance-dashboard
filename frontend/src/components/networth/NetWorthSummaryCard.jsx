@@ -1,5 +1,5 @@
-import KpiIcon from '../KpiIcon';
-import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters';
+import KpiIcon from '../KpiIcon.jsx';
+import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
 
 function renderKpiName(name) {
   const suffix = ' (As in CNY)';

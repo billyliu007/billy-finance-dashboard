@@ -110,9 +110,7 @@ export default function createApp() {
       res.json(data);
     } catch (error) {
       console.error(error);
-      res.status(500).json({
-        message: FETCH_ERROR_MESSAGE,
-      });
+      res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -128,11 +126,18 @@ export default function createApp() {
       return res.json({ sheets: sheetsData });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
-        message: FETCH_ERROR_MESSAGE,
-      });
+      return res.status(500).json({ message: getErrorMessage(error) });
     }
   });
+
+  function getErrorMessage(error) {
+    const data = error?.response?.data;
+    if (data?.error?.message) return data.error.message;
+    if (data?.message && typeof data.message === 'string') return data.message;
+    const msg = error?.message || '';
+    if (msg) return msg;
+    return FETCH_ERROR_MESSAGE;
+  }
 
   app.get('/api/dashboard/net-worth', async (_req, res) => {
     try {
@@ -153,7 +158,7 @@ export default function createApp() {
       return res.json(payload);
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: FETCH_ERROR_MESSAGE });
+      return res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -164,7 +169,7 @@ export default function createApp() {
       return res.json(payload);
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: FETCH_ERROR_MESSAGE });
+      return res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 

@@ -14,7 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useEffect, useState } from 'react';
-import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters';
+import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
 
 function formatDateOnlyLabel(rawValue) {
   const raw = String(rawValue || '').trim();
