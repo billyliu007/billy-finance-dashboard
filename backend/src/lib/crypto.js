@@ -1,31 +1,32 @@
 const BINANCE_TICKER_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price';
 const COINGECKO_SIMPLE_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price';
+const COINBASE_TICKER_BASE_URL = 'https://api.exchange.coinbase.com/products';
 
-const COINGECKO_ID_BY_SYMBOL = {
-  BTC: 'bitcoin',
-  ETH: 'ethereum',
-};
-
-function toSymbolList(symbols = []) {
-  return Array.from(
-    new Set(
-      symbols
-        .map((symbol) => String(symbol || '').trim().toUpperCase())
-        .filter((symbol) => symbol.length > 0),
-    ),
-  );
+function normalizeTargets(targets = []) {
+  return targets
+    .map((target) => {
+      const assetSymbol = String(target?.assetSymbol || '').trim().toUpperCase();
+      const providerSymbol = String(target?.providerSymbol || '').trim();
+      return {
+        assetSymbol,
+        providerSymbol,
+      };
+    })
+    .filter((target) => target.assetSymbol && target.providerSymbol);
 }
 
-export async function fetchBinanceUsdtQuotes(symbols = []) {
-  const normalizedSymbols = toSymbolList(symbols);
-  if (normalizedSymbols.length === 0) {
+export async function fetchBinanceUsdtQuotes(targets = []) {
+  const normalizedTargets = normalizeTargets(targets).map((target) => ({
+    ...target,
+    providerSymbol: target.providerSymbol.toUpperCase(),
+  }));
+  if (normalizedTargets.length === 0) {
     return {};
   }
 
-  const requests = normalizedSymbols.map(async (symbol) => {
+  const requests = normalizedTargets.map(async (target) => {
     try {
-      const pair = `${symbol}USDT`;
-      const params = new URLSearchParams({ symbol: pair });
+      const params = new URLSearchParams({ symbol: target.providerSymbol });
       const response = await fetch(`${BINANCE_TICKER_PRICE_URL}?${params.toString()}`);
       if (!response.ok) {
         return null;
@@ -38,8 +39,8 @@ export async function fetchBinanceUsdtQuotes(symbols = []) {
       }
 
       return {
-        symbol,
-        pair,
+        symbol: target.assetSymbol,
+        pair: target.providerSymbol,
         price,
         timestamp: Date.now(),
         source: 'binance',
@@ -59,17 +60,17 @@ export async function fetchBinanceUsdtQuotes(symbols = []) {
 }
 
 export async function fetchCoingeckoUsdQuotes(symbols = []) {
-  const normalizedSymbols = toSymbolList(symbols);
-  if (normalizedSymbols.length === 0) {
+  const normalizedTargets = normalizeTargets(symbols).map((target) => ({
+    ...target,
+    providerSymbol: target.providerSymbol.toLowerCase(),
+  }));
+  if (normalizedTargets.length === 0) {
     return {};
   }
 
   const idToSymbol = new Map();
-  normalizedSymbols.forEach((symbol) => {
-    const coinId = COINGECKO_ID_BY_SYMBOL[symbol];
-    if (coinId) {
-      idToSymbol.set(coinId, symbol);
-    }
+  normalizedTargets.forEach((target) => {
+    idToSymbol.set(target.providerSymbol, target.assetSymbol);
   });
 
   const ids = Array.from(idToSymbol.keys());
@@ -106,4 +107,48 @@ export async function fetchCoingeckoUsdQuotes(symbols = []) {
   } catch {
     return {};
   }
+}
+
+export async function fetchCoinbaseProductQuotes(targets = []) {
+  const normalizedTargets = normalizeTargets(targets).map((target) => ({
+    ...target,
+    providerSymbol: target.providerSymbol.toUpperCase(),
+  }));
+  if (normalizedTargets.length === 0) {
+    return {};
+  }
+
+  const requests = normalizedTargets.map(async (target) => {
+    try {
+      const response = await fetch(`${COINBASE_TICKER_BASE_URL}/${target.providerSymbol}/ticker`);
+      if (!response.ok) {
+        return null;
+      }
+
+      const body = await response.json();
+      const price = Number(body?.price);
+      if (!Number.isFinite(price) || price <= 0) {
+        return null;
+      }
+
+      const timestamp = body?.time ? new Date(body.time).getTime() : Date.now();
+      return {
+        symbol: target.assetSymbol,
+        pair: target.providerSymbol,
+        price,
+        timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+        source: 'coinbase',
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  const results = await Promise.all(requests);
+  return results.reduce((acc, item) => {
+    if (item) {
+      acc[item.symbol] = item;
+    }
+    return acc;
+  }, {});
 }

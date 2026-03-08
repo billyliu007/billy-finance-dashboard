@@ -8,6 +8,11 @@ const DEFAULT_CONFIG = {
       qtyCell: 'D28',
       purchasePriceCell: 'C28',
       currentPriceCell: 'F28',
+      providerSymbols: {
+        coinbase: 'BTC-USDT',
+        coingecko: 'bitcoin',
+        binance: 'BTCUSDT',
+      },
     },
     {
       key: 'eth',
@@ -16,6 +21,11 @@ const DEFAULT_CONFIG = {
       qtyCell: 'D36',
       purchasePriceCell: 'C36',
       currentPriceCell: 'F36',
+      providerSymbols: {
+        coinbase: 'ETH-USDT',
+        coingecko: 'ethereum',
+        binance: 'ETHUSDT',
+      },
     },
     {
       key: 'qqq',
@@ -24,6 +34,9 @@ const DEFAULT_CONFIG = {
       qtyCell: 'D40',
       purchasePriceCell: 'C40',
       currentPriceCell: 'F39',
+      providerSymbols: {
+        finnhub: 'QQQ',
+      },
     },
     {
       key: 'qqqm',
@@ -32,6 +45,9 @@ const DEFAULT_CONFIG = {
       qtyCell: 'D46',
       purchasePriceCell: 'C46',
       currentPriceCell: 'F45',
+      providerSymbols: {
+        finnhub: 'QQQM',
+      },
     },
     {
       key: 'tsla',
@@ -40,6 +56,9 @@ const DEFAULT_CONFIG = {
       qtyCell: 'D43',
       purchasePriceCell: 'C43',
       currentPriceCell: 'F42',
+      providerSymbols: {
+        finnhub: 'TSLA',
+      },
     },
   ],
 };
