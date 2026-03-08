@@ -16,6 +16,12 @@ services:
         sync: false
       - key: GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
         sync: false
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: FX_PROVIDER
+        value: frankfurter
+      - key: CRYPTO_PROVIDER
+        value: binance
 
   - type: web
     name: billy-finance-frontend
