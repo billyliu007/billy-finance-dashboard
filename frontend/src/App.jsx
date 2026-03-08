@@ -2,36 +2,17 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import NetWorthPage from './pages/NetWorthPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
+import DevelopmentPage from './pages/DevelopmentPage.jsx';
+import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
+import { resolveFrontendBuildVersion } from './utils/version.js';
 import './App.css';
-
-function resolveBuildVersion() {
-  const explicitVersion = import.meta.env.VITE_APP_VERSION;
-  if (explicitVersion) {
-    return String(explicitVersion);
-  }
-
-  if (import.meta.env.DEV) {
-    return 'dev-local';
-  }
-
-  if (typeof document === 'undefined') {
-    return '';
-  }
-
-  const scriptTag = Array.from(document.querySelectorAll('script[src]'))
-    .find((script) => /index-[A-Za-z0-9_-]+\.js$/.test(script.getAttribute('src') || ''));
-
-  const source = scriptTag?.getAttribute('src') || '';
-  const match = /index-([A-Za-z0-9_-]+)\.js$/.exec(source);
-  return match?.[1] || 'unknown';
-}
 
 export default function App() {
   const [hideValues, setHideValues] = useState(() => {
     const saved = localStorage.getItem('hide_values_enabled');
     return saved === 'true';
   });
-  const [buildVersion] = useState(() => resolveBuildVersion());
+  const [buildVersion] = useState(() => resolveFrontendBuildVersion());
 
   useEffect(() => {
     localStorage.setItem('hide_values_enabled', String(hideValues));
@@ -56,6 +37,11 @@ export default function App() {
           <NavLink to="/portfolio" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
             Portfolio Holdings
           </NavLink>
+          {SHOW_DEVELOPMENT_PAGE && (
+            <NavLink to="/development" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
+              Development
+            </NavLink>
+          )}
         </nav>
       </aside>
 
@@ -64,10 +50,12 @@ export default function App() {
           <Route path="/net-worth" element={<NetWorthPage hideValues={hideValues} />} />
           <Route path="/overview" element={<Navigate to="/net-worth" replace />} />
           <Route path="/portfolio" element={<PortfolioPage hideValues={hideValues} />} />
+          {SHOW_DEVELOPMENT_PAGE && (
+            <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />
+          )}
           <Route path="*" element={<Navigate to="/net-worth" replace />} />
         </Routes>
       </main>
-      {buildVersion && <span className="buildFooter">v {buildVersion}</span>}
     </div>
   );
 }

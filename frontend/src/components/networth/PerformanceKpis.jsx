@@ -15,7 +15,7 @@ export default function PerformanceKpis({ hideValues, summary }) {
       <article className="miniKpi">
         <p>
           <KpiIcon type="period" />
-          <span>Month-over-Month Return</span>
+          <span>Latest Period Return</span>
         </p>
         <h3 className={summary.latestPeriodChangePct >= 0 ? 'pos' : 'neg'}>{formatPercent(summary.latestPeriodChangePct)}</h3>
         <small>{summary.latestPeriodSubtitle}</small>

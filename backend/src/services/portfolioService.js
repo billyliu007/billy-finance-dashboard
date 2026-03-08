@@ -2,14 +2,54 @@ import PORTFOLIO_CONFIG from '../config/portfolioConfig.js';
 import { parseMoney } from '../lib/number.js';
 import { getCellValue } from '../lib/sheet.js';
 
-export function buildPortfolioPayload({ headers = [], rows = [] }) {
+function isStockAsset(asset) {
+  return /stock/i.test(String(asset?.category || ''));
+}
+
+function isCryptoAsset(asset) {
+  return /crypto/i.test(String(asset?.category || ''));
+}
+
+function resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) {
+  const fallbackPrice = parseMoney(currentPriceRaw);
+  const fallback = {
+    currentPrice: fallbackPrice,
+    priceSource: 'sheet',
+    priceTimestamp: null,
+  };
+
+  if (!isStockAsset(asset) && !isCryptoAsset(asset)) {
+    return fallback;
+  }
+
+  const symbol = String(asset?.name || '').trim().toUpperCase();
+  const livePrice = isStockAsset(asset)
+    ? Number(stockQuotes?.[symbol]?.price)
+    : isCryptoAsset(asset)
+      ? Number(cryptoQuotes?.[symbol]?.price)
+      : NaN;
+  if (!Number.isFinite(livePrice) || livePrice <= 0) {
+    return fallback;
+  }
+
+  return {
+    currentPrice: livePrice,
+    priceSource: isStockAsset(asset) ? 'finnhub' : 'binance',
+    priceTimestamp: isStockAsset(asset)
+      ? Number(stockQuotes?.[symbol]?.timestamp) || null
+      : Number(cryptoQuotes?.[symbol]?.timestamp) || null,
+  };
+}
+
+export function buildPortfolioPayload({ headers = [], rows = [], stockQuotes = {}, cryptoQuotes = {} }) {
   const positions = PORTFOLIO_CONFIG.assets.map((asset) => {
     const qtyRaw = getCellValue(headers, rows, asset.qtyCell);
     const purchasePriceRaw = getCellValue(headers, rows, asset.purchasePriceCell);
     const currentPriceRaw = getCellValue(headers, rows, asset.currentPriceCell);
     const qty = parseMoney(qtyRaw);
     const purchasePrice = parseMoney(purchasePriceRaw);
-    const currentPrice = parseMoney(currentPriceRaw);
+    const priceResolution = resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes);
+    const currentPrice = priceResolution.currentPrice;
     const totalPurchaseCost = qty * purchasePrice;
     const currentValue = qty * currentPrice;
     const pnl = currentValue - totalPurchaseCost;
@@ -22,6 +62,8 @@ export function buildPortfolioPayload({ headers = [], rows = [] }) {
       qty,
       purchasePrice,
       currentPrice,
+      priceSource: priceResolution.priceSource,
+      priceTimestamp: priceResolution.priceTimestamp,
       totalPurchaseCost,
       currentValue,
       pnl,

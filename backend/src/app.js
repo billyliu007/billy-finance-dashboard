@@ -1,15 +1,32 @@
 import express from 'express';
 import cors from 'cors';
 import { google } from 'googleapis';
+import { readFileSync } from 'node:fs';
 import DASHBOARD_CONFIG from './config/dashboardConfig.js';
 import PORTFOLIO_CONFIG from './config/portfolioConfig.js';
 import { buildNetWorthPayload } from './services/netWorthService.js';
 import { buildPortfolioPayload } from './services/portfolioService.js';
+import { fetchFinnhubQuotes } from './lib/finnhub.js';
+import { fetchFrankfurterFxRates } from './lib/fx.js';
+import { fetchBinanceUsdtQuotes } from './lib/crypto.js';
 
 const SHEETS_READONLY_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 const DEFAULT_SHEET_RANGE = 'Sheet1!A1:Z100';
 const FETCH_ERROR_MESSAGE =
   'Failed to fetch Google Sheets data. Check backend environment configuration and sheet permissions.';
+const BACKEND_VERSION = resolveBackendVersion();
+const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
+const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'binance').trim().toLowerCase();
+
+function resolveBackendVersion() {
+  try {
+    const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+    const parsed = JSON.parse(raw);
+    return String(parsed?.version || 'unknown');
+  } catch {
+    return 'unknown';
+  }
+}
 
 function mapSheetValues(values = []) {
   if (values.length === 0) {
@@ -95,12 +112,122 @@ async function fetchMultipleSheetRows(ranges) {
   });
 }
 
+function getStockSymbols() {
+  return (PORTFOLIO_CONFIG.assets || [])
+    .filter((asset) => /stock/i.test(String(asset.category || '')))
+    .map((asset) => String(asset.name || '').trim().toUpperCase())
+    .filter((symbol) => symbol.length > 0);
+}
+
+async function getStockQuoteMap() {
+  const stockSymbols = getStockSymbols();
+  if (stockSymbols.length === 0) {
+    return {};
+  }
+
+  return fetchFinnhubQuotes(stockSymbols);
+}
+
+function getCryptoSymbols() {
+  return (PORTFOLIO_CONFIG.assets || [])
+    .filter((asset) => /crypto/i.test(String(asset.category || '')))
+    .map((asset) => String(asset.name || '').trim().toUpperCase())
+    .filter((symbol) => symbol.length > 0);
+}
+
+async function getCryptoQuoteMap() {
+  const cryptoSymbols = getCryptoSymbols();
+  if (cryptoSymbols.length === 0 || CRYPTO_PROVIDER === 'sheet') {
+    return {};
+  }
+
+  if (CRYPTO_PROVIDER === 'binance') {
+    return fetchBinanceUsdtQuotes(cryptoSymbols);
+  }
+
+  return {};
+}
+
+async function getLiveFxRates() {
+  if (FX_PROVIDER === 'sheet') {
+    return {};
+  }
+
+  if (FX_PROVIDER === 'frankfurter') {
+    return fetchFrankfurterFxRates();
+  }
+
+  return {};
+}
+
 export default function createApp() {
   const app = express();
   app.use(cors());
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
+  });
+
+  app.get('/api/dev/status', (_req, res) => {
+    const stockAssets = (PORTFOLIO_CONFIG.assets || []).filter((asset) =>
+      /stock/i.test(String(asset.category || '')),
+    );
+    const cryptoAssets = (PORTFOLIO_CONFIG.assets || []).filter((asset) =>
+      /crypto/i.test(String(asset.category || '')),
+    );
+
+    res.json({
+      backendVersion: BACKEND_VERSION,
+      marketData: {
+        stocks: {
+          primary: process.env.FINNHUB_API_KEY ? 'finnhub' : 'sheet',
+          fallback: 'sheet',
+          symbols: stockAssets.map((asset) => String(asset.name || '').toUpperCase()),
+        },
+        crypto: {
+          primary: CRYPTO_PROVIDER === 'sheet' ? 'sheet' : CRYPTO_PROVIDER,
+          fallback: 'sheet',
+          symbols: cryptoAssets.map((asset) => `${String(asset.name || '').toUpperCase()}/USDT`),
+        },
+        fx: {
+          primary: FX_PROVIDER === 'sheet' ? 'sheet' : FX_PROVIDER,
+          fallback: 'sheet',
+          pairs: ['USD/CNY', 'SGD/CNY'],
+        },
+      },
+      sheetBackedData: [
+        {
+          key: 'net_worth_cash_debt',
+          label: 'Net worth cash/debt components',
+          range: DASHBOARD_CONFIG.netWorthRange,
+          notes: 'Cash/debt values from configured cell references',
+        },
+        {
+          key: 'fx_rates',
+          label: 'FX rates (USD/CNY, SGD/CNY)',
+          range: DASHBOARD_CONFIG.forexRange,
+          notes: 'Used for CNY conversion in net worth totals',
+        },
+        {
+          key: 'cashflow_history',
+          label: 'Cashflow and net worth history',
+          range: DASHBOARD_CONFIG.cashflowRange,
+          notes: 'Used for performance trend, ATH/ATL, and KPI history',
+        },
+        {
+          key: 'portfolio_positions',
+          label: 'Portfolio quantities and cost basis',
+          range: PORTFOLIO_CONFIG.range,
+          notes: 'Qty and purchase prices remain sheet-backed',
+        },
+        {
+          key: 'crypto_current_prices',
+          label: 'Crypto current prices',
+          range: PORTFOLIO_CONFIG.range,
+          notes: 'Used as fallback if live crypto provider is unavailable',
+        },
+      ],
+    });
   });
 
   app.get('/api/sheet', async (req, res) => {
@@ -149,11 +276,17 @@ export default function createApp() {
       ];
       const sheetsData = await fetchMultipleSheetRows(ranges);
       const [netWorthSheet, forexSheet, portfolioSheet, cashflowSheet] = sheetsData;
+      const stockQuotes = await getStockQuoteMap();
+      const cryptoQuotes = await getCryptoQuoteMap();
+      const fxRates = await getLiveFxRates();
       const payload = buildNetWorthPayload({
         netWorthSheet,
         forexSheet,
         portfolioSheet,
         cashflowSheet,
+        stockQuotes,
+        cryptoQuotes,
+        fxRatesOverride: fxRates,
       });
       return res.json(payload);
     } catch (error) {
@@ -165,7 +298,13 @@ export default function createApp() {
   app.get('/api/dashboard/portfolio', async (_req, res) => {
     try {
       const portfolioSheet = await fetchSheetRows(PORTFOLIO_CONFIG.range);
-      const payload = buildPortfolioPayload(portfolioSheet);
+      const stockQuotes = await getStockQuoteMap();
+      const cryptoQuotes = await getCryptoQuoteMap();
+      const payload = buildPortfolioPayload({
+        ...portfolioSheet,
+        stockQuotes,
+        cryptoQuotes,
+      });
       return res.json(payload);
     } catch (error) {
       console.error(error);

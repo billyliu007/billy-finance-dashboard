@@ -6,7 +6,7 @@ import PortfolioPositionsTable from '../components/portfolio/PortfolioPositionsT
 import useApiData from '../hooks/useApiData.js';
 
 export default function PortfolioPage({ hideValues }) {
-  const { data, isLoading, error } = useApiData('/api/dashboard/portfolio');
+  const { data, isLoading, error } = useApiData('/api/dashboard/portfolio', { refreshMs: 60_000 });
   const rows = useMemo(() => data?.tableRows || [], [data]);
   const allocationData = useMemo(() => data?.allocationData || [], [data]);
   const chartData = useMemo(() => data?.chartData || [], [data]);

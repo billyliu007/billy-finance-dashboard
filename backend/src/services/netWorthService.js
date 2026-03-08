@@ -49,7 +49,32 @@ function buildDetailRows(headers, rows, fxRates) {
   });
 }
 
-function computeUsdPositionsTotal(headers, rows) {
+function isStockAsset(asset) {
+  return /stock/i.test(String(asset?.category || ''));
+}
+
+function isCryptoAsset(asset) {
+  return /crypto/i.test(String(asset?.category || ''));
+}
+
+function resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) {
+  const fallbackPrice = parseMoney(currentPriceRaw);
+  if (!isStockAsset(asset) && !isCryptoAsset(asset)) {
+    return fallbackPrice;
+  }
+
+  const symbol = String(asset?.name || '').trim().toUpperCase();
+  const livePrice = isStockAsset(asset)
+    ? Number(stockQuotes?.[symbol]?.price)
+    : Number(cryptoQuotes?.[symbol]?.price);
+  if (!Number.isFinite(livePrice) || livePrice <= 0) {
+    return fallbackPrice;
+  }
+
+  return livePrice;
+}
+
+function computeUsdPositionsTotal(headers, rows, stockQuotes = {}, cryptoQuotes = {}) {
   return PORTFOLIO_CONFIG.assets.reduce((sum, asset) => {
     const qtyRaw = getCellValue(headers, rows, asset.qtyCell);
     const currentPriceRaw = getCellValue(headers, rows, asset.currentPriceCell);
@@ -59,7 +84,7 @@ function computeUsdPositionsTotal(headers, rows) {
     }
 
     const qty = parseMoney(qtyRaw);
-    const currentPrice = parseMoney(currentPriceRaw);
+    const currentPrice = resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes);
     return sum + qty * currentPrice;
   }, 0);
 }
@@ -217,7 +242,15 @@ function summarizeCashflow(cashflowData) {
   };
 }
 
-export function buildNetWorthPayload({ netWorthSheet, forexSheet, portfolioSheet, cashflowSheet }) {
+export function buildNetWorthPayload({
+  netWorthSheet,
+  forexSheet,
+  portfolioSheet,
+  cashflowSheet,
+  stockQuotes = {},
+  cryptoQuotes = {},
+  fxRatesOverride = {},
+}) {
   const headers = netWorthSheet.headers || [];
   const rows = netWorthSheet.rows || [];
   const forexHeaders = forexSheet.headers || [];
@@ -226,11 +259,20 @@ export function buildNetWorthPayload({ netWorthSheet, forexSheet, portfolioSheet
   const portfolioRows = portfolioSheet.rows || [];
   const cashflowRows = cashflowSheet.rows || [];
 
-  const fxRates = buildFxRates(forexHeaders, forexRows, DASHBOARD_CONFIG.forexRates);
+  const fxRates = {
+    ...buildFxRates(forexHeaders, forexRows, DASHBOARD_CONFIG.forexRates),
+    ...Object.entries(fxRatesOverride).reduce((acc, [currency, rate]) => {
+      const parsedRate = Number(rate);
+      if (Number.isFinite(parsedRate) && parsedRate > 0) {
+        acc[String(currency || '').toUpperCase()] = parsedRate;
+      }
+      return acc;
+    }, {}),
+  };
   const detailRows = buildDetailRows(headers, rows, fxRates);
   const visibleDetailRows = detailRows.filter((item) => item.found);
   const cashRows = mapCashDetailRowsToTableRows(visibleDetailRows);
-  const usdPositionsTotal = computeUsdPositionsTotal(portfolioHeaders, portfolioRows);
+  const usdPositionsTotal = computeUsdPositionsTotal(portfolioHeaders, portfolioRows, stockQuotes, cryptoQuotes);
   const aggregatedTotalsByKey = aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates);
   const componentValues = NET_WORTH_COMPONENTS.map((component) => ({
     key: component.key,

@@ -1,4 +1,6 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+export const SHOW_DEVELOPMENT_PAGE =
+  import.meta.env.VITE_SHOW_DEVELOPMENT_PAGE === 'true' || import.meta.env.DEV;
 
 export const HOLDING_COLORS = [
   '#22d3ee',

@@ -58,7 +58,7 @@ function PerformancePanel({ hideValues, performance, isLoading, error }) {
 }
 
 export default function NetWorthPage({ hideValues }) {
-  const { data, isLoading, error } = useApiData('/api/dashboard/net-worth');
+  const { data, isLoading, error } = useApiData('/api/dashboard/net-worth', { refreshMs: 60_000 });
 
   return (
     <>
