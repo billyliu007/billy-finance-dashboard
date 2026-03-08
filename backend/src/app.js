@@ -117,8 +117,7 @@ async function fetchMultipleSheetRows(ranges) {
 }
 
 function getStockSymbols() {
-  return (PORTFOLIO_CONFIG.assets || [])
-    .filter((asset) => /stock/i.test(String(asset.category || '')))
+  return getAssetsByCategory('stock')
     .map((asset) => ({
       assetSymbol: String(asset.name || '').trim().toUpperCase(),
       providerSymbol: String(asset.providerSymbols?.finnhub || asset.name || '')
@@ -148,8 +147,7 @@ async function getStockQuoteMap() {
 }
 
 function getCryptoSymbols() {
-  const assets = (PORTFOLIO_CONFIG.assets || [])
-    .filter((asset) => /crypto/i.test(String(asset.category || '')))
+  const assets = getAssetsByCategory('crypto')
     .map((asset) => ({
       assetSymbol: String(asset.name || '').trim().toUpperCase(),
       coinbaseProduct: String(asset.providerSymbols?.coinbase || `${asset.name}-USDT`)
@@ -164,6 +162,49 @@ function getCryptoSymbols() {
   return assets;
 }
 
+function getAssetsByCategory(category) {
+  const categoryPattern = new RegExp(category, 'i');
+  return (PORTFOLIO_CONFIG.assets || []).filter((asset) =>
+    categoryPattern.test(String(asset.category || '')),
+  );
+}
+
+function mapCryptoTargets(assets, provider) {
+  if (provider === 'coinbase') {
+    return assets.map((asset) => ({
+      assetSymbol: asset.assetSymbol,
+      providerSymbol: asset.coinbaseProduct,
+    }));
+  }
+  if (provider === 'coingecko') {
+    return assets
+      .filter((asset) => asset.coingeckoId)
+      .map((asset) => ({
+        assetSymbol: asset.assetSymbol,
+        providerSymbol: asset.coingeckoId,
+      }));
+  }
+  if (provider === 'binance') {
+    return assets.map((asset) => ({
+      assetSymbol: asset.assetSymbol,
+      providerSymbol: asset.binanceSymbol,
+    }));
+  }
+  return [];
+}
+
+function findMissingCryptoAssets(assets, quotes) {
+  return assets.filter((asset) => !quotes[asset.assetSymbol]);
+}
+
+function countQuotes(quotes) {
+  return Object.keys(quotes).length;
+}
+
+function mergeQuotesByPriority(highPriorityToLowPriority) {
+  return highPriorityToLowPriority.reduceRight((acc, quoteMap) => ({ ...acc, ...quoteMap }), {});
+}
+
 async function getCryptoQuoteMap() {
   const cryptoAssets = getCryptoSymbols();
   if (cryptoAssets.length === 0 || CRYPTO_PROVIDER === 'sheet') {
@@ -171,80 +212,37 @@ async function getCryptoQuoteMap() {
   }
 
   if (CRYPTO_PROVIDER === 'binance') {
-    return fetchBinanceUsdtQuotes(
-      cryptoAssets.map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.binanceSymbol,
-      })),
-    );
+    return fetchBinanceUsdtQuotes(mapCryptoTargets(cryptoAssets, 'binance'));
   }
 
   if (CRYPTO_PROVIDER === 'coingecko') {
-    const coingeckoTargets = cryptoAssets
-      .filter((asset) => asset.coingeckoId)
-      .map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.coingeckoId,
-      }));
-    const coingeckoQuotes = await fetchCoingeckoUsdQuotes(coingeckoTargets);
-    const missingSymbols = cryptoAssets.filter((asset) => !coingeckoQuotes[asset.assetSymbol]);
+    const coingeckoQuotes = await fetchCoingeckoUsdQuotes(mapCryptoTargets(cryptoAssets, 'coingecko'));
+    const missingSymbols = findMissingCryptoAssets(cryptoAssets, coingeckoQuotes);
     if (missingSymbols.length === 0) {
       return coingeckoQuotes;
     }
 
-    const binanceQuotes = await fetchBinanceUsdtQuotes(
-      missingSymbols.map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.binanceSymbol,
-      })),
-    );
-    return {
-      ...coingeckoQuotes,
-      ...binanceQuotes,
-    };
+    const binanceQuotes = await fetchBinanceUsdtQuotes(mapCryptoTargets(missingSymbols, 'binance'));
+    return mergeQuotesByPriority([coingeckoQuotes, binanceQuotes]);
   }
 
-  const coinbaseQuotes = await fetchCoinbaseProductQuotes(
-    cryptoAssets.map((asset) => ({
-      assetSymbol: asset.assetSymbol,
-      providerSymbol: asset.coinbaseProduct,
-    })),
-  );
-  const missingAfterCoinbase = cryptoAssets.filter((asset) => !coinbaseQuotes[asset.assetSymbol]);
+  const coinbaseQuotes = await fetchCoinbaseProductQuotes(mapCryptoTargets(cryptoAssets, 'coinbase'));
+  const missingAfterCoinbase = findMissingCryptoAssets(cryptoAssets, coinbaseQuotes);
   if (missingAfterCoinbase.length === 0) {
     return coinbaseQuotes;
   }
 
   const coingeckoQuotes = await fetchCoingeckoUsdQuotes(
-    missingAfterCoinbase
-      .filter((asset) => asset.coingeckoId)
-      .map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.coingeckoId,
-      })),
+    mapCryptoTargets(missingAfterCoinbase, 'coingecko'),
   );
-  const missingAfterCoingecko = missingAfterCoinbase.filter(
-    (asset) => !coingeckoQuotes[asset.assetSymbol],
-  );
+  const missingAfterCoingecko = findMissingCryptoAssets(missingAfterCoinbase, coingeckoQuotes);
   if (missingAfterCoingecko.length === 0) {
-    return {
-      ...coinbaseQuotes,
-      ...coingeckoQuotes,
-    };
+    return mergeQuotesByPriority([coinbaseQuotes, coingeckoQuotes]);
   }
 
-  const binanceQuotes = await fetchBinanceUsdtQuotes(
-    missingAfterCoingecko.map((asset) => ({
-      assetSymbol: asset.assetSymbol,
-      providerSymbol: asset.binanceSymbol,
-    })),
-  );
-  return {
-    // coinbase is preferred and should win for overlapping symbols
-    ...binanceQuotes,
-    ...coingeckoQuotes,
-    ...coinbaseQuotes,
-  };
+  const binanceQuotes = await fetchBinanceUsdtQuotes(mapCryptoTargets(missingAfterCoingecko, 'binance'));
+  // coinbase is preferred and should win for overlapping symbols
+  return mergeQuotesByPriority([coinbaseQuotes, coingeckoQuotes, binanceQuotes]);
 }
 
 async function getLiveFxRates() {
@@ -276,10 +274,10 @@ async function buildProviderDiagnostics() {
     const stockQuotes = await getStockQuoteMap();
     diagnostics.push({
       provider: 'finnhub',
-      status: Object.keys(stockQuotes).length > 0 ? 'ok' : 'error',
+      status: countQuotes(stockQuotes) > 0 ? 'ok' : 'error',
       message:
-        Object.keys(stockQuotes).length > 0
-          ? `Live stock quotes received (${Object.keys(stockQuotes).length}/${stockTargets.length}).`
+        countQuotes(stockQuotes) > 0
+          ? `Live stock quotes received (${countQuotes(stockQuotes)}/${stockTargets.length}).`
           : 'No live stock quotes received from Finnhub; stock prices are unavailable.',
       checkedAt: nowIsoString(),
     });
@@ -293,49 +291,33 @@ async function buildProviderDiagnostics() {
       checkedAt: nowIsoString(),
     });
   } else if (CRYPTO_PROVIDER === 'binance') {
-    const binanceQuotes = await fetchBinanceUsdtQuotes(
-      cryptoTargets.map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.binanceSymbol,
-      })),
-    );
+    const binanceQuotes = await fetchBinanceUsdtQuotes(mapCryptoTargets(cryptoTargets, 'binance'));
     diagnostics.push({
       provider: 'binance',
-      status: Object.keys(binanceQuotes).length > 0 ? 'ok' : 'error',
+      status: countQuotes(binanceQuotes) > 0 ? 'ok' : 'error',
       message:
-        Object.keys(binanceQuotes).length > 0
-          ? `Live crypto quotes received from Binance (${Object.keys(binanceQuotes).length}/${cryptoTargets.length}).`
+        countQuotes(binanceQuotes) > 0
+          ? `Live crypto quotes received from Binance (${countQuotes(binanceQuotes)}/${cryptoTargets.length}).`
           : 'No live crypto quotes received from Binance; crypto prices are unavailable.',
       checkedAt: nowIsoString(),
     });
   } else if (CRYPTO_PROVIDER === 'coingecko') {
-    const coingeckoTargets = cryptoTargets
-      .filter((asset) => asset.coingeckoId)
-      .map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.coingeckoId,
-      }));
-    const coingeckoQuotes = await fetchCoingeckoUsdQuotes(coingeckoTargets);
-    const missingSymbols = cryptoTargets.filter((asset) => !coingeckoQuotes[asset.assetSymbol]);
+    const coingeckoQuotes = await fetchCoingeckoUsdQuotes(mapCryptoTargets(cryptoTargets, 'coingecko'));
+    const missingSymbols = findMissingCryptoAssets(cryptoTargets, coingeckoQuotes);
     const binanceQuotes = missingSymbols.length > 0
-      ? await fetchBinanceUsdtQuotes(
-        missingSymbols.map((asset) => ({
-          assetSymbol: asset.assetSymbol,
-          providerSymbol: asset.binanceSymbol,
-        })),
-      )
+      ? await fetchBinanceUsdtQuotes(mapCryptoTargets(missingSymbols, 'binance'))
       : {};
-    const resolvedCount = Object.keys(coingeckoQuotes).length + Object.keys(binanceQuotes).length;
+    const resolvedCount = countQuotes(coingeckoQuotes) + countQuotes(binanceQuotes);
     const unresolved = missingSymbols
       .filter((asset) => !binanceQuotes[asset.assetSymbol])
       .map((asset) => asset.assetSymbol);
 
     diagnostics.push({
       provider: 'coingecko',
-      status: Object.keys(coingeckoQuotes).length > 0 ? 'ok' : 'error',
+      status: countQuotes(coingeckoQuotes) > 0 ? 'ok' : 'error',
       message:
-        Object.keys(coingeckoQuotes).length > 0
-          ? `CoinGecko returned ${Object.keys(coingeckoQuotes).length} crypto quote(s).`
+        countQuotes(coingeckoQuotes) > 0
+          ? `CoinGecko returned ${countQuotes(coingeckoQuotes)} crypto quote(s).`
           : 'CoinGecko returned no crypto quotes.',
       checkedAt: nowIsoString(),
     });
@@ -343,34 +325,29 @@ async function buildProviderDiagnostics() {
     diagnostics.push({
       provider: 'binance-fallback',
       status:
-        unresolved.length === 0 && resolvedCount > 0
-          ? missingAfterCoinbase.length === 0
-            ? 'not_needed'
-            : 'ok'
-          : 'error',
+        missingSymbols.length === 0
+          ? 'not_needed'
+          : unresolved.length === 0 && resolvedCount > 0
+            ? 'ok'
+            : 'error',
       message:
         missingSymbols.length === 0
           ? 'Fallback not needed; CoinGecko covered all symbols.'
           : unresolved.length === 0
-            ? `Binance fallback resolved remaining symbols (${Object.keys(binanceQuotes).length}/${missingSymbols.length}).`
+            ? `Binance fallback resolved remaining symbols (${countQuotes(binanceQuotes)}/${missingSymbols.length}).`
             : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols are unavailable.`,
       checkedAt: nowIsoString(),
     });
   } else {
-    const coinbaseQuotes = await fetchCoinbaseProductQuotes(
-      cryptoTargets.map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.coinbaseProduct,
-      })),
-    );
-    const missingAfterCoinbase = cryptoTargets.filter((asset) => !coinbaseQuotes[asset.assetSymbol]);
+    const coinbaseQuotes = await fetchCoinbaseProductQuotes(mapCryptoTargets(cryptoTargets, 'coinbase'));
+    const missingAfterCoinbase = findMissingCryptoAssets(cryptoTargets, coinbaseQuotes);
 
     diagnostics.push({
       provider: 'coinbase',
-      status: Object.keys(coinbaseQuotes).length > 0 ? 'ok' : 'error',
+      status: countQuotes(coinbaseQuotes) > 0 ? 'ok' : 'error',
       message:
-        Object.keys(coinbaseQuotes).length > 0
-          ? `Coinbase returned ${Object.keys(coinbaseQuotes).length} crypto quote(s).`
+        countQuotes(coinbaseQuotes) > 0
+          ? `Coinbase returned ${countQuotes(coinbaseQuotes)} crypto quote(s).`
           : 'Coinbase returned no crypto quotes.',
       checkedAt: nowIsoString(),
     });
@@ -392,38 +369,25 @@ async function buildProviderDiagnostics() {
       return diagnostics;
     }
 
-    const coingeckoTargets = missingAfterCoinbase
-      .filter((asset) => asset.coingeckoId)
-      .map((asset) => ({
-        assetSymbol: asset.assetSymbol,
-        providerSymbol: asset.coingeckoId,
-      }));
-    const coingeckoQuotes = await fetchCoingeckoUsdQuotes(coingeckoTargets);
-    const missingAfterCoingecko = missingAfterCoinbase.filter(
-      (asset) => !coingeckoQuotes[asset.assetSymbol],
+    const coingeckoQuotes = await fetchCoingeckoUsdQuotes(
+      mapCryptoTargets(missingAfterCoinbase, 'coingecko'),
     );
+    const missingAfterCoingecko = findMissingCryptoAssets(missingAfterCoinbase, coingeckoQuotes);
     const binanceQuotes = missingAfterCoingecko.length > 0
-      ? await fetchBinanceUsdtQuotes(
-        missingAfterCoingecko.map((asset) => ({
-          assetSymbol: asset.assetSymbol,
-          providerSymbol: asset.binanceSymbol,
-        })),
-      )
+      ? await fetchBinanceUsdtQuotes(mapCryptoTargets(missingAfterCoingecko, 'binance'))
       : {};
     const resolvedCount =
-      Object.keys(coinbaseQuotes).length +
-      Object.keys(coingeckoQuotes).length +
-      Object.keys(binanceQuotes).length;
+      countQuotes(coinbaseQuotes) + countQuotes(coingeckoQuotes) + countQuotes(binanceQuotes);
     const unresolved = missingAfterCoingecko
       .filter((asset) => !binanceQuotes[asset.assetSymbol])
       .map((asset) => asset.assetSymbol);
 
     diagnostics.push({
       provider: 'coingecko',
-      status: Object.keys(coingeckoQuotes).length > 0 ? 'ok' : 'error',
+      status: countQuotes(coingeckoQuotes) > 0 ? 'ok' : 'error',
       message:
-        Object.keys(coingeckoQuotes).length > 0
-          ? `CoinGecko fallback returned ${Object.keys(coingeckoQuotes).length} crypto quote(s).`
+        countQuotes(coingeckoQuotes) > 0
+          ? `CoinGecko fallback returned ${countQuotes(coingeckoQuotes)} crypto quote(s).`
           : 'CoinGecko fallback returned no crypto quotes.',
       checkedAt: nowIsoString(),
     });
@@ -442,7 +406,7 @@ async function buildProviderDiagnostics() {
             ? 'Fallback not needed; Coinbase covered all symbols.'
             : 'Binance fallback not needed; Coinbase/CoinGecko covered all symbols.'
           : unresolved.length === 0
-            ? `Binance fallback resolved remaining symbols (${Object.keys(binanceQuotes).length}/${missingAfterCoingecko.length}).`
+            ? `Binance fallback resolved remaining symbols (${countQuotes(binanceQuotes)}/${missingAfterCoingecko.length}).`
             : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols are unavailable.`,
       checkedAt: nowIsoString(),
     });
@@ -473,12 +437,8 @@ export default function createApp() {
   });
 
   app.get('/api/dev/status', async (_req, res) => {
-    const stockAssets = (PORTFOLIO_CONFIG.assets || []).filter((asset) =>
-      /stock/i.test(String(asset.category || '')),
-    );
-    const cryptoAssets = (PORTFOLIO_CONFIG.assets || []).filter((asset) =>
-      /crypto/i.test(String(asset.category || '')),
-    );
+    const stockAssets = getAssetsByCategory('stock');
+    const cryptoAssets = getAssetsByCategory('crypto');
     try {
       const providerDiagnostics = await buildProviderDiagnostics();
       res.json({
