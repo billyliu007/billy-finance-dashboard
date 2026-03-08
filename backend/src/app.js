@@ -494,12 +494,6 @@ export default function createApp() {
             range: PORTFOLIO_CONFIG.range,
             notes: 'Qty and purchase prices remain sheet-backed',
           },
-          {
-            key: 'crypto_current_prices',
-            label: 'Crypto current prices',
-            range: PORTFOLIO_CONFIG.range,
-            notes: 'No longer used; crypto prices come from providers only',
-          },
         ],
       });
     } catch (error) {
