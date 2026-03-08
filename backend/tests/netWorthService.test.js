@@ -5,7 +5,6 @@ import { buildNetWorthPayload } from '../src/services/netWorthService.js';
 /**
  * Build mock sheet data matching backend config cell refs.
  * Net Worth: B3, B12, B11, B17 (detailItems)
- * Forex: C1 (SGD), C2 (USD)
  * Portfolio: D28/F28, D36/F36, etc. (assets)
  * Cashflow: col A date, col B netWorth
  */
@@ -16,12 +15,6 @@ function mockNetWorthSheet() {
   rows[10][1] = '5000';   // B12 - USD_cash
   rows[9][1] = '2000';    // B11 - USDT/USDC_cash
   rows[15][1] = '3000';   // B17 - cny_cash_debt (liability)
-  return { headers, rows };
-}
-
-function mockForexSheet() {
-  const headers = ['', '', '1.34'];  // C1 = SGD rate
-  const rows = [['', '', '7.2']];    // C2 = USD rate
   return { headers, rows };
 }
 
@@ -46,9 +39,9 @@ function mockCashflowSheet() {
 test('buildNetWorthPayload returns overview and performance structure', () => {
   const payload = buildNetWorthPayload({
     netWorthSheet: mockNetWorthSheet(),
-    forexSheet: mockForexSheet(),
     portfolioSheet: mockPortfolioSheet(),
     cashflowSheet: mockCashflowSheet(),
+    fxRatesOverride: { SGD: 1.34, USD: 7.2 },
   });
 
   assert.ok(payload.overview);
@@ -63,9 +56,9 @@ test('buildNetWorthPayload returns overview and performance structure', () => {
 test('buildNetWorthPayload computes total net worth from cash and positions', () => {
   const payload = buildNetWorthPayload({
     netWorthSheet: mockNetWorthSheet(),
-    forexSheet: mockForexSheet(),
     portfolioSheet: mockPortfolioSheet(),
     cashflowSheet: mockCashflowSheet(),
+    fxRatesOverride: { SGD: 1.34, USD: 7.2 },
   });
 
   // SGD 10000 * 1.34 + USD (5000+2000) * 7.2 + USD positions (0.5*60000=30000) * 7.2 - CNY debt 3000
@@ -74,16 +67,12 @@ test('buildNetWorthPayload computes total net worth from cash and positions', ()
   assert.ok(payload.overview.hasData);
 });
 
-test('buildNetWorthPayload normalizes RMB to CNY in forex rates', () => {
-  const forexWithRmb = {
-    headers: ['', '', '1.34'],
-    rows: [['', '', '7.2']],
-  };
+test('buildNetWorthPayload handles fxRatesOverride inputs', () => {
   const payload = buildNetWorthPayload({
     netWorthSheet: mockNetWorthSheet(),
-    forexSheet: forexWithRmb,
     portfolioSheet: mockPortfolioSheet(),
     cashflowSheet: mockCashflowSheet(),
+    fxRatesOverride: { SGD: 1.34, USD: 7.2, RMB: 1 },
   });
   assert.ok(payload.overview.componentValues.length > 0);
 });
@@ -92,9 +81,9 @@ test('buildNetWorthPayload handles empty cashflow', () => {
   const emptyCashflow = { headers: ['Date', 'Net Worth'], rows: [] };
   const payload = buildNetWorthPayload({
     netWorthSheet: mockNetWorthSheet(),
-    forexSheet: mockForexSheet(),
     portfolioSheet: mockPortfolioSheet(),
     cashflowSheet: emptyCashflow,
+    fxRatesOverride: { SGD: 1.34, USD: 7.2 },
   });
 
   assert.strictEqual(payload.performance.hasData, false);

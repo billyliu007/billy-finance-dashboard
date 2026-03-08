@@ -11,15 +11,12 @@ function isCryptoAsset(asset) {
 }
 
 function resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) {
-  const fallbackPrice = parseMoney(currentPriceRaw);
-  const fallback = {
-    currentPrice: fallbackPrice,
-    priceSource: 'sheet',
-    priceTimestamp: null,
-  };
-
   if (!isStockAsset(asset) && !isCryptoAsset(asset)) {
-    return fallback;
+    return {
+      currentPrice: parseMoney(currentPriceRaw),
+      priceSource: 'sheet',
+      priceTimestamp: null,
+    };
   }
 
   const symbol = String(asset?.name || '').trim().toUpperCase();
@@ -29,7 +26,11 @@ function resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) 
       ? Number(cryptoQuotes?.[symbol]?.price)
       : NaN;
   if (!Number.isFinite(livePrice) || livePrice <= 0) {
-    return fallback;
+    return {
+      currentPrice: null,
+      priceSource: 'unavailable',
+      priceTimestamp: null,
+    };
   }
 
   return {
@@ -49,12 +50,12 @@ export function buildPortfolioPayload({ headers = [], rows = [], stockQuotes = {
     const qty = parseMoney(qtyRaw);
     const purchasePrice = parseMoney(purchasePriceRaw);
     const priceResolution = resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes);
-    const currentPrice = priceResolution.currentPrice;
+    const currentPrice = Number.isFinite(priceResolution.currentPrice) ? priceResolution.currentPrice : 0;
     const totalPurchaseCost = qty * purchasePrice;
     const currentValue = qty * currentPrice;
     const pnl = currentValue - totalPurchaseCost;
     const pnlPct = totalPurchaseCost === 0 ? 0 : (pnl / totalPurchaseCost) * 100;
-    const found = [qtyRaw, purchasePriceRaw, currentPriceRaw].some((value) => String(value || '').trim() !== '');
+    const found = [qtyRaw, purchasePriceRaw].some((value) => String(value || '').trim() !== '');
 
     return {
       ...asset,

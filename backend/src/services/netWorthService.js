@@ -14,18 +14,6 @@ const NET_WORTH_COMPONENTS = [
   { key: 'cny_assets_total', displayName: 'CNY Assets Total' },
 ];
 
-function buildFxRates(forexHeaders, forexRows, forexRatesConfig = []) {
-  const rates = { CNY: 1 };
-
-  forexRatesConfig.forEach((rateConfig) => {
-    const currency = normalizeCurrencyCode(rateConfig.currency);
-    const rawRate = parseMoney(getCellValue(forexHeaders, forexRows, rateConfig.cellRef));
-    rates[currency] = rawRate > 0 ? rawRate : null;
-  });
-
-  return rates;
-}
-
 function buildDetailRows(headers, rows, fxRates) {
   return (DASHBOARD_CONFIG.detailItems || []).map((item) => {
     const result = findComponentValue(headers, rows, item, DASHBOARD_CONFIG);
@@ -58,9 +46,8 @@ function isCryptoAsset(asset) {
 }
 
 function resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) {
-  const fallbackPrice = parseMoney(currentPriceRaw);
   if (!isStockAsset(asset) && !isCryptoAsset(asset)) {
-    return fallbackPrice;
+    return parseMoney(currentPriceRaw);
   }
 
   const symbol = String(asset?.name || '').trim().toUpperCase();
@@ -68,7 +55,7 @@ function resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, crypto
     ? Number(stockQuotes?.[symbol]?.price)
     : Number(cryptoQuotes?.[symbol]?.price);
   if (!Number.isFinite(livePrice) || livePrice <= 0) {
-    return fallbackPrice;
+    return null;
   }
 
   return livePrice;
@@ -77,14 +64,17 @@ function resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, crypto
 function computeUsdPositionsTotal(headers, rows, stockQuotes = {}, cryptoQuotes = {}) {
   return PORTFOLIO_CONFIG.assets.reduce((sum, asset) => {
     const qtyRaw = getCellValue(headers, rows, asset.qtyCell);
-    const currentPriceRaw = getCellValue(headers, rows, asset.currentPriceCell);
-    const hasData = [qtyRaw, currentPriceRaw].some((value) => String(value || '').trim() !== '');
+    const hasData = String(qtyRaw || '').trim() !== '';
     if (!hasData) {
       return sum;
     }
 
     const qty = parseMoney(qtyRaw);
+    const currentPriceRaw = getCellValue(headers, rows, asset.currentPriceCell);
     const currentPrice = resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes);
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+      return sum;
+    }
     return sum + qty * currentPrice;
   }, 0);
 }
@@ -244,7 +234,6 @@ function summarizeCashflow(cashflowData) {
 
 export function buildNetWorthPayload({
   netWorthSheet,
-  forexSheet,
   portfolioSheet,
   cashflowSheet,
   stockQuotes = {},
@@ -253,14 +242,12 @@ export function buildNetWorthPayload({
 }) {
   const headers = netWorthSheet.headers || [];
   const rows = netWorthSheet.rows || [];
-  const forexHeaders = forexSheet.headers || [];
-  const forexRows = forexSheet.rows || [];
   const portfolioHeaders = portfolioSheet.headers || [];
   const portfolioRows = portfolioSheet.rows || [];
   const cashflowRows = cashflowSheet.rows || [];
 
   const fxRates = {
-    ...buildFxRates(forexHeaders, forexRows, DASHBOARD_CONFIG.forexRates),
+    CNY: 1,
     ...Object.entries(fxRatesOverride).reduce((acc, [currency, rate]) => {
       const parsedRate = Number(rate);
       if (Number.isFinite(parsedRate) && parsedRate > 0) {

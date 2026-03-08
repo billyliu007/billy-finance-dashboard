@@ -34,11 +34,6 @@ const DEFAULT_CONFIG = {
       currency: 'CNY',
     },
   ],
-  forexRange: "'Forex'!A1:C20",
-  forexRates: [
-    { currency: 'SGD', cellRef: 'C1' },
-    { currency: 'USD', cellRef: 'C2' },
-  ],
   cashflowRange: "'Cashflow'!A1:C400",
 };
 
@@ -65,16 +60,8 @@ function normalizeConfig(userConfig) {
     merged.detailItems = DEFAULT_CONFIG.detailItems;
   }
 
-  if (!Array.isArray(merged.forexRates) || merged.forexRates.length === 0) {
-    merged.forexRates = DEFAULT_CONFIG.forexRates;
-  }
-
   if (typeof merged.netWorthRange !== 'string' || merged.netWorthRange.trim() === '') {
     merged.netWorthRange = DEFAULT_CONFIG.netWorthRange;
-  }
-
-  if (typeof merged.forexRange !== 'string' || merged.forexRange.trim() === '') {
-    merged.forexRange = DEFAULT_CONFIG.forexRange;
   }
 
   if (typeof merged.cashflowRange !== 'string' || merged.cashflowRange.trim() === '') {

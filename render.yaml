@@ -7,7 +7,9 @@ services:
     startCommand: npm run start --prefix backend
     healthCheckPath: /api/health
     envVars:
+      # Secrets are sourced from this Render Environment Group.
       - fromGroup: billy-finance-secrets
+      # Required secret/env keys (documented explicitly for portability).
       - key: PORT
         value: 4000
       - key: GOOGLE_SHEETS_SPREADSHEET_ID
@@ -17,6 +19,8 @@ services:
       - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
         sync: false
       - key: GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+        sync: false
+      - key: FINNHUB_API_KEY
         sync: false
       - key: FX_PROVIDER
         value: frankfurter

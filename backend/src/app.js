@@ -248,10 +248,6 @@ async function getCryptoQuoteMap() {
 }
 
 async function getLiveFxRates() {
-  if (FX_PROVIDER === 'sheet') {
-    return {};
-  }
-
   if (FX_PROVIDER === 'frankfurter') {
     return fetchFrankfurterFxRates();
   }
@@ -273,7 +269,7 @@ async function buildProviderDiagnostics() {
     diagnostics.push({
       provider: 'finnhub',
       status: 'disabled',
-      message: 'FINNHUB_API_KEY is missing; stock quotes will fall back to sheet.',
+      message: 'FINNHUB_API_KEY is missing; stock quotes are unavailable.',
       checkedAt: nowIsoString(),
     });
   } else {
@@ -284,7 +280,7 @@ async function buildProviderDiagnostics() {
       message:
         Object.keys(stockQuotes).length > 0
           ? `Live stock quotes received (${Object.keys(stockQuotes).length}/${stockTargets.length}).`
-          : 'No live stock quotes received from Finnhub; using sheet fallback.',
+          : 'No live stock quotes received from Finnhub; stock prices are unavailable.',
       checkedAt: nowIsoString(),
     });
   }
@@ -293,7 +289,7 @@ async function buildProviderDiagnostics() {
     diagnostics.push({
       provider: 'crypto',
       status: 'disabled',
-      message: 'CRYPTO_PROVIDER=sheet; crypto prices are sheet-backed.',
+      message: 'CRYPTO_PROVIDER=sheet; crypto prices are unavailable in provider mode.',
       checkedAt: nowIsoString(),
     });
   } else if (CRYPTO_PROVIDER === 'binance') {
@@ -309,7 +305,7 @@ async function buildProviderDiagnostics() {
       message:
         Object.keys(binanceQuotes).length > 0
           ? `Live crypto quotes received from Binance (${Object.keys(binanceQuotes).length}/${cryptoTargets.length}).`
-          : 'No live crypto quotes received from Binance; using sheet fallback.',
+          : 'No live crypto quotes received from Binance; crypto prices are unavailable.',
       checkedAt: nowIsoString(),
     });
   } else if (CRYPTO_PROVIDER === 'coingecko') {
@@ -357,7 +353,7 @@ async function buildProviderDiagnostics() {
           ? 'Fallback not needed; CoinGecko covered all symbols.'
           : unresolved.length === 0
             ? `Binance fallback resolved remaining symbols (${Object.keys(binanceQuotes).length}/${missingSymbols.length}).`
-            : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols use sheet fallback.`,
+            : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols are unavailable.`,
       checkedAt: nowIsoString(),
     });
   } else {
@@ -447,19 +443,12 @@ async function buildProviderDiagnostics() {
             : 'Binance fallback not needed; Coinbase/CoinGecko covered all symbols.'
           : unresolved.length === 0
             ? `Binance fallback resolved remaining symbols (${Object.keys(binanceQuotes).length}/${missingAfterCoingecko.length}).`
-            : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols use sheet fallback.`,
+            : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols are unavailable.`,
       checkedAt: nowIsoString(),
     });
   }
 
-  if (FX_PROVIDER === 'sheet') {
-    diagnostics.push({
-      provider: 'fx',
-      status: 'disabled',
-      message: 'FX_PROVIDER=sheet; FX rates are sheet-backed.',
-      checkedAt: nowIsoString(),
-    });
-  } else {
+  {
     const fxRates = await getLiveFxRates();
     const hasRates = Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD);
     diagnostics.push({
@@ -467,7 +456,7 @@ async function buildProviderDiagnostics() {
       status: hasRates ? 'ok' : 'error',
       message: hasRates
         ? 'Live FX rates received for USD/CNY and SGD/CNY.'
-        : 'Live FX rates unavailable; using sheet fallback.',
+        : 'Live FX rates unavailable; FX-based conversions are unavailable.',
       checkedAt: nowIsoString(),
     });
   }
@@ -496,18 +485,18 @@ export default function createApp() {
         backendVersion: BACKEND_VERSION,
         marketData: {
           stocks: {
-            primary: process.env.FINNHUB_API_KEY ? 'finnhub' : 'sheet',
-            fallback: 'sheet',
+            primary: process.env.FINNHUB_API_KEY ? 'finnhub' : 'none',
+            fallback: 'none',
             symbols: stockAssets.map((asset) => String(asset.name || '').toUpperCase()),
           },
           crypto: {
-            primary: CRYPTO_PROVIDER === 'sheet' ? 'sheet' : CRYPTO_PROVIDER,
+            primary: CRYPTO_PROVIDER === 'sheet' ? 'none' : CRYPTO_PROVIDER,
             fallback:
               CRYPTO_PROVIDER === 'coinbase'
-                ? 'coingecko -> binance -> sheet'
+                ? 'coingecko -> binance'
                 : CRYPTO_PROVIDER === 'coingecko'
-                  ? 'binance -> sheet'
-                  : 'sheet',
+                  ? 'binance'
+                  : 'none',
             symbols: cryptoAssets.map((asset) => {
               const name = String(asset.name || '').toUpperCase();
               if (CRYPTO_PROVIDER === 'coinbase') {
@@ -520,8 +509,8 @@ export default function createApp() {
             }),
           },
           fx: {
-            primary: FX_PROVIDER === 'sheet' ? 'sheet' : FX_PROVIDER,
-            fallback: 'sheet',
+            primary: FX_PROVIDER === 'sheet' ? 'none' : FX_PROVIDER,
+            fallback: 'none',
             pairs: ['USD/CNY', 'SGD/CNY'],
           },
         },
@@ -532,12 +521,6 @@ export default function createApp() {
             label: 'Net worth cash/debt components',
             range: DASHBOARD_CONFIG.netWorthRange,
             notes: 'Cash/debt values from configured cell references',
-          },
-          {
-            key: 'fx_rates',
-            label: 'FX rates (USD/CNY, SGD/CNY)',
-            range: DASHBOARD_CONFIG.forexRange,
-            notes: 'Used for CNY conversion in net worth totals',
           },
           {
             key: 'cashflow_history',
@@ -555,7 +538,7 @@ export default function createApp() {
             key: 'crypto_current_prices',
             label: 'Crypto current prices',
             range: PORTFOLIO_CONFIG.range,
-            notes: 'Used as fallback if live crypto provider is unavailable',
+            notes: 'No longer used; crypto prices come from providers only',
           },
         ],
       });
@@ -605,18 +588,16 @@ export default function createApp() {
     try {
       const ranges = [
         DASHBOARD_CONFIG.netWorthRange,
-        DASHBOARD_CONFIG.forexRange,
         PORTFOLIO_CONFIG.range,
         DASHBOARD_CONFIG.cashflowRange,
       ];
       const sheetsData = await fetchMultipleSheetRows(ranges);
-      const [netWorthSheet, forexSheet, portfolioSheet, cashflowSheet] = sheetsData;
+      const [netWorthSheet, portfolioSheet, cashflowSheet] = sheetsData;
       const stockQuotes = await getStockQuoteMap();
       const cryptoQuotes = await getCryptoQuoteMap();
       const fxRates = await getLiveFxRates();
       const payload = buildNetWorthPayload({
         netWorthSheet,
-        forexSheet,
         portfolioSheet,
         cashflowSheet,
         stockQuotes,
