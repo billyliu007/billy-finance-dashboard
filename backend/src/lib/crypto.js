@@ -1,4 +1,10 @@
 const BINANCE_TICKER_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price';
+const COINGECKO_SIMPLE_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price';
+
+const COINGECKO_ID_BY_SYMBOL = {
+  BTC: 'bitcoin',
+  ETH: 'ethereum',
+};
 
 function toSymbolList(symbols = []) {
   return Array.from(
@@ -50,4 +56,54 @@ export async function fetchBinanceUsdtQuotes(symbols = []) {
     }
     return acc;
   }, {});
+}
+
+export async function fetchCoingeckoUsdQuotes(symbols = []) {
+  const normalizedSymbols = toSymbolList(symbols);
+  if (normalizedSymbols.length === 0) {
+    return {};
+  }
+
+  const idToSymbol = new Map();
+  normalizedSymbols.forEach((symbol) => {
+    const coinId = COINGECKO_ID_BY_SYMBOL[symbol];
+    if (coinId) {
+      idToSymbol.set(coinId, symbol);
+    }
+  });
+
+  const ids = Array.from(idToSymbol.keys());
+  if (ids.length === 0) {
+    return {};
+  }
+
+  try {
+    const params = new URLSearchParams({
+      ids: ids.join(','),
+      vs_currencies: 'usd',
+    });
+    const response = await fetch(`${COINGECKO_SIMPLE_PRICE_URL}?${params.toString()}`);
+    if (!response.ok) {
+      return {};
+    }
+
+    const body = await response.json();
+    const timestamp = Date.now();
+    return ids.reduce((acc, id) => {
+      const symbol = idToSymbol.get(id);
+      const price = Number(body?.[id]?.usd);
+      if (symbol && Number.isFinite(price) && price > 0) {
+        acc[symbol] = {
+          symbol,
+          pair: `${symbol}/USD`,
+          price,
+          timestamp,
+          source: 'coingecko',
+        };
+      }
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
 }

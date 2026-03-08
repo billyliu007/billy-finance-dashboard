@@ -21,7 +21,7 @@ services:
       - key: FX_PROVIDER
         value: frankfurter
       - key: CRYPTO_PROVIDER
-        value: binance
+        value: coingecko
 
   - type: web
     name: billy-finance-frontend

@@ -34,7 +34,7 @@ function resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) 
 
   return {
     currentPrice: livePrice,
-    priceSource: isStockAsset(asset) ? 'finnhub' : 'binance',
+    priceSource: isStockAsset(asset) ? 'finnhub' : String(cryptoQuotes?.[symbol]?.source || 'crypto-live'),
     priceTimestamp: isStockAsset(asset)
       ? Number(stockQuotes?.[symbol]?.timestamp) || null
       : Number(cryptoQuotes?.[symbol]?.timestamp) || null,

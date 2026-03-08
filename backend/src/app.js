@@ -8,7 +8,7 @@ import { buildNetWorthPayload } from './services/netWorthService.js';
 import { buildPortfolioPayload } from './services/portfolioService.js';
 import { fetchFinnhubQuotes } from './lib/finnhub.js';
 import { fetchFrankfurterFxRates } from './lib/fx.js';
-import { fetchBinanceUsdtQuotes } from './lib/crypto.js';
+import { fetchBinanceUsdtQuotes, fetchCoingeckoUsdQuotes } from './lib/crypto.js';
 
 const SHEETS_READONLY_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 const DEFAULT_SHEET_RANGE = 'Sheet1!A1:Z100';
@@ -16,7 +16,7 @@ const FETCH_ERROR_MESSAGE =
   'Failed to fetch Google Sheets data. Check backend environment configuration and sheet permissions.';
 const BACKEND_VERSION = resolveBackendVersion();
 const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
-const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'binance').trim().toLowerCase();
+const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'coingecko').trim().toLowerCase();
 
 function resolveBackendVersion() {
   try {
@@ -145,7 +145,17 @@ async function getCryptoQuoteMap() {
     return fetchBinanceUsdtQuotes(cryptoSymbols);
   }
 
-  return {};
+  const coingeckoQuotes = await fetchCoingeckoUsdQuotes(cryptoSymbols);
+  const missingSymbols = cryptoSymbols.filter((symbol) => !coingeckoQuotes[symbol]);
+  if (missingSymbols.length === 0) {
+    return coingeckoQuotes;
+  }
+
+  const binanceQuotes = await fetchBinanceUsdtQuotes(missingSymbols);
+  return {
+    ...coingeckoQuotes,
+    ...binanceQuotes,
+  };
 }
 
 async function getLiveFxRates() {
@@ -186,7 +196,7 @@ export default function createApp() {
         },
         crypto: {
           primary: CRYPTO_PROVIDER === 'sheet' ? 'sheet' : CRYPTO_PROVIDER,
-          fallback: 'sheet',
+          fallback: CRYPTO_PROVIDER === 'coingecko' ? 'binance -> sheet' : 'sheet',
           symbols: cryptoAssets.map((asset) => `${String(asset.name || '').toUpperCase()}/USDT`),
         },
         fx: {
