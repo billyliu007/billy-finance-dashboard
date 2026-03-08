@@ -93,6 +93,34 @@ export default function DevelopmentPage({ frontendVersion }) {
 
         {!status.isLoading && !status.error && (
           <article className="tableCard">
+            <h2>3rd Party Fetch Diagnostics</h2>
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                    <th>Checked At</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(status.data?.providerDiagnostics || []).map((item) => (
+                    <tr key={`${item.provider}-${item.checkedAt}`}>
+                      <td>{item.provider}</td>
+                      <td>{item.status}</td>
+                      <td>{item.message}</td>
+                      <td>{item.checkedAt ? new Date(item.checkedAt).toLocaleString() : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        )}
+
+        {!status.isLoading && !status.error && (
+          <article className="tableCard">
             <h2>Other Sheet-Backed Data</h2>
             <div className="tableWrap">
               <table>
