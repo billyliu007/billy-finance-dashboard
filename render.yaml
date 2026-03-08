@@ -3,8 +3,9 @@ services:
     name: billy-finance-backend
     env: node
     rootDir: .
-    buildCommand: npm install --prefix backend
+    buildCommand: npm ci --prefix backend
     startCommand: npm run start --prefix backend
+    healthCheckPath: /api/health
     envVars:
       - key: PORT
         value: 4000
