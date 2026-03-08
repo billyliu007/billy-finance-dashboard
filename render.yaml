@@ -17,7 +17,7 @@ services:
       - key: GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
         sync: false
       - key: FINNHUB_API_KEY
-        sync: false
+        value: CHANGE_ME_FINNHUB_API_KEY
       - key: FX_PROVIDER
         value: frankfurter
       - key: CRYPTO_PROVIDER
