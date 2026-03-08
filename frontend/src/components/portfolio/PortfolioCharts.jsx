@@ -3,7 +3,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
+  LabelList,
   Pie,
   PieChart,
   ReferenceLine,
@@ -120,6 +120,25 @@ function ActivePnlBar(props) {
   );
 }
 
+function PnlBarLabel({ x, y, width, height, index, data, hideValues }) {
+  if (![x, y, width, height].every((value) => Number.isFinite(value))) {
+    return null;
+  }
+
+  const point = Number.isInteger(index) ? data[index] : null;
+  const pnl = Number(point?.pnl) || 0;
+  const pnlPct = Number(point?.pnlPct) || 0;
+  const labelText = `${formatMaybeHidden(hideValues, formatMoney, pnl)} (${hideValues ? 'Hidden' : formatPercent(pnlPct)})`;
+  const labelX = pnl >= 0 ? x + width + 8 : x - 8;
+  const textAnchor = pnl >= 0 ? 'start' : 'end';
+
+  return (
+    <text x={labelX} y={y + height / 2} dy={4} fill="#e2e8f0" fontSize={11} textAnchor={textAnchor}>
+      {labelText}
+    </text>
+  );
+}
+
 export default function PortfolioCharts({ hideValues, allocationData, chartData, assetColorMap }) {
   const [activePieIndex, setActivePieIndex] = useState(-1);
   const pieCells = useMemo(
@@ -146,12 +165,13 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 innerRadius={55}
                 outerRadius={95}
                 paddingAngle={2}
+                isAnimationActive={false}
                 activeIndex={activePieIndex}
                 activeShape={<ActiveAllocationShape />}
                 onMouseEnter={(_, index) => setActivePieIndex(index)}
                 onMouseLeave={() => setActivePieIndex(-1)}
                 labelLine={false}
-                label={({ percent }) => `${((percent || 0) * 100).toFixed(1)}%`}
+                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(1)}%`}
               >
                 {pieCells.map((cell) => (
                   <Cell
@@ -173,7 +193,6 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 labelStyle={{ color: '#f8fafc' }}
                 itemStyle={{ color: '#e2e8f0' }}
               />
-              <Legend />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -212,6 +231,14 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
               />
               <ReferenceLine x={0} stroke="#64748b" />
               <Bar dataKey="pnl" radius={[4, 4, 4, 4]} activeBar={<ActivePnlBar />}>
+                <LabelList content={(props) => (
+                  <PnlBarLabel
+                    {...props}
+                    hideValues={hideValues}
+                    data={chartData}
+                  />
+                )}
+                />
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`${entry.name}-pnl-${index}`}
