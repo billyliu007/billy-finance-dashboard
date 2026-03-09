@@ -10,8 +10,6 @@ services:
       # Secrets are sourced from this Render Environment Group.
       - fromGroup: billy-finance-secrets
       # Required secret/env keys (documented explicitly for portability).
-      - key: PORT
-        value: 4000
       - key: GOOGLE_SHEETS_SPREADSHEET_ID
         sync: false
       - key: GOOGLE_SHEETS_RANGE
