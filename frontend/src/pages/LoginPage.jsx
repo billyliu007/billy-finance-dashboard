@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { API_BASE_URL } from '../constants.js';
 
 function resolveMessage(search) {
   const params = new URLSearchParams(search);
@@ -8,19 +9,21 @@ function resolveMessage(search) {
 
 export default function LoginPage() {
   const message = useMemo(() => resolveMessage(window.location.search), []);
+  const apiBase = String(API_BASE_URL || '').replace(/\/$/, '');
+  const authHref = (provider) => `${apiBase}/api/auth/${provider}/start`;
   return (
     <main className="authScreen">
       <section className="authCard">
         <h1>NetPulse</h1>
         <p>Sign in to access your personal dashboard data.</p>
         <div className="authActions">
-          <a href="/api/auth/google/start" className="authBtn">
+          <a href={authHref('google')} className="authBtn">
             Continue with Google
           </a>
-          <a href="/api/auth/apple/start" className="authBtn secondary">
+          <a href={authHref('apple')} className="authBtn secondary">
             Continue with Apple
           </a>
-          <a href="/api/auth/wechat/start" className="authBtn secondary">
+          <a href={authHref('wechat')} className="authBtn secondary">
             Continue with WeChat
           </a>
         </div>
