@@ -1,10 +1,8 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { findUserByEmail } from '../repositories/userRepository.js';
+import { listUsersForSnapshots } from '../repositories/userRepository.js';
 import { replaceNetWorthHistory } from '../repositories/financeRepository.js';
-
-const TARGET_EMAIL = String(process.env.DEFAULT_USER_EMAIL || 'Billyliu007@gmail.com').toLowerCase();
 const SOURCE_UTC_OFFSET_HOURS = 8;
 
 function parseUtcTimestampFromUtcPlus8(rawDateTime) {
@@ -83,8 +81,9 @@ function parseRows(rawText) {
 
 async function run() {
   const filePathArg = process.argv[2];
+  const userEmailArg = String(process.argv[3] || '').trim().toLowerCase();
   if (!filePathArg) {
-    throw new Error('Usage: npm run db:import-history --prefix backend -- <path-to-raw-tsv.txt>');
+    throw new Error('Usage: npm run db:import-history --prefix backend -- <path-to-raw-tsv.txt> [user-email]');
   }
 
   const absolutePath = resolve(process.cwd(), filePathArg);
@@ -94,14 +93,19 @@ async function run() {
     throw new Error('No valid history rows were parsed from the input file.');
   }
 
-  const user = await findUserByEmail(TARGET_EMAIL);
+  const users = await listUsersForSnapshots();
+  const user = userEmailArg
+    ? users.find((item) => String(item?.email || '').toLowerCase() === userEmailArg)
+    : users[0];
   if (!user) {
-    throw new Error(`User not found for email: ${TARGET_EMAIL}`);
+    throw new Error(userEmailArg
+      ? `User not found for email: ${userEmailArg}`
+      : 'No onboarded users found. Pass a target email as second argument.');
   }
 
   await replaceNetWorthHistory(user.id, historyRows);
   // eslint-disable-next-line no-console
-  console.log(`Imported ${historyRows.length} net worth rows for ${TARGET_EMAIL}.`);
+  console.log(`Imported ${historyRows.length} net worth rows for ${String(user.email || user.id)}.`);
 }
 
 run().catch((error) => {

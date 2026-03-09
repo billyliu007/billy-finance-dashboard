@@ -180,8 +180,7 @@ export async function completeGoogleLogin(code) {
     user = await findOrCreateUserByGoogleEmail({ email, displayName: profile?.name || null });
   } else {
     const migrationBindEnabled = String(process.env.MIGRATION_BIND_ENABLED || '').toLowerCase() === 'true';
-    const migrationEmail = String(process.env.MIGRATION_BIND_GOOGLE_EMAIL || '').toLowerCase();
-    if (migrationBindEnabled && migrationEmail && migrationEmail === email.toLowerCase()) {
+    if (migrationBindEnabled) {
       user = await findUserByEmail(email);
     }
     if (!user) {
