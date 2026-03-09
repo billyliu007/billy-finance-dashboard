@@ -8,7 +8,7 @@ services:
     healthCheckPath: /api/health
     envVars:
       # Secrets are sourced from this Render Environment Group.
-      - fromGroup: billy-finance-secrets
+      - fromGroup: netpulse-secrets
       # Required secret/env keys (documented explicitly for portability).
       - key: DATABASE_URL
         sync: false
@@ -81,7 +81,7 @@ services:
     buildCommand: npm ci --prefix backend
     startCommand: npm run cron:daily-snapshot --prefix backend
     envVars:
-      - fromGroup: billy-finance-secrets
+      - fromGroup: netpulse-secrets
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_SSL
