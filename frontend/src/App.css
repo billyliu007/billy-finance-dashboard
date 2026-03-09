@@ -1,3 +1,100 @@
+.lockScreen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  outline: none;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(56, 189, 248, 0.18), transparent 55%),
+    linear-gradient(180deg, rgba(2, 6, 23, 1), rgba(8, 20, 38, 1));
+}
+
+.lockCard {
+  width: min(380px, 100%);
+  padding: 24px 20px 18px;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  background: transparent;
+}
+
+.lockCard h1 {
+  margin: 0;
+  font-size: 1.65rem;
+  color: #f8fbff;
+  font-weight: 700;
+}
+
+.lockCard p {
+  margin: 0;
+  color: #d6e6ff;
+  font-size: 1rem;
+}
+
+.lockDots {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0 2px;
+}
+
+.lockDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(219, 234, 254, 0.65);
+  background: transparent;
+  transition: all 120ms ease;
+}
+
+.lockDot.filled {
+  background: #e2e8f0;
+  border-color: #e2e8f0;
+}
+
+.lockKeypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.keypadButton {
+  height: 72px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.35);
+  background: rgba(30, 41, 59, 0.6);
+  color: #f8fafc;
+  font-size: 1.45rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 90ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.keypadButton:hover {
+  background: rgba(51, 65, 85, 0.68);
+  border-color: rgba(241, 245, 249, 0.5);
+}
+
+.keypadButton:active {
+  transform: scale(0.97);
+}
+
+.keypadButton.action {
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+
+.keypadButton.ghost {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.keypadButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .appShell {
   display: grid;
   grid-template-columns: 248px 1fr;

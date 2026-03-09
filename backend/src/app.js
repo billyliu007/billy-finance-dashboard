@@ -283,6 +283,19 @@ async function buildProviderDiagnostics() {
     });
   }
 
+  {
+    const fxRates = await getLiveFxRates();
+    const hasRates = Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD);
+    diagnostics.push({
+      provider: FX_PROVIDER,
+      status: hasRates ? 'ok' : 'error',
+      message: hasRates
+        ? 'Live FX rates received for USD/CNY and SGD/CNY.'
+        : 'Live FX rates unavailable; FX-based conversions are unavailable.',
+      checkedAt: nowIsoString(),
+    });
+  }
+
   if (CRYPTO_PROVIDER === 'sheet') {
     diagnostics.push({
       provider: 'crypto',
@@ -366,63 +379,49 @@ async function buildProviderDiagnostics() {
         message: 'Fallback not needed; Coinbase covered all symbols.',
         checkedAt: nowIsoString(),
       });
-      return diagnostics;
+    } else {
+      const coingeckoQuotes = await fetchCoingeckoUsdQuotes(
+        mapCryptoTargets(missingAfterCoinbase, 'coingecko'),
+      );
+      const missingAfterCoingecko = findMissingCryptoAssets(missingAfterCoinbase, coingeckoQuotes);
+      const binanceQuotes = missingAfterCoingecko.length > 0
+        ? await fetchBinanceUsdtQuotes(mapCryptoTargets(missingAfterCoingecko, 'binance'))
+        : {};
+      const resolvedCount =
+        countQuotes(coinbaseQuotes) + countQuotes(coingeckoQuotes) + countQuotes(binanceQuotes);
+      const unresolved = missingAfterCoingecko
+        .filter((asset) => !binanceQuotes[asset.assetSymbol])
+        .map((asset) => asset.assetSymbol);
+
+      diagnostics.push({
+        provider: 'coingecko',
+        status: countQuotes(coingeckoQuotes) > 0 ? 'ok' : 'error',
+        message:
+          countQuotes(coingeckoQuotes) > 0
+            ? `CoinGecko fallback returned ${countQuotes(coingeckoQuotes)} crypto quote(s).`
+            : 'CoinGecko fallback returned no crypto quotes.',
+        checkedAt: nowIsoString(),
+      });
+
+      diagnostics.push({
+        provider: 'binance-fallback',
+        status:
+          unresolved.length === 0 && resolvedCount > 0
+            ? missingAfterCoinbase.length === 0
+              ? 'not_needed'
+              : 'ok'
+            : 'error',
+        message:
+          missingAfterCoingecko.length === 0
+            ? missingAfterCoinbase.length === 0
+              ? 'Fallback not needed; Coinbase covered all symbols.'
+              : 'Binance fallback not needed; Coinbase/CoinGecko covered all symbols.'
+            : unresolved.length === 0
+              ? `Binance fallback resolved remaining symbols (${countQuotes(binanceQuotes)}/${missingAfterCoingecko.length}).`
+              : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols are unavailable.`,
+        checkedAt: nowIsoString(),
+      });
     }
-
-    const coingeckoQuotes = await fetchCoingeckoUsdQuotes(
-      mapCryptoTargets(missingAfterCoinbase, 'coingecko'),
-    );
-    const missingAfterCoingecko = findMissingCryptoAssets(missingAfterCoinbase, coingeckoQuotes);
-    const binanceQuotes = missingAfterCoingecko.length > 0
-      ? await fetchBinanceUsdtQuotes(mapCryptoTargets(missingAfterCoingecko, 'binance'))
-      : {};
-    const resolvedCount =
-      countQuotes(coinbaseQuotes) + countQuotes(coingeckoQuotes) + countQuotes(binanceQuotes);
-    const unresolved = missingAfterCoingecko
-      .filter((asset) => !binanceQuotes[asset.assetSymbol])
-      .map((asset) => asset.assetSymbol);
-
-    diagnostics.push({
-      provider: 'coingecko',
-      status: countQuotes(coingeckoQuotes) > 0 ? 'ok' : 'error',
-      message:
-        countQuotes(coingeckoQuotes) > 0
-          ? `CoinGecko fallback returned ${countQuotes(coingeckoQuotes)} crypto quote(s).`
-          : 'CoinGecko fallback returned no crypto quotes.',
-      checkedAt: nowIsoString(),
-    });
-
-    diagnostics.push({
-      provider: 'binance-fallback',
-      status:
-        unresolved.length === 0 && resolvedCount > 0
-          ? missingAfterCoinbase.length === 0
-            ? 'not_needed'
-            : 'ok'
-          : 'error',
-      message:
-        missingAfterCoingecko.length === 0
-          ? missingAfterCoinbase.length === 0
-            ? 'Fallback not needed; Coinbase covered all symbols.'
-            : 'Binance fallback not needed; Coinbase/CoinGecko covered all symbols.'
-          : unresolved.length === 0
-            ? `Binance fallback resolved remaining symbols (${countQuotes(binanceQuotes)}/${missingAfterCoingecko.length}).`
-            : `Binance fallback failed for: ${unresolved.join(', ')}; these symbols are unavailable.`,
-      checkedAt: nowIsoString(),
-    });
-  }
-
-  {
-    const fxRates = await getLiveFxRates();
-    const hasRates = Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD);
-    diagnostics.push({
-      provider: FX_PROVIDER,
-      status: hasRates ? 'ok' : 'error',
-      message: hasRates
-        ? 'Live FX rates received for USD/CNY and SGD/CNY.'
-        : 'Live FX rates unavailable; FX-based conversions are unavailable.',
-      checkedAt: nowIsoString(),
-    });
   }
 
   return diagnostics;
