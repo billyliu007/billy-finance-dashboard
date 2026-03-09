@@ -18,21 +18,32 @@ function isProduction() {
   return String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 }
 
+function buildCookieSecurityOptions() {
+  if (isProduction()) {
+    // Frontend and backend run on different Render domains in production.
+    // Cross-site XHR/fetch with credentials requires SameSite=None + Secure.
+    return { secure: true, sameSite: 'none' };
+  }
+  return { secure: false, sameSite: 'lax' };
+}
+
 export function buildSessionCookie(sessionToken) {
+  const security = buildCookieSecurityOptions();
   return serialize(SESSION_COOKIE_NAME, sessionToken, {
     httpOnly: true,
-    secure: isProduction(),
-    sameSite: 'lax',
+    secure: security.secure,
+    sameSite: security.sameSite,
     path: '/',
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
 }
 
 export function clearSessionCookie() {
+  const security = buildCookieSecurityOptions();
   return serialize(SESSION_COOKIE_NAME, '', {
     httpOnly: true,
-    secure: isProduction(),
-    sameSite: 'lax',
+    secure: security.secure,
+    sameSite: security.sameSite,
     path: '/',
     maxAge: 0,
   });
