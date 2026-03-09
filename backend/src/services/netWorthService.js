@@ -1,12 +1,8 @@
-import DASHBOARD_CONFIG from '../config/dashboardConfig.js';
-import PORTFOLIO_CONFIG from '../config/portfolioConfig.js';
 import {
   buildDynamicDomain,
   normalizeCurrencyCode,
-  parseMoney,
   percentFromReference,
 } from '../lib/number.js';
-import { findComponentValue, getCellValue } from '../lib/sheet.js';
 
 const NET_WORTH_COMPONENTS = [
   { key: 'sgd_assets_in_cny', displayName: 'SGD Assets Total (As in CNY)' },
@@ -14,25 +10,25 @@ const NET_WORTH_COMPONENTS = [
   { key: 'cny_assets_total', displayName: 'CNY Assets Total' },
 ];
 
-function buildDetailRows(headers, rows, fxRates) {
-  return (DASHBOARD_CONFIG.detailItems || []).map((item) => {
-    const result = findComponentValue(headers, rows, item, DASHBOARD_CONFIG);
+function buildDetailRows(cashComponents, fxRates) {
+  return (cashComponents || []).map((item) => {
     const type = String(item.type || 'asset').toLowerCase() === 'liability' ? 'liability' : 'asset';
-    const category = item.category || 'Other';
+    const category = item.category || 'Cash';
     const currency = normalizeCurrencyCode(item.currency || 'CNY');
-    const signedValue = type === 'liability' ? -Math.abs(result.value) : result.value;
+    const amount = Number(item.amount || 0);
+    const signedValue = type === 'liability' ? -Math.abs(amount) : amount;
     const rate = fxRates[currency];
 
     return {
       key: item.key,
-      name: item.displayName || item.labelMatch || item.key,
+      name: item.name || item.displayName || item.key,
       type,
       category,
       currency,
       value: signedValue,
       fxRate: Number.isFinite(rate) ? rate : null,
       cnyValue: Number.isFinite(rate) ? signedValue * rate : null,
-      found: result.found,
+      found: true,
     };
   });
 }
@@ -45,12 +41,12 @@ function isCryptoAsset(asset) {
   return /crypto/i.test(String(asset?.category || ''));
 }
 
-function resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) {
+function resolvePositionCurrentPrice(asset, stockQuotes, cryptoQuotes) {
   if (!isStockAsset(asset) && !isCryptoAsset(asset)) {
-    return parseMoney(currentPriceRaw);
+    return Number(asset?.purchasePrice || 0);
   }
 
-  const symbol = String(asset?.name || '').trim().toUpperCase();
+  const symbol = String(asset?.symbol || asset?.name || '').trim().toUpperCase();
   const livePrice = isStockAsset(asset)
     ? Number(stockQuotes?.[symbol]?.price)
     : Number(cryptoQuotes?.[symbol]?.price);
@@ -61,17 +57,13 @@ function resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, crypto
   return livePrice;
 }
 
-function computeUsdPositionsTotal(headers, rows, stockQuotes = {}, cryptoQuotes = {}) {
-  return PORTFOLIO_CONFIG.assets.reduce((sum, asset) => {
-    const qtyRaw = getCellValue(headers, rows, asset.qtyCell);
-    const hasData = String(qtyRaw || '').trim() !== '';
-    if (!hasData) {
+function computeUsdPositionsTotal(positions, stockQuotes = {}, cryptoQuotes = {}) {
+  return (positions || []).reduce((sum, asset) => {
+    const qty = Number(asset?.qty || 0);
+    if (!Number.isFinite(qty) || qty <= 0) {
       return sum;
     }
-
-    const qty = parseMoney(qtyRaw);
-    const currentPriceRaw = getCellValue(headers, rows, asset.currentPriceCell);
-    const currentPrice = resolvePositionCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes);
+    const currentPrice = resolvePositionCurrentPrice(asset, stockQuotes, cryptoQuotes);
     if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
       return sum;
     }
@@ -126,12 +118,18 @@ function mapCashDetailRowsToTableRows(visibleDetailRows) {
 }
 
 function parseCashflowRows(rows) {
-  return rows
+  return (rows || [])
     .map((row) => ({
-      date: String(row[0] || '').trim(),
-      netWorth: parseMoney(row[1]),
+      date: String(row?.date || '').trim(),
+      recordedAtUtc: String(row?.recordedAtUtc || '').trim(),
+      netWorth: Number(row?.netWorth || 0),
     }))
-    .filter((item) => item.date !== '' && item.netWorth !== 0);
+    .filter((item) => item.date !== '' && Number.isFinite(item.netWorth))
+    .map((item) => ({
+      ...item,
+      // Keep date-only for chart x-axis density, but expose timestamp for UI local-time formatting.
+      dateTimeLabel: item.recordedAtUtc || item.date,
+    }));
 }
 
 function buildDerivedChangeSeries(cashflowData) {
@@ -201,6 +199,8 @@ function buildMonthEndSeries(cashflowData) {
     .map((item) => ({
       date: item.monthKey,
       netWorth: item.netWorth,
+      recordedAtUtc: item.recordedAtUtc,
+      dateTimeLabel: item.dateTimeLabel,
     }));
 }
 
@@ -211,6 +211,8 @@ function summarizeCashflow(cashflowData) {
       peak: { date: '-', netWorth: 0 },
       bottom: { date: '-', netWorth: 0 },
       latestPeriodChangePct: 0,
+      latestPeriodStart: null,
+      latestPeriodEnd: null,
       latestPeriodSubtitle: '-',
     };
   }
@@ -228,24 +230,20 @@ function summarizeCashflow(cashflowData) {
     peak,
     bottom,
     latestPeriodChangePct,
+    latestPeriodStart: previous ? (previous.dateTimeLabel || previous.recordedAtUtc || previous.date) : null,
+    latestPeriodEnd: latest.dateTimeLabel || latest.recordedAtUtc || latest.date,
     latestPeriodSubtitle: previous ? `${previous.date} -> ${latest.date}` : latest.date,
   };
 }
 
 export function buildNetWorthPayload({
-  netWorthSheet,
-  portfolioSheet,
-  cashflowSheet,
+  cashComponents = [],
+  positions = [],
+  history = [],
   stockQuotes = {},
   cryptoQuotes = {},
   fxRatesOverride = {},
 }) {
-  const headers = netWorthSheet.headers || [];
-  const rows = netWorthSheet.rows || [];
-  const portfolioHeaders = portfolioSheet.headers || [];
-  const portfolioRows = portfolioSheet.rows || [];
-  const cashflowRows = cashflowSheet.rows || [];
-
   const fxRates = {
     CNY: 1,
     ...Object.entries(fxRatesOverride).reduce((acc, [currency, rate]) => {
@@ -256,10 +254,10 @@ export function buildNetWorthPayload({
       return acc;
     }, {}),
   };
-  const detailRows = buildDetailRows(headers, rows, fxRates);
+  const detailRows = buildDetailRows(cashComponents, fxRates);
   const visibleDetailRows = detailRows.filter((item) => item.found);
   const cashRows = mapCashDetailRowsToTableRows(visibleDetailRows);
-  const usdPositionsTotal = computeUsdPositionsTotal(portfolioHeaders, portfolioRows, stockQuotes, cryptoQuotes);
+  const usdPositionsTotal = computeUsdPositionsTotal(positions, stockQuotes, cryptoQuotes);
   const aggregatedTotalsByKey = aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates);
   const componentValues = NET_WORTH_COMPONENTS.map((component) => ({
     key: component.key,
@@ -270,7 +268,7 @@ export function buildNetWorthPayload({
     .filter((item) => !item.found)
     .map((item) => `${item.name}: ${item.reason || 'Missing data'}`);
   const totalNetWorth = componentValues.reduce((sum, component) => sum + component.value, 0);
-  const cashflowData = parseCashflowRows(cashflowRows);
+  const cashflowData = parseCashflowRows(history);
   const monthEndSeries = buildMonthEndSeries(cashflowData);
   const derivedSeries = buildDerivedChangeSeries(monthEndSeries);
   const summary = summarizeCashflow(cashflowData);
@@ -291,7 +289,7 @@ export function buildNetWorthPayload({
 
   return {
     overview: {
-      hasData: headers.length > 0,
+      hasData: detailRows.length > 0,
       totalNetWorth,
       netWorthBounds,
       componentValues,

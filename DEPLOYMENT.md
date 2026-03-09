@@ -1,72 +1,77 @@
-# Cloud Hosting + Cloud Source Management
+# Deployment Guide (Render + External Postgres)
 
-This project is ready to deploy with:
-- Source code in **GitHub**
-- Hosting on **Render** (frontend + backend)
+This project is designed for:
 
-## 1) Put source code in GitHub
+- GitHub for source control
+- Render for backend/frontend hosting
+- External free Postgres (e.g. Neon/Supabase) via `DATABASE_URL`
 
-1. Create a new GitHub repo (empty repo).
-2. Run in this project root:
+## 1) Connect repo in Render
 
-```bash
-git add .
-git commit -m "Prepare cloud deployment"
-git branch -M main
-git remote add origin <YOUR_GITHUB_REPO_URL>
-git push -u origin main
-```
+1. Render dashboard -> **New +** -> **Blueprint**
+2. Select this repo
+3. Render loads [`render.yaml`](render.yaml)
 
-If `origin` already exists:
+It creates:
 
-```bash
-git remote set-url origin <YOUR_GITHUB_REPO_URL>
-git push -u origin main
-```
+- `netpulse-backend` (web)
+- `netpulse-frontend` (static)
+- `netpulse-daily-snapshot` (cron)
 
-## 2) Deploy on Render using Blueprint
+## 2) Configure backend env vars
 
-1. Go to Render dashboard.
-2. Choose **New +** -> **Blueprint**.
-3. Connect your GitHub repo.
-4. Render will detect [`render.yaml`](render.yaml) and create two services:
-   - `billy-finance-backend`
-   - `billy-finance-frontend`
+Set on backend service (or env group):
 
-## 3) Configure backend environment variables in Render
+- `DATABASE_URL`
+- `FRONTEND_BASE_URL`
+- `DATABASE_SSL` (default `true`)
+- `AUTH_SESSION_TTL_MS`
+- `SNAPSHOT_CRON_TOKEN`
+- `MIGRATION_BIND_ENABLED`
+- `MIGRATION_BIND_GOOGLE_EMAIL`
+- `DEFAULT_USER_EMAIL`
+- `DEFAULT_USER_DISPLAY_NAME`
+- `FINNHUB_API_KEY`
+- `FX_PROVIDER`
+- `CRYPTO_PROVIDER`
 
-Set these on `billy-finance-backend`:
-- `GOOGLE_SHEETS_SPREADSHEET_ID`
-- `GOOGLE_SHEETS_RANGE`
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
-- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
+OAuth credentials:
 
-Use the private key with literal `\\n` newlines in one line, for example:
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_CALLBACK_URL`
+- `APPLE_CLIENT_ID`
+- `APPLE_CLIENT_SECRET`
+- `APPLE_CALLBACK_URL`
+- `WECHAT_APP_ID`
+- `WECHAT_APP_SECRET`
+- `WECHAT_CALLBACK_URL`
 
-```env
------BEGIN PRIVATE KEY-----\\nABC...\\n-----END PRIVATE KEY-----\\n
-```
+## 3) Configure frontend env var
 
-## 4) Point frontend to backend URL
+Set on frontend static service:
 
-After backend deploys, copy backend URL and set this on `billy-finance-frontend`:
 - `VITE_API_BASE_URL=https://<your-backend>.onrender.com`
 
-Then redeploy frontend service.
+## 4) Database schema migration
 
-## 5) Day-2 workflow (cloud source managed)
-
-For every change:
+After backend deploys and DB is reachable, run once:
 
 ```bash
-git add .
-git commit -m "your change"
-git push
+npm run db:migrate --prefix backend
 ```
 
-Render auto-deploys from GitHub.
+## 5) Daily snapshot cron
 
-## Optional recommendation
+`render.yaml` config schedules snapshot at UTC midnight:
 
-- Add branch protection on `main` in GitHub.
-- Use pull requests for safer production changes.
+- schedule: `0 0 * * *`
+- command: `npm run cron:daily-snapshot --prefix backend`
+
+## 6) OAuth callback URLs
+
+In each OAuth provider console, configure callback URLs to match backend public domain:
+
+- Google: `https://<backend>/api/auth/google/callback`
+- Apple: `https://<backend>/api/auth/apple/callback`
+- WeChat: `https://<backend>/api/auth/wechat/callback`

@@ -1,4 +1,4 @@
-.lockScreen {
+.authScreen {
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -9,7 +9,7 @@
     linear-gradient(180deg, rgba(2, 6, 23, 1), rgba(8, 20, 38, 1));
 }
 
-.lockCard {
+.authCard {
   width: min(380px, 100%);
   padding: 24px 20px 18px;
   display: grid;
@@ -18,81 +18,107 @@
   background: transparent;
 }
 
-.lockCard h1 {
+.authCard.wide {
+  width: min(920px, 100%);
+}
+
+.authCard h1 {
   margin: 0;
   font-size: 1.65rem;
   color: #f8fbff;
   font-weight: 700;
 }
 
-.lockCard p {
+.authCard p {
   margin: 0;
   color: #d6e6ff;
   font-size: 1rem;
 }
 
-.lockDots {
-  display: flex;
-  gap: 12px;
-  padding: 4px 0 2px;
-}
-
-.lockDot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid rgba(219, 234, 254, 0.65);
-  background: transparent;
-  transition: all 120ms ease;
-}
-
-.lockDot.filled {
-  background: #e2e8f0;
-  border-color: #e2e8f0;
-}
-
-.lockKeypad {
+.authActions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  max-width: 320px;
 }
 
-.keypadButton {
-  height: 72px;
-  border-radius: 999px;
+.authBtn {
+  width: 100%;
   border: 1px solid rgba(226, 232, 240, 0.35);
+  border-radius: 999px;
   background: rgba(30, 41, 59, 0.6);
   color: #f8fafc;
-  font-size: 1.45rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: transform 90ms ease, background-color 120ms ease, border-color 120ms ease;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 12px 16px;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.keypadButton:hover {
+.authBtn:hover {
   background: rgba(51, 65, 85, 0.68);
   border-color: rgba(241, 245, 249, 0.5);
 }
 
-.keypadButton:active {
-  transform: scale(0.97);
+.authBtn.secondary {
+  font-weight: 500;
+  opacity: 0.95;
 }
 
-.keypadButton.action {
-  font-size: 0.92rem;
-  letter-spacing: 0.02em;
+.onboardingForm {
+  width: 100%;
+  display: grid;
+  gap: 12px;
 }
 
-.keypadButton.ghost {
-  visibility: hidden;
-  pointer-events: none;
+.onboardingForm label {
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 0.9rem;
 }
 
-.keypadButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.onboardingForm input,
+.onboardingForm select {
+  border: 1px solid rgba(226, 232, 240, 0.35);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.6);
+  color: #f8fafc;
+  font-size: 0.95rem;
+  padding: 10px;
+}
+
+.onboardingGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.onboardingRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.onboardingForm button,
+.logoutBtn {
+  border: 1px solid rgba(94, 234, 212, 0.45);
+  background: linear-gradient(120deg, rgba(14, 116, 144, 0.28), rgba(7, 89, 133, 0.2));
+  color: #ecfeff;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.logoutBtn {
+  margin-top: 14px;
+  width: 100%;
+}
+
+.sideSubtitle {
+  margin: 2px 0 2px;
+  color: #dbeafe;
+  font-size: 0.86rem;
 }
 
 .appShell {

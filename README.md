@@ -1,15 +1,27 @@
-# Billy Finance Dashboard (Google Sheets powered)
+# NetPulse (Postgres + OAuth)
 
-A personal finance dashboard that reads your data from **Google Sheets** and renders:
-- **Net Worth** (summary + performance over time)
-- **Portfolio holdings** (positions + allocation + P&L)
-- **Privacy mode** toggle (hide amounts)
+A personal finance dashboard with multi-user support.
 
-This repo is a full-stack app:
-- `backend`: Express API that reads Google Sheets via a service account.
-- `frontend`: React (Vite) UI that calls the backend.
+## Core capabilities
 
-## Run locally
+- User-scoped finance data in Postgres
+- OAuth login providers:
+  - Google
+  - Apple
+  - WeChat
+- First-login onboarding (initial cash/debt/assets)
+- Live market data:
+  - Stocks: Finnhub
+  - Crypto: Coinbase -> CoinGecko -> Binance fallback
+  - FX: Frankfurter
+- Daily net-worth snapshot job (UTC 00:00)
+
+## Stack
+
+- `backend`: Express API + PostgreSQL
+- `frontend`: React (Vite)
+
+## Local development
 
 ### 1) Install dependencies
 
@@ -17,28 +29,33 @@ This repo is a full-stack app:
 npm run setup
 ```
 
-### 2) Configure backend environment
+### 2) Configure environment
 
 ```bash
 cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-Set these in `backend/.env`:
-- `GOOGLE_SHEETS_SPREADSHEET_ID`
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
-- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (single-line value with escaped `\n`)
+Set required backend values in `backend/.env`:
 
-Example private key format:
+- `DATABASE_URL`
+- `FRONTEND_BASE_URL`
+- OAuth credentials:
+  - `GOOGLE_OAUTH_*`
+  - `APPLE_*`
+  - `WECHAT_*`
+- market data keys/settings:
+  - `FINNHUB_API_KEY`
+  - `FX_PROVIDER`
+  - `CRYPTO_PROVIDER`
 
-```env
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nABC...\n-----END PRIVATE KEY-----\n"
+### 3) Run DB schema migration
+
+```bash
+npm run db:migrate --prefix backend
 ```
 
-### 3) Share sheet access
-
-Share your Google Sheet with the **service account email** as **Viewer**.
-
-### 4) Start the app
+### 4) Start app
 
 ```bash
 npm run dev
@@ -47,25 +64,29 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:4000`
 
-## Google Sheet expectations
+## Authentication + onboarding flow
 
-The backend reads multiple ranges (see `backend/src/config/dashboardConfig.js` and `backend/src/config/portfolioConfig.js`).
-By default it expects sheet tabs like:
-- `Net Worth`
-- `Forex`
-- `Crypto/Stock Portfolio`
-- `Cashflow`
+1. Open frontend and sign in via OAuth provider.
+2. If first login, complete onboarding:
+   - preferred display name
+   - initial cash/debt rows
+   - initial asset positions
+3. Dashboard routes unlock after onboarding completes.
 
-## API
+## API (main)
 
-The frontend uses these endpoints:
-- `GET /api/health` (health check)
-- `GET /api/dashboard/net-worth` (net worth + performance payload)
-- `GET /api/dashboard/portfolio` (portfolio payload)
+- `GET /api/health`
+- `GET /api/auth/session`
+- `POST /api/auth/logout`
+- `GET /api/dashboard/net-worth`
+- `GET /api/dashboard/portfolio`
+- `GET /api/dev/status`
+- `GET /api/onboarding/status`
+- `POST /api/onboarding/initialize`
 
-Raw sheet endpoints (useful for debugging):
-- `GET /api/sheet?range=<A1_RANGE>`
-- `GET /api/sheets?ranges=<A1_RANGE>,<A1_RANGE>,...`
+Cron/internal:
+
+- `POST /api/internal/snapshot/daily` (requires `x-cron-token`)
 
 ## Deployment
 

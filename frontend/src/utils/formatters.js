@@ -73,3 +73,23 @@ export function formatPercent(value) {
 export function formatPercentUnsigned(value) {
   return `${value.toFixed(2)}%`;
 }
+
+export function formatLocalDateTime(value, { includeSeconds = true } = {}) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '-';
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(includeSeconds ? { second: '2-digit' } : {}),
+    hour12: false,
+  }).format(parsed);
+}

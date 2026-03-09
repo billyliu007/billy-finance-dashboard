@@ -1,6 +1,6 @@
-# Frontend (Billy Finance Dashboard)
+# Frontend (NetPulse)
 
-This is the React (Vite) frontend for the Billy Finance Dashboard.
+This is the React (Vite) frontend for NetPulse.
 
 For full setup instructions, see the repo root [`README.md`](../README.md).
 

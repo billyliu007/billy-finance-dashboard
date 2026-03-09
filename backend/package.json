@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "db:migrate": "node src/db/migrate.js",
+    "db:import-history": "node src/scripts/importNetWorthHistoryFromRaw.js",
+    "cron:daily-snapshot": "node src/scripts/runDailySnapshot.js"
   },
   "dependencies": {
+    "cookie": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
-    "googleapis": "^144.0.0"
+    "pg": "^8.16.3"
   }
 }

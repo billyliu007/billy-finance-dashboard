@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: billy-finance-backend
+    name: netpulse-backend
     env: node
     rootDir: .
     buildCommand: npm ci --prefix backend
@@ -10,14 +10,44 @@ services:
       # Secrets are sourced from this Render Environment Group.
       - fromGroup: billy-finance-secrets
       # Required secret/env keys (documented explicitly for portability).
-      - key: GOOGLE_SHEETS_SPREADSHEET_ID
+      - key: DATABASE_URL
         sync: false
-      - key: GOOGLE_SHEETS_RANGE
+      - key: FRONTEND_BASE_URL
         sync: false
-      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+      - key: AUTH_SESSION_TTL_MS
+        value: "1209600000"
+      - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
-      - key: GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
+      - key: GOOGLE_OAUTH_CALLBACK_URL
+        sync: false
+      - key: APPLE_CLIENT_ID
+        sync: false
+      - key: APPLE_CLIENT_SECRET
+        sync: false
+      - key: APPLE_CALLBACK_URL
+        sync: false
+      - key: WECHAT_APP_ID
+        sync: false
+      - key: WECHAT_APP_SECRET
+        sync: false
+      - key: WECHAT_CALLBACK_URL
+        sync: false
+      - key: SNAPSHOT_CRON_TOKEN
+        sync: false
+      - key: MIGRATION_BIND_ENABLED
+        value: "true"
+      - key: MIGRATION_BIND_GOOGLE_EMAIL
+        value: Billyliu007@gmail.com
+      - key: DEFAULT_USER_EMAIL
+        value: Billyliu007@gmail.com
+      - key: DEFAULT_USER_DISPLAY_NAME
+        value: NetPulse User
+      - key: DATABASE_SSL
+        value: "true"
+      - key: DATA_SOURCE
+        value: db
       - key: FINNHUB_API_KEY
         sync: false
       - key: FX_PROVIDER
@@ -26,7 +56,7 @@ services:
         value: coinbase
 
   - type: web
-    name: billy-finance-frontend
+    name: netpulse-frontend
     env: static
     rootDir: .
     buildCommand: npm install --prefix frontend && npm run build --prefix frontend
@@ -39,5 +69,25 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         sync: false
-      - key: VITE_APP_PASSCODE
-        value: "0309"
+
+  - type: cron
+    name: netpulse-daily-snapshot
+    env: node
+    rootDir: .
+    schedule: "0 0 * * *"
+    buildCommand: npm ci --prefix backend
+    startCommand: npm run cron:daily-snapshot --prefix backend
+    envVars:
+      - fromGroup: billy-finance-secrets
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: DATA_SOURCE
+        value: db
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: FX_PROVIDER
+        value: frankfurter
+      - key: CRYPTO_PROVIDER
+        value: coinbase

@@ -26,9 +26,9 @@ export default function PortfolioPage({ hideValues }) {
       </header>
 
       <div className="dashboardPanel">
-        {isLoading && <p>Loading sheet data...</p>}
+        {isLoading && <p>Loading dashboard data...</p>}
         {!isLoading && error && <p className="error">{error}</p>}
-        {!isLoading && !error && data?.isEmpty && <p>No portfolio rows found in the configured range.</p>}
+        {!isLoading && !error && data?.isEmpty && <p>No portfolio positions found yet.</p>}
 
         {!isLoading && !error && data && !data.isEmpty && (
           <>

@@ -5,7 +5,7 @@ function mapAssetSources(rows = []) {
   return rows.map((row) => ({
     name: row.name,
     category: row.category,
-    source: row.priceSource || 'sheet',
+    source: row.priceSource || 'unavailable',
     asOf: row.priceTimestamp ? new Date(row.priceTimestamp).toLocaleString() : '-',
   }));
 }
@@ -55,44 +55,6 @@ export default function DevelopmentPage({ frontendVersion }) {
 
         {!status.isLoading && !status.error && (
           <article className="tableCard">
-            <h2>Configured Data Providers</h2>
-            <div className="tableWrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Asset Type</th>
-                    <th>Primary</th>
-                    <th>Fallback</th>
-                    <th>Symbols</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Stocks</td>
-                    <td>{status.data?.marketData?.stocks?.primary || '-'}</td>
-                    <td>{status.data?.marketData?.stocks?.fallback || '-'}</td>
-                    <td>{(status.data?.marketData?.stocks?.symbols || []).join(', ') || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td>Crypto</td>
-                    <td>{status.data?.marketData?.crypto?.primary || '-'}</td>
-                    <td>{status.data?.marketData?.crypto?.fallback || '-'}</td>
-                    <td>{(status.data?.marketData?.crypto?.symbols || []).join(', ') || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td>FX</td>
-                    <td>{status.data?.marketData?.fx?.primary || '-'}</td>
-                    <td>{status.data?.marketData?.fx?.fallback || '-'}</td>
-                    <td>{(status.data?.marketData?.fx?.pairs || []).join(', ') || '-'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </article>
-        )}
-
-        {!status.isLoading && !status.error && (
-          <article className="tableCard">
             <h2>3rd Party Fetch Diagnostics</h2>
             <div className="tableWrap">
               <table>
@@ -121,24 +83,20 @@ export default function DevelopmentPage({ frontendVersion }) {
 
         {!status.isLoading && !status.error && (
           <article className="tableCard">
-            <h2>Other Sheet-Backed Data</h2>
+            <h2>Data Source</h2>
             <div className="tableWrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Dataset</th>
-                    <th>Sheet Range</th>
-                    <th>Notes</th>
+                    <th>Storage</th>
+                    <th>User Scoped</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(status.data?.sheetBackedData || []).map((item) => (
-                    <tr key={item.key}>
-                      <td>{item.label}</td>
-                      <td>{item.range}</td>
-                      <td>{item.notes}</td>
-                    </tr>
-                  ))}
+                  <tr>
+                    <td>{status.data?.storage?.primary || '-'}</td>
+                    <td>{String(status.data?.storage?.userScoped || false)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>

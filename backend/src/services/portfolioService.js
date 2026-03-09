@@ -1,6 +1,4 @@
 import PORTFOLIO_CONFIG from '../config/portfolioConfig.js';
-import { parseMoney } from '../lib/number.js';
-import { getCellValue } from '../lib/sheet.js';
 
 function isStockAsset(asset) {
   return /stock/i.test(String(asset?.category || ''));
@@ -10,16 +8,8 @@ function isCryptoAsset(asset) {
   return /crypto/i.test(String(asset?.category || ''));
 }
 
-function resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) {
-  if (!isStockAsset(asset) && !isCryptoAsset(asset)) {
-    return {
-      currentPrice: parseMoney(currentPriceRaw),
-      priceSource: 'sheet',
-      priceTimestamp: null,
-    };
-  }
-
-  const symbol = String(asset?.name || '').trim().toUpperCase();
+function resolveCurrentPrice(asset, stockQuotes, cryptoQuotes) {
+  const symbol = String(asset?.symbol || asset?.name || '').trim().toUpperCase();
   const livePrice = isStockAsset(asset)
     ? Number(stockQuotes?.[symbol]?.price)
     : isCryptoAsset(asset)
@@ -35,33 +25,46 @@ function resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes) 
 
   return {
     currentPrice: livePrice,
-    priceSource: isStockAsset(asset) ? 'finnhub' : String(cryptoQuotes?.[symbol]?.source || 'crypto-live'),
+    priceSource: isStockAsset(asset)
+      ? String(stockQuotes?.[symbol]?.source || 'finnhub')
+      : String(cryptoQuotes?.[symbol]?.source || 'crypto-live'),
     priceTimestamp: isStockAsset(asset)
       ? Number(stockQuotes?.[symbol]?.timestamp) || null
       : Number(cryptoQuotes?.[symbol]?.timestamp) || null,
   };
 }
 
-export function buildPortfolioPayload({ headers = [], rows = [], stockQuotes = {}, cryptoQuotes = {} }) {
-  const positions = PORTFOLIO_CONFIG.assets.map((asset) => {
-    const qtyRaw = getCellValue(headers, rows, asset.qtyCell);
-    const purchasePriceRaw = getCellValue(headers, rows, asset.purchasePriceCell);
-    const currentPriceRaw = getCellValue(headers, rows, asset.currentPriceCell);
-    const qty = parseMoney(qtyRaw);
-    const purchasePrice = parseMoney(purchasePriceRaw);
-    const priceResolution = resolveCurrentPrice(asset, currentPriceRaw, stockQuotes, cryptoQuotes);
+export function buildPortfolioPayload({ positions = [], stockQuotes = {}, cryptoQuotes = {} }) {
+  const configuredAssetMap = new Map(
+    (PORTFOLIO_CONFIG.assets || []).map((asset) => [String(asset.name || '').toUpperCase(), asset]),
+  );
+  const normalized = positions.map((position) => {
+    const symbol = String(position?.symbol || '').toUpperCase();
+    const configured = configuredAssetMap.get(symbol) || {};
+    return {
+      ...configured,
+      symbol,
+      name: position?.name || configured?.name || symbol,
+      category: position?.category || configured?.category || 'Other',
+      qty: Number(position?.qty || 0),
+      purchasePrice: Number(position?.purchasePrice || 0),
+    };
+  });
+
+  const computedPositions = normalized.map((asset) => {
+    const priceResolution = resolveCurrentPrice(asset, stockQuotes, cryptoQuotes);
     const currentPrice = Number.isFinite(priceResolution.currentPrice) ? priceResolution.currentPrice : 0;
-    const totalPurchaseCost = qty * purchasePrice;
-    const currentValue = qty * currentPrice;
+    const totalPurchaseCost = asset.qty * asset.purchasePrice;
+    const currentValue = asset.qty * currentPrice;
     const pnl = currentValue - totalPurchaseCost;
     const pnlPct = totalPurchaseCost === 0 ? 0 : (pnl / totalPurchaseCost) * 100;
-    const found = [qtyRaw, purchasePriceRaw].some((value) => String(value || '').trim() !== '');
+    const found = Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice);
 
     return {
       ...asset,
       found,
-      qty,
-      purchasePrice,
+      qty: asset.qty,
+      purchasePrice: asset.purchasePrice,
       currentPrice,
       priceSource: priceResolution.priceSource,
       priceTimestamp: priceResolution.priceTimestamp,
@@ -72,7 +75,7 @@ export function buildPortfolioPayload({ headers = [], rows = [], stockQuotes = {
     };
   });
 
-  const visiblePositions = positions.filter((position) => position.found);
+  const visiblePositions = computedPositions.filter((position) => position.found);
   const totals = visiblePositions.reduce(
     (acc, position) => {
       acc.cost += position.totalPurchaseCost;

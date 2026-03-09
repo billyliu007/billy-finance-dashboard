@@ -14,7 +14,9 @@ import {
   YAxis,
 } from 'recharts';
 import { useEffect, useState } from 'react';
-import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+import { formatCny, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+
+const NET_WORTH_X_KEY = 'dateTimeLabel';
 
 function formatDateOnlyLabel(rawValue) {
   const raw = String(rawValue || '').trim();
@@ -129,7 +131,9 @@ function PeriodReturnTooltip({ active, payload, hideValues }) {
         padding: '8px 10px',
       }}
     >
-      <p style={{ margin: 0, color: '#f8fafc', fontWeight: 600 }}>{point.date}</p>
+      <p style={{ margin: 0, color: '#f8fafc', fontWeight: 600 }}>
+        {formatLocalDateTime(point.recordedAtUtc || point.dateTimeLabel || point.date)}
+      </p>
       <p style={{ margin: '4px 0 0' }}>
         Prev month-end:{' '}
         {point.previousNetWorth == null
@@ -182,7 +186,8 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
       return;
     }
 
-    const key = `${point.date}|${point.netWorth}`;
+    const xValue = point?.[NET_WORTH_X_KEY] || point.date;
+    const key = `${xValue}|${point.netWorth}`;
     const existing = markerByPoint.get(key);
     if (!existing) {
       markerByPoint.set(key, { point, labels: [label], color });
@@ -192,10 +197,10 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
     existing.labels.push(label);
   });
 
-  const dateIndexByDate = new Map(cashflowData.map((item, index) => [item.date, index]));
+  const dateIndexByDate = new Map(cashflowData.map((item, index) => [item?.[NET_WORTH_X_KEY] || item.date, index]));
   const markerEntries = Array.from(markerByPoint.values()).map((marker) => {
     const isHigh = marker.labels.includes('High');
-    const positionIndex = dateIndexByDate.get(marker.point.date) ?? 0;
+    const positionIndex = dateIndexByDate.get(marker.point?.[NET_WORTH_X_KEY] || marker.point.date) ?? 0;
     const side = isHigh
       ? 'top'
       : positionIndex > cashflowData.length * 0.65
@@ -233,7 +238,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={cashflowData} margin={{ top: 28, right: 12, left: isSmallScreen ? 6 : 24, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="date" tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+              <XAxis dataKey={NET_WORTH_X_KEY} tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis
                 domain={netWorthDomain}
                 tick={isSmallScreen ? false : { fill: '#94a3b8', fontSize: 12 }}
@@ -244,6 +249,10 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
               />
               <Tooltip
                 formatter={(value) => formatMaybeHidden(hideValues, formatCny, Number(value) || 0)}
+                labelFormatter={(label, payload) => {
+                  const point = payload?.[0]?.payload;
+                  return formatLocalDateTime(point?.recordedAtUtc || point?.dateTimeLabel || label);
+                }}
                 contentStyle={{
                   backgroundColor: '#0b1220',
                   border: '1px solid #334155',
@@ -256,8 +265,8 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
               <Line type="monotone" dataKey="netWorth" stroke="#22d3ee" strokeWidth={2.5} dot={false} />
               {markerEntries.map((marker) => (
                 <ReferenceDot
-                  key={`${marker.point.date}-${marker.point.netWorth}`}
-                  x={marker.point.date}
+                  key={`${marker.point?.[NET_WORTH_X_KEY] || marker.point.date}-${marker.point.netWorth}`}
+                  x={marker.point?.[NET_WORTH_X_KEY] || marker.point.date}
                   y={marker.point.netWorth}
                   r={5}
                   fill={marker.color}

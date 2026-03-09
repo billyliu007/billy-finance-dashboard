@@ -12,9 +12,9 @@ function OverviewPanel({ hideValues, overview, isLoading, error }) {
       </header>
 
       <div className="dashboardPanel">
-        {isLoading && <p>Loading sheet data...</p>}
+        {isLoading && <p>Loading dashboard data...</p>}
         {!isLoading && error && <p className="error">{error}</p>}
-        {!isLoading && !error && !overview?.hasData && <p>No rows found in the configured range.</p>}
+        {!isLoading && !error && !overview?.hasData && <p>No cash/debt records found yet.</p>}
 
         {!isLoading && !error && overview?.hasData && (
           <>
@@ -37,9 +37,9 @@ function PerformancePanel({ hideValues, performance, isLoading, error }) {
   return (
     <section className="contentWrap">
       <div className="dashboardPanel">
-        {isLoading && <p>Loading sheet data...</p>}
+        {isLoading && <p>Loading dashboard data...</p>}
         {!isLoading && error && <p className="error">{error}</p>}
-        {!isLoading && !error && !performance?.hasData && <p>No cashflow rows found in `Cashflow`.</p>}
+        {!isLoading && !error && !performance?.hasData && <p>No net worth history is available yet.</p>}
 
         {!isLoading && !error && performance?.hasData && (
           <>
