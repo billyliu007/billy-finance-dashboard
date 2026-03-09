@@ -18,8 +18,25 @@ function isProduction() {
   return String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 }
 
+function isHostedHttpsFrontend() {
+  const frontendBaseUrl = String(process.env.FRONTEND_BASE_URL || '').trim();
+  if (!frontendBaseUrl) {
+    return false;
+  }
+  try {
+    const parsed = new URL(frontendBaseUrl);
+    if (parsed.protocol !== 'https:') {
+      return false;
+    }
+    const host = parsed.hostname.toLowerCase();
+    return host !== 'localhost' && host !== '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 function buildCookieSecurityOptions() {
-  if (isProduction()) {
+  if (isProduction() || isHostedHttpsFrontend()) {
     // Frontend and backend run on different Render domains in production.
     // Cross-site XHR/fetch with credentials requires SameSite=None + Secure.
     return { secure: true, sameSite: 'none' };
