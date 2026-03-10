@@ -80,17 +80,28 @@ export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto 
       <article className="tableCard portfolioMobileDetailsCard">
         <div className="detailsHeaderRow">
           <h2>Positions</h2>
-          <button
-            type="button"
-            className="detailsToggleBtn"
-            onClick={() => setShowMobileDetails((prev) => !prev)}
-            aria-expanded={showMobileDetails}
-          >
-            {showMobileDetails ? 'Hide details' : 'Show details'}
-            <span className={`detailsChevron ${showMobileDetails ? 'isOpen' : ''}`} aria-hidden="true">
-              ▾
-            </span>
-          </button>
+          <div className="detailsHeaderActions">
+            {onAddCrypto && (
+              <button
+                type="button"
+                className="detailsAddBtn"
+                onClick={onAddCrypto}
+              >
+                + Add
+              </button>
+            )}
+            <button
+              type="button"
+              className="detailsToggleBtn"
+              onClick={() => setShowMobileDetails((prev) => !prev)}
+              aria-expanded={showMobileDetails}
+            >
+              {showMobileDetails ? 'Hide details' : 'Show details'}
+              <span className={`detailsChevron ${showMobileDetails ? 'isOpen' : ''}`} aria-hidden="true">
+                ▾
+              </span>
+            </button>
+          </div>
         </div>
 
         {showMobileDetails && (
