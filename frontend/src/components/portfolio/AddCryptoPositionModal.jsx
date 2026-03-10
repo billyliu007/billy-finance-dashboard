@@ -176,7 +176,7 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </button>
-          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected || !normalizeText(avgCost)}>
+          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected || !normalizeText(avgCost) || !normalizeText(qty) || Number(qty) <= 0}>
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </footer>

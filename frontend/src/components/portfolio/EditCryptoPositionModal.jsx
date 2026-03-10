@@ -117,7 +117,7 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
             type="button"
             className="modalBtn"
             onClick={handleSave}
-            disabled={isSaving || !normalizeText(qty) || !normalizeText(avgCost)}
+            disabled={isSaving || !normalizeText(qty) || !normalizeText(avgCost) || Number(qty) <= 0}
           >
             {isSaving ? 'Saving...' : 'Save'}
           </button>
