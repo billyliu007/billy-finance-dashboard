@@ -7,7 +7,14 @@ import {
   formatQty,
 } from '../../utils/formatters.js';
 
-export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto, onAddStock }) {
+export default function PortfolioPositionsTable({
+  hideValues,
+  rows,
+  onAddCrypto,
+  onAddStock,
+  onEditPosition,
+  onDeletePosition,
+}) {
   const [showMobileDetails, setShowMobileDetails] = useState(true);
   const [showAddMenu, setShowAddMenu] = useState(false);
 
@@ -94,6 +101,7 @@ export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto,
                 <th>Portfolio Weight (%)</th>
                 <th>Unrealized Gain/Loss</th>
                 <th>Unrealized Return (%)</th>
+                {(onEditPosition || onDeletePosition) && <th className="positionActionsHeader">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -113,6 +121,32 @@ export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto,
                   <td data-label="Unrealized Return (%)" className={item.pnl >= 0 ? 'pos' : 'neg'}>
                     {formatPercent(item.pnlPct)}
                   </td>
+                  {(onEditPosition || onDeletePosition) && (
+                    <td data-label="Actions" className="positionActionsCell">
+                      {onEditPosition && (
+                        <button
+                          type="button"
+                          className="headerIconBtn positionActionBtn"
+                          onClick={() => onEditPosition(item)}
+                          aria-label={`Edit ${item.name}`}
+                          title="Edit"
+                        >
+                          ✎
+                        </button>
+                      )}
+                      {onDeletePosition && (
+                        <button
+                          type="button"
+                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                          onClick={() => onDeletePosition(item)}
+                          aria-label={`Delete ${item.name}`}
+                          title="Delete"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -208,9 +242,37 @@ export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto,
                         </div>
                       </div>
                       <dl className="positionMetaList">
-                        <div>
-                          <dt>Weight</dt>
-                          <dd>{formatPercentUnsigned(item.weightPct)}</dd>
+                        <div className="positionMetaRowWithActions">
+                          <div>
+                            <dt>Weight</dt>
+                            <dd>{formatPercentUnsigned(item.weightPct)}</dd>
+                          </div>
+                          {(onEditPosition || onDeletePosition) && (
+                            <div className="positionCardActionIcons">
+                              {onEditPosition && (
+                                <button
+                                  type="button"
+                                  className="headerIconBtn positionActionBtn"
+                                  onClick={() => onEditPosition(item)}
+                                  aria-label={`Edit ${item.name}`}
+                                  title="Edit"
+                                >
+                                  ✎
+                                </button>
+                              )}
+                              {onDeletePosition && (
+                                <button
+                                  type="button"
+                                  className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                  onClick={() => onDeletePosition(item)}
+                                  aria-label={`Delete ${item.name}`}
+                                  title="Delete"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </dl>
                     </section>

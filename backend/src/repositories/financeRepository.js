@@ -375,3 +375,62 @@ export async function createStockPositionFromSymbol({ userId, symbol, qty, avgCo
 
   return { symbol: normalizedSymbol };
 }
+
+/**
+ * Update an existing position's quantity and average cost (any asset).
+ * @param {{ userId: string, symbol: string, qty: number, avgCostPerUnit: number }} options
+ * @returns {Promise<{ symbol: string }>}
+ */
+export async function updatePosition({ userId, symbol, qty, avgCostPerUnit }) {
+  const resolvedUserId = String(userId || '').trim();
+  const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+  const resolvedQty = Number(qty);
+  const resolvedCost = Number(avgCostPerUnit);
+
+  if (!resolvedUserId || !normalizedSymbol) {
+    throw new Error('User id and symbol are required.');
+  }
+  if (!Number.isFinite(resolvedQty) || resolvedQty <= 0) {
+    throw new Error('Quantity must be greater than 0.');
+  }
+  if (!Number.isFinite(resolvedCost) || resolvedCost < 0) {
+    throw new Error('Average cost per unit must be 0 or greater.');
+  }
+
+  const result = await query(
+    `UPDATE portfolio_positions
+     SET qty = $3, purchase_price = $4, updated_at = NOW()
+     WHERE user_id = $1 AND symbol = $2
+     RETURNING symbol`,
+    [resolvedUserId, normalizedSymbol, resolvedQty, resolvedCost],
+  );
+  if (result.rowCount === 0) {
+    throw new Error(`Position not found for ${normalizedSymbol}.`);
+  }
+  return { symbol: normalizedSymbol };
+}
+
+/**
+ * Delete a position by symbol (user-scoped).
+ * @param {string} userId
+ * @param {string} symbol
+ * @returns {Promise<{ symbol: string }>}
+ */
+export async function deletePosition(userId, symbol) {
+  const resolvedUserId = String(userId || '').trim();
+  const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+  if (!resolvedUserId || !normalizedSymbol) {
+    throw new Error('User id and symbol are required.');
+  }
+
+  const result = await query(
+    `DELETE FROM portfolio_positions
+     WHERE user_id = $1 AND symbol = $2
+     RETURNING symbol`,
+    [resolvedUserId, normalizedSymbol],
+  );
+  if (result.rowCount === 0) {
+    throw new Error(`Position not found for ${normalizedSymbol}.`);
+  }
+  return { symbol: normalizedSymbol };
+}

@@ -23,6 +23,8 @@ import {
   createCryptoPositionFromCoinbaseProduct,
   listUsStockSymbols,
   createStockPositionFromSymbol,
+  updatePosition,
+  deletePosition,
   listPortfolioPositions,
   replaceCashComponents,
   replacePortfolioPositions,
@@ -267,6 +269,33 @@ export default function createApp() {
       const message = getErrorMessage(error);
       const status = /already exists/i.test(message) ? 409 : 400;
       return res.status(status).json({ message });
+    }
+  });
+
+  app.patch('/api/portfolio/positions/:symbol', requireAuth, async (req, res) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const qty = Number(req.body?.qty);
+      const avgCostPerUnit = Number(req.body?.avgCostPerUnit);
+      const result = await updatePosition({
+        userId: req.auth.user.userId,
+        symbol,
+        qty,
+        avgCostPerUnit,
+      });
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      return res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.delete('/api/portfolio/positions/:symbol', requireAuth, async (req, res) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const result = await deletePosition(req.auth.user.userId, symbol);
+      return res.status(200).json({ ok: true, ...result });
+    } catch (error) {
+      return res.status(404).json({ message: getErrorMessage(error) });
     }
   });
 

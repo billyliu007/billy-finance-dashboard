@@ -353,6 +353,60 @@ h1 {
   border-color: rgba(94, 234, 212, 0.7);
 }
 
+.positionActionsHeader {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.positionActionsCell {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.positionActionBtn {
+  margin-right: 6px;
+}
+
+.positionActionBtn:last-child {
+  margin-right: 0;
+}
+
+.positionActionBtnDanger {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.25);
+  color: #fecaca;
+}
+
+.positionActionBtnDanger:hover {
+  border-color: rgba(248, 113, 113, 0.8);
+}
+
+.positionMetaRowWithActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.positionMetaRowWithActions > div:first-child {
+  flex: 0 0 auto;
+}
+
+.positionCardActionIcons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
 .modalOverlay {
   position: fixed;
   inset: 0;
@@ -913,6 +967,14 @@ h1 {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
+}
+
+.positionMetaList .positionMetaRowWithActions,
+.positionMetaList .positionCardActionIcons {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .positionMetaList dt {

@@ -5,12 +5,15 @@ import PortfolioKpis from '../components/portfolio/PortfolioKpis.jsx';
 import PortfolioPositionsTable from '../components/portfolio/PortfolioPositionsTable.jsx';
 import AddCryptoPositionModal from '../components/portfolio/AddCryptoPositionModal.jsx';
 import AddStockPositionModal from '../components/portfolio/AddStockPositionModal.jsx';
+import EditCryptoPositionModal from '../components/portfolio/EditCryptoPositionModal.jsx';
 import useApiData from '../hooks/useApiData.js';
+import { deleteJson } from '../utils/api.js';
 
 export default function PortfolioPage({ hideValues }) {
   const { data, isLoading, error, refresh } = useApiData('/api/dashboard/portfolio', { refreshMs: 60_000 });
   const [isAddCryptoOpen, setIsAddCryptoOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
+  const [editPosition, setEditPosition] = useState(null);
   const rows = useMemo(() => data?.tableRows || [], [data]);
   const allocationData = useMemo(() => data?.allocationData || [], [data]);
   const chartData = useMemo(() => data?.chartData || [], [data]);
@@ -48,6 +51,16 @@ export default function PortfolioPage({ hideValues }) {
               rows={rows}
               onAddCrypto={() => setIsAddCryptoOpen(true)}
               onAddStock={() => setIsAddStockOpen(true)}
+              onEditPosition={(position) => setEditPosition(position)}
+              onDeletePosition={async (position) => {
+                if (!window.confirm(`Are you sure you want to remove ${position.name}? This cannot be undone.`)) return;
+                try {
+                  await deleteJson(`/api/portfolio/positions/${encodeURIComponent(position.symbol)}`);
+                  refresh?.();
+                } catch (err) {
+                  window.alert(err?.message || 'Failed to delete position.');
+                }
+              }}
             />
           </>
         )}
@@ -61,6 +74,15 @@ export default function PortfolioPage({ hideValues }) {
           open={isAddStockOpen}
           onClose={() => setIsAddStockOpen(false)}
           onSaved={() => refresh?.()}
+        />
+        <EditCryptoPositionModal
+          open={Boolean(editPosition)}
+          position={editPosition ?? undefined}
+          onClose={() => setEditPosition(null)}
+          onSaved={() => {
+            refresh?.();
+            setEditPosition(null);
+          }}
         />
       </div>
     </section>

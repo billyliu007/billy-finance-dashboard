@@ -43,6 +43,36 @@ export async function postJson(path, body, { signal } = {}) {
   return requestJson(path, { signal, method: 'POST', body });
 }
 
+export async function patchJson(path, body, { signal } = {}) {
+  return requestJson(path, { signal, method: 'PATCH', body });
+}
+
+export async function deleteJson(path, { signal } = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    signal,
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const data = await response.json();
+      if (data?.message && typeof data.message === 'string') message = data.message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+  if (response.status === 204 || response.status === 200) {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export function getSheetLoadErrorMessage() {
   return DEFAULT_ERROR_MESSAGE;
 }
