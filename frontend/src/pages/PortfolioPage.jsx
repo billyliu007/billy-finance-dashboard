@@ -6,11 +6,11 @@ import PortfolioPositionsTable from '../components/portfolio/PortfolioPositionsT
 import AddCryptoPositionModal from '../components/portfolio/AddCryptoPositionModal.jsx';
 import AddStockPositionModal from '../components/portfolio/AddStockPositionModal.jsx';
 import EditCryptoPositionModal from '../components/portfolio/EditCryptoPositionModal.jsx';
-import useApiData from '../hooks/useApiData.js';
+import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { deleteJson } from '../utils/api.js';
 
 export default function PortfolioPage({ hideValues }) {
-  const { data, isLoading, error, refresh } = useApiData('/api/dashboard/portfolio', { refreshMs: 60_000 });
+  const { portfolio: data, isLoading, error, refresh } = useDashboard();
   const [isAddCryptoOpen, setIsAddCryptoOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
   const [editPosition, setEditPosition] = useState(null);

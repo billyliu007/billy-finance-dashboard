@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import SideNav from './components/SideNav.jsx';
 import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
+import { DashboardProvider } from './contexts/DashboardContext.jsx';
 import NetWorthPage from './pages/NetWorthPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import DevelopmentPage from './pages/DevelopmentPage.jsx';
@@ -78,30 +79,32 @@ export default function App() {
   }
 
   return (
-    <div className={`appShell${sideNavOpen ? '' : ' sideNavCollapsed'}`}>
-      <SideNav
-        open={sideNavOpen}
-        onToggle={() => setSideNavOpen((prev) => !prev)}
-        user={session.user}
-        hideValues={hideValues}
-        onHideValuesChange={setHideValues}
-        onLogout={handleLogout}
-      />
+    <DashboardProvider>
+      <div className={`appShell${sideNavOpen ? '' : ' sideNavCollapsed'}`}>
+        <SideNav
+          open={sideNavOpen}
+          onToggle={() => setSideNavOpen((prev) => !prev)}
+          user={session.user}
+          hideValues={hideValues}
+          onHideValuesChange={setHideValues}
+          onLogout={handleLogout}
+        />
 
-      <main className="mainContent">
-        {session.error && <p className="error">{session.error}</p>}
-        <Routes>
-          <Route path="/login" element={<Navigate to="/net-worth" replace />} />
-          <Route path="/onboarding" element={<Navigate to="/net-worth" replace />} />
-          <Route path="/net-worth" element={<NetWorthPage hideValues={hideValues} />} />
-          <Route path="/overview" element={<Navigate to="/net-worth" replace />} />
-          <Route path="/portfolio" element={<PortfolioPage hideValues={hideValues} />} />
-          {SHOW_DEVELOPMENT_PAGE && (
-            <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />
-          )}
-          <Route path="*" element={<Navigate to="/net-worth" replace />} />
-        </Routes>
-      </main>
-    </div>
+        <main className="mainContent">
+          {session.error && <p className="error">{session.error}</p>}
+          <Routes>
+            <Route path="/login" element={<Navigate to="/net-worth" replace />} />
+            <Route path="/onboarding" element={<Navigate to="/net-worth" replace />} />
+            <Route path="/net-worth" element={<NetWorthPage hideValues={hideValues} />} />
+            <Route path="/overview" element={<Navigate to="/net-worth" replace />} />
+            <Route path="/portfolio" element={<PortfolioPage hideValues={hideValues} />} />
+            {SHOW_DEVELOPMENT_PAGE && (
+              <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />
+            )}
+            <Route path="*" element={<Navigate to="/net-worth" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </DashboardProvider>
   );
 }

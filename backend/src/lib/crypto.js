@@ -1,6 +1,9 @@
+import { fetchWithTimeout } from './http.js';
+
 const BINANCE_TICKER_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price';
 const COINGECKO_SIMPLE_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 const COINBASE_TICKER_BASE_URL = 'https://api.exchange.coinbase.com/products';
+const CRYPTO_TIMEOUT_MS = 10000;
 
 function normalizeTargets(targets = []) {
   return targets
@@ -27,7 +30,9 @@ export async function fetchBinanceUsdtQuotes(targets = []) {
   const requests = normalizedTargets.map(async (target) => {
     try {
       const params = new URLSearchParams({ symbol: target.providerSymbol });
-      const response = await fetch(`${BINANCE_TICKER_PRICE_URL}?${params.toString()}`);
+      const response = await fetchWithTimeout(`${BINANCE_TICKER_PRICE_URL}?${params.toString()}`, {
+        timeoutMs: CRYPTO_TIMEOUT_MS,
+      });
       if (!response.ok) {
         return null;
       }
@@ -83,7 +88,9 @@ export async function fetchCoingeckoUsdQuotes(symbols = []) {
       ids: ids.join(','),
       vs_currencies: 'usd',
     });
-    const response = await fetch(`${COINGECKO_SIMPLE_PRICE_URL}?${params.toString()}`);
+    const response = await fetchWithTimeout(`${COINGECKO_SIMPLE_PRICE_URL}?${params.toString()}`, {
+      timeoutMs: CRYPTO_TIMEOUT_MS,
+    });
     if (!response.ok) {
       return {};
     }
@@ -120,7 +127,10 @@ export async function fetchCoinbaseProductQuotes(targets = []) {
 
   const requests = normalizedTargets.map(async (target) => {
     try {
-      const response = await fetch(`${COINBASE_TICKER_BASE_URL}/${target.providerSymbol}/ticker`);
+      const response = await fetchWithTimeout(
+        `${COINBASE_TICKER_BASE_URL}/${target.providerSymbol}/ticker`,
+        { timeoutMs: CRYPTO_TIMEOUT_MS }
+      );
       if (!response.ok) {
         return null;
       }

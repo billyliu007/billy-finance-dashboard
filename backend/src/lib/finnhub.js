@@ -1,4 +1,7 @@
+import { fetchWithTimeout } from './http.js';
+
 const FINNHUB_QUOTE_URL = 'https://finnhub.io/api/v1/quote';
+const FINNHUB_TIMEOUT_MS = 10000;
 
 function toSymbolList(symbols = []) {
   return Array.from(
@@ -40,7 +43,9 @@ export async function fetchFinnhubQuotes(symbols = []) {
   const requests = normalizedSymbols.map(async (symbol) => {
     try {
       const params = new URLSearchParams({ symbol, token: apiKey });
-      const response = await fetch(`${FINNHUB_QUOTE_URL}?${params.toString()}`);
+      const response = await fetchWithTimeout(`${FINNHUB_QUOTE_URL}?${params.toString()}`, {
+        timeoutMs: FINNHUB_TIMEOUT_MS,
+      });
       if (!response.ok) {
         return null;
       }

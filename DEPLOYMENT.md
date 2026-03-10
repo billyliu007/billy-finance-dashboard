@@ -102,3 +102,12 @@ Ensure `FRONTEND_BASE_URL` and `VITE_API_BASE_URL` match the URLs you use (see `
 - **Command:** `npm run cron:daily-snapshot --prefix backend` (writes net worth history to the shared DB).
 
 No pre-deploy command is configured; the database is shared with local dev and is not migrated on deploy.
+
+## 7. Performance (production load)
+
+To keep app load fast and reliable in production:
+
+- **Single dashboard request** – The frontend calls `GET /api/dashboard` once after login. That endpoint returns both `netWorth` and `portfolio` in one response. Net Worth and Portfolio pages share this data, so switching tabs does not trigger another heavy request.
+- **One FX request** – The backend fetches all FX rates (e.g. USD, EUR, SGD → CNY) in a single Frankfurter API call instead of one call per currency.
+- **Timeouts on external APIs** – Outbound requests to Frankfurter, Finnhub, and crypto providers (Coinbase, etc.) use a 10s timeout. If a provider is slow or down, the request fails that part instead of hanging the whole dashboard.
+- **Cold starts** – On Render’s free tier the backend can spin down when idle; the first request after that may be slow. Use a paid plan or a keep-alive ping to reduce cold starts.

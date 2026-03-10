@@ -6,7 +6,7 @@ import EditCashModal from '../components/networth/EditCashModal.jsx';
 import DeleteCashConfirmModal from '../components/networth/DeleteCashConfirmModal.jsx';
 import PerformanceCharts from '../components/networth/PerformanceCharts.jsx';
 import PerformanceKpis from '../components/networth/PerformanceKpis.jsx';
-import useApiData from '../hooks/useApiData.js';
+import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { putJson } from '../utils/api.js';
 
 function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
@@ -131,12 +131,14 @@ function PerformancePanel({ hideValues, performance, isLoading, error, baseCurre
 }
 
 export default function NetWorthPage({ hideValues }) {
-  const { data, isLoading, error, refresh } = useApiData('/api/dashboard/net-worth', { refreshMs: 60_000 });
+  const { netWorth, isLoading, error, refresh } = useDashboard();
+  const overview = netWorth?.overview;
+  const performance = netWorth?.performance;
 
   return (
     <>
-      <OverviewPanel hideValues={hideValues} overview={data?.overview} isLoading={isLoading} error={error} refresh={refresh} />
-      <PerformancePanel hideValues={hideValues} performance={data?.performance} isLoading={isLoading} error={error} baseCurrency={data?.overview?.baseCurrency ?? 'USD'} />
+      <OverviewPanel hideValues={hideValues} overview={overview} isLoading={isLoading} error={error} refresh={refresh} />
+      <PerformancePanel hideValues={hideValues} performance={performance} isLoading={isLoading} error={error} baseCurrency={overview?.baseCurrency ?? 'USD'} />
     </>
   );
 }

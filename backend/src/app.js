@@ -310,6 +310,16 @@ export default function createApp() {
     }
   });
 
+  app.get('/api/dashboard', requireAuth, async (req, res) => {
+    try {
+      const baseCurrency = req.auth.user.baseCurrency || 'USD';
+      const payload = await resolveDashboardPayload(req.auth.user.userId, baseCurrency);
+      return res.json({ netWorth: payload.netWorth, portfolio: payload.portfolio });
+    } catch (error) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.get('/api/dashboard/net-worth', requireAuth, async (req, res) => {
     try {
       const baseCurrency = req.auth.user.baseCurrency || 'USD';

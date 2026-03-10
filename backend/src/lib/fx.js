@@ -1,37 +1,57 @@
+import { fetchWithTimeout } from './http.js';
+
 const FRANKFURTER_URL = 'https://api.frankfurter.app/latest';
+const FX_TIMEOUT_MS = 10000;
 
-function parseRate(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
+/** Currencies we fetch (all vs USD, then derive to CNY). */
+const DEFAULT_FX_CURRENCIES = ['USD', 'SGD', 'EUR', 'GBP', 'JPY', 'HKD'];
 
-async function fetchPair(from, to) {
-  const params = new URLSearchParams({ from, to });
-  const response = await fetch(`${FRANKFURTER_URL}?${params.toString()}`);
+/**
+ * Fetch FX rates to CNY in a single request: from=USD&to=CNY,SGD,EUR,GBP,JPY,HKD,
+ * then derive each currency → CNY (USD/CNY from rates.CNY, EUR/CNY = rates.CNY/rates.EUR, etc.).
+ */
+export async function fetchFrankfurterFxRates(extraCurrencies = []) {
+  const toFetch = [...new Set([...DEFAULT_FX_CURRENCIES, ...extraCurrencies])].filter(
+    (c) => c && String(c).toUpperCase() !== 'CNY'
+  );
+  if (toFetch.length === 0) {
+    return {};
+  }
+
+  const toParam = ['CNY', ...toFetch.filter((c) => c !== 'USD')].join(',');
+  const params = new URLSearchParams({ from: 'USD', to: toParam });
+
+  let response;
+  try {
+    response = await fetchWithTimeout(`${FRANKFURTER_URL}?${params.toString()}`, {
+      timeoutMs: FX_TIMEOUT_MS,
+    });
+  } catch (err) {
+    return {};
+  }
+
   if (!response.ok) {
-    return null;
+    return {};
   }
 
   const body = await response.json();
-  return parseRate(body?.rates?.[to]);
-}
+  const rates = body?.rates;
+  if (!rates || typeof rates !== 'object') {
+    return {};
+  }
 
-/** Currencies we always fetch to CNY (plus any passed in). */
-const DEFAULT_FX_CURRENCIES = ['USD', 'SGD', 'EUR', 'GBP', 'JPY', 'HKD'];
+  const usdToCny = Number(rates.CNY);
+  if (!Number.isFinite(usdToCny) || usdToCny <= 0) {
+    return {};
+  }
 
-export async function fetchFrankfurterFxRates(extraCurrencies = []) {
-  const toFetch = [...new Set([...DEFAULT_FX_CURRENCIES, ...extraCurrencies])].filter(
-    (c) => c !== 'CNY'
-  );
-  const pairs = await Promise.all(
-    toFetch.map((currency) => fetchPair(currency, 'CNY').then((rate) => ({ currency, rate })))
-  );
-
-  const rates = {};
-  for (const { currency, rate } of pairs) {
-    if (rate != null) {
-      rates[currency] = rate;
+  const result = { USD: usdToCny };
+  for (const currency of toFetch) {
+    if (currency === 'USD') continue;
+    const usdToCur = Number(rates[currency]);
+    if (Number.isFinite(usdToCur) && usdToCur > 0) {
+      result[currency] = usdToCny / usdToCur;
     }
   }
-  return rates;
+  return result;
 }
