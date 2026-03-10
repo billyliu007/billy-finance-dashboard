@@ -1,4 +1,10 @@
+# My Worth Track – Render Blueprint
+#
+# Backend and local dev use the same database (schema and data already in place).
+# No migrations run on deploy; run them manually when the schema changes.
+
 services:
+  # Backend API (Node)
   - type: web
     name: netpulse-backend
     env: node
@@ -7,42 +13,51 @@ services:
     startCommand: npm run start --prefix backend
     healthCheckPath: /api/health
     envVars:
-      # Secrets are sourced from this Render Environment Group.
       - fromGroup: netpulse-secrets
-      # Required secret/env keys (documented explicitly for portability).
+
+      # Database (same DB as localhost; set in group or here)
       - key: DATABASE_URL
         sync: false
+      - key: DATABASE_SSL
+        value: "true"
+
+      # App & auth
+      - key: DATA_SOURCE
+        value: db
       - key: FRONTEND_BASE_URL
         sync: false
-      # Example: https://your-frontend-domain.onrender.com
       - key: AUTH_SESSION_TTL_MS
         value: "1209600000"
+      - key: MIGRATION_BIND_ENABLED
+        value: "true"
+      - key: SNAPSHOT_CRON_TOKEN
+        sync: false
+
+      # OAuth – Google
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
       - key: GOOGLE_OAUTH_CALLBACK_URL
         sync: false
+
+      # OAuth – Apple
       - key: APPLE_CLIENT_ID
         sync: false
       - key: APPLE_CLIENT_SECRET
         sync: false
       - key: APPLE_CALLBACK_URL
         sync: false
+
+      # OAuth – WeChat
       - key: WECHAT_APP_ID
         sync: false
       - key: WECHAT_APP_SECRET
         sync: false
       - key: WECHAT_CALLBACK_URL
         sync: false
-      - key: SNAPSHOT_CRON_TOKEN
-        sync: false
-      - key: MIGRATION_BIND_ENABLED
-        value: "true"
-      - key: DATABASE_SSL
-        value: "true"
-      - key: DATA_SOURCE
-        value: db
+
+      # Market data
       - key: FINNHUB_API_KEY
         sync: false
       - key: FX_PROVIDER
@@ -50,6 +65,7 @@ services:
       - key: CRYPTO_PROVIDER
         value: coinbase
 
+  # Frontend (static SPA)
   - type: web
     name: netpulse-frontend
     env: static
@@ -67,6 +83,7 @@ services:
       - key: VITE_SHOW_DEVELOPMENT_PAGE
         value: "false"
 
+  # Daily net worth snapshot (uses same DB; no OAuth)
   - type: cron
     name: netpulse-daily-snapshot
     env: node
