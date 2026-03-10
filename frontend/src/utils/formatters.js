@@ -18,6 +18,11 @@ export function formatCny(value) {
   }).format(value);
 }
 
+/** Format a number as currency in the given base currency (e.g. USD, CNY). */
+export function formatBaseCurrency(value, baseCurrency = 'USD') {
+  return formatCurrencyValue(value, baseCurrency);
+}
+
 export function formatMoney(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

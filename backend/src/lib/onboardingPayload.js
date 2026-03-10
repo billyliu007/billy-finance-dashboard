@@ -4,10 +4,10 @@
 
 const DISPLAY_NAME_MIN = 2;
 const DISPLAY_NAME_MAX = 30;
-const CASH_TYPES = ['asset', 'liability'];
 
 /**
  * Normalize and validate onboarding request body.
+ * Cash components: currency, name, balance (negative = debt).
  * @param {object} body - Raw request body
  * @returns {{ displayName: string, cashComponents: object[], positions: object[] }}
  * @throws {Error} When validation fails
@@ -28,22 +28,13 @@ export function parseOnboardingPayload(body) {
   }
 
   const normalizedCash = cashComponents.map((item, index) => {
-    const key = String(item?.key || `component_${index + 1}`).trim().toLowerCase();
-    const name = String(item?.name || key).trim();
+    const name = String(item?.name ?? item?.displayName ?? `Component ${index + 1}`).trim();
     const currency = String(item?.currency || 'CNY').trim().toUpperCase();
-    const type = String(item?.type || 'asset').trim().toLowerCase();
-    const amount = Number(item?.amount || 0);
-    if (!key || !name || !currency || !CASH_TYPES.includes(type) || !Number.isFinite(amount)) {
-      throw new Error('Invalid cash/debt input.');
+    const balance = Number(item?.balance ?? item?.amount ?? 0);
+    if (!name || !currency || !Number.isFinite(balance)) {
+      throw new Error('Invalid cash component: need currency, name, and balance (number).');
     }
-    return {
-      key,
-      name,
-      currency,
-      type,
-      category: String(item?.category || 'Cash'),
-      amount,
-    };
+    return { name, currency, balance };
   });
 
   const normalizedPositions = positions.map((item) => {

@@ -17,7 +17,8 @@ export async function createUser({ email = null, displayName = null, onboardingC
 
 export async function findUserById(userId) {
   const result = await query(
-    `SELECT id, email, display_name AS "displayName", public_id AS "publicId", onboarding_completed AS "onboardingCompleted", created_at AS "createdAt"
+    `SELECT id, email, display_name AS "displayName", public_id AS "publicId", onboarding_completed AS "onboardingCompleted",
+            COALESCE(UPPER(TRIM(base_currency)), 'USD') AS "baseCurrency", created_at AS "createdAt"
      FROM users
      WHERE id = $1`,
     [userId],
@@ -72,9 +73,19 @@ export async function markOnboardingCompleted(userId, displayName) {
   return result.rows[0] || null;
 }
 
+export async function updateUserBaseCurrency(userId, baseCurrency) {
+  const code = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
+  await query(
+    `UPDATE users SET base_currency = $2, updated_at = NOW() WHERE id = $1`,
+    [userId, code],
+  );
+  return code;
+}
+
 export async function listUsersForSnapshots() {
   const result = await query(
-    `SELECT id, email, display_name AS "displayName", onboarding_completed AS "onboardingCompleted"
+    `SELECT id, email, display_name AS "displayName", onboarding_completed AS "onboardingCompleted",
+            COALESCE(UPPER(TRIM(base_currency)), 'USD') AS "baseCurrency"
      FROM users
      WHERE onboarding_completed = TRUE`,
   );
@@ -92,7 +103,8 @@ export async function createSession(userId, sessionToken, expiresAtIsoString) {
 export async function findSession(sessionToken) {
   const result = await query(
     `SELECT s.id, s.user_id AS "userId", s.expires_at AS "expiresAt",
-            u.email, u.display_name AS "displayName", u.public_id AS "publicId", u.onboarding_completed AS "onboardingCompleted"
+            u.email, u.display_name AS "displayName", u.public_id AS "publicId", u.onboarding_completed AS "onboardingCompleted",
+            COALESCE(UPPER(TRIM(u.base_currency)), 'USD') AS "baseCurrency"
      FROM user_sessions s
      INNER JOIN users u ON u.id = s.user_id
      WHERE s.session_token = $1`,

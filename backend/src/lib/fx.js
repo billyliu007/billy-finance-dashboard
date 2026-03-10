@@ -16,18 +16,22 @@ async function fetchPair(from, to) {
   return parseRate(body?.rates?.[to]);
 }
 
-export async function fetchFrankfurterFxRates() {
-  const [usdToCny, sgdToCny] = await Promise.all([
-    fetchPair('USD', 'CNY'),
-    fetchPair('SGD', 'CNY'),
-  ]);
+/** Currencies we always fetch to CNY (plus any passed in). */
+const DEFAULT_FX_CURRENCIES = ['USD', 'SGD', 'EUR', 'GBP', 'JPY', 'HKD'];
+
+export async function fetchFrankfurterFxRates(extraCurrencies = []) {
+  const toFetch = [...new Set([...DEFAULT_FX_CURRENCIES, ...extraCurrencies])].filter(
+    (c) => c !== 'CNY'
+  );
+  const pairs = await Promise.all(
+    toFetch.map((currency) => fetchPair(currency, 'CNY').then((rate) => ({ currency, rate })))
+  );
 
   const rates = {};
-  if (usdToCny) {
-    rates.USD = usdToCny;
-  }
-  if (sgdToCny) {
-    rates.SGD = sgdToCny;
+  for (const { currency, rate } of pairs) {
+    if (rate != null) {
+      rates[currency] = rate;
+    }
   }
   return rates;
 }

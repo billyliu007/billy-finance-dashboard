@@ -52,7 +52,7 @@ Set on frontend static service:
 
 ## 4) Database schema migration
 
-After backend deploys and DB is reachable, run once:
+On Render, migrations run automatically before each deploy via `preDeployCommand` in `render.yaml`. For local or first-time setup, run once:
 
 ```bash
 npm run db:migrate --prefix backend

@@ -570,6 +570,17 @@ h1 {
   color: #cfe2ff;
 }
 
+.modalBtn.danger {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(185, 28, 28, 0.25);
+  color: #fecaca;
+}
+
+.modalBtn.danger:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.7);
+  background: rgba(185, 28, 28, 0.35);
+}
+
 .modalBtn:disabled {
   border-color: rgba(148, 163, 184, 0.2);
   background: rgba(30, 41, 59, 0.5);
@@ -609,6 +620,37 @@ h1 {
   stroke-linecap: round;
   stroke-linejoin: round;
   flex: none;
+}
+
+.kpiValueRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kpiValueRow .kpiValue {
+  margin: 0;
+}
+
+.kpiBaseCurrencySelect {
+  font-size: 0.95rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  background: var(--panel-strong);
+  color: #e2e8f0;
+  cursor: pointer;
+  min-width: 4.5em;
+}
+
+.kpiBaseCurrencySelect:hover {
+  border-color: rgba(94, 234, 212, 0.5);
+}
+
+.kpiBaseCurrencySelect:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .kpiValue {
@@ -1176,7 +1218,7 @@ tbody tr:hover td {
   }
 
   .cashMobileCompact {
-    min-width: 0;
+    min-width: 0 !important;
     width: 100%;
     table-layout: fixed;
   }
@@ -1189,12 +1231,50 @@ tbody tr:hover td {
 
   .cashMobileCompact th:nth-child(2),
   .cashMobileCompact td:nth-child(2) {
-    width: 68%;
+    width: 52%;
   }
 
   .cashMobileCompact th:nth-child(4),
   .cashMobileCompact td:nth-child(4) {
-    width: 32%;
+    width: 30%;
+  }
+
+  .cashMobileCompact th:nth-child(7),
+  .cashMobileCompact td:nth-child(7) {
+    width: 18%;
+    padding: 6px 2px;
+    box-sizing: border-box;
+  }
+
+  /* Shorten "Actions" header so it fits without truncation */
+  .cashMobileCompact th:nth-child(7) {
+    font-size: 0;
+    letter-spacing: 0;
+  }
+
+  .cashMobileCompact th:nth-child(7)::after {
+    content: '⋯';
+    font-size: 0.74rem;
+    font-weight: 650;
+    color: #b7c8f3;
+  }
+
+  .cashMobileCompact .positionActionsCell {
+    white-space: nowrap;
+  }
+
+  .cashMobileCompact .positionActionsCell .headerIconBtn {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0;
+    font-size: 0.7rem;
+    margin-right: 2px;
+  }
+
+  .cashMobileCompact .positionActionsCell .headerIconBtn:last-child {
+    margin-right: 0;
   }
 
   .positionsMobileCompact th:nth-child(2),

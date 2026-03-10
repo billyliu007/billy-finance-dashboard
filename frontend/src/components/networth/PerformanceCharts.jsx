@@ -14,7 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useEffect, useState } from 'react';
-import { formatCny, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+import { formatBaseCurrency, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
 
 const NET_WORTH_X_KEY = 'dateTimeLabel';
 
@@ -111,7 +111,7 @@ function ActivePeriodBar(props) {
   );
 }
 
-function PeriodReturnTooltip({ active, payload, hideValues }) {
+function PeriodReturnTooltip({ active, payload, hideValues, baseCurrency = 'USD' }) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -120,6 +120,8 @@ function PeriodReturnTooltip({ active, payload, hideValues }) {
   if (!point) {
     return null;
   }
+
+  const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
 
   return (
     <div
@@ -138,11 +140,11 @@ function PeriodReturnTooltip({ active, payload, hideValues }) {
         Prev month-end:{' '}
         {point.previousNetWorth == null
           ? '-'
-          : formatMaybeHidden(hideValues, formatCny, Number(point.previousNetWorth) || 0)}
+          : formatMaybeHidden(hideValues, formatValue, Number(point.previousNetWorth) || 0)}
       </p>
       <p style={{ margin: '2px 0 0' }}>
         Current month-end:{' '}
-        {formatMaybeHidden(hideValues, formatCny, Number(point.currentNetWorth) || 0)}
+        {formatMaybeHidden(hideValues, formatValue, Number(point.currentNetWorth) || 0)}
       </p>
       <p style={{ margin: '2px 0 0' }}>
         MoM Return: {hideValues ? 'Hidden' : formatPercent(Number(point.derivedChangePct) || 0)}
@@ -151,8 +153,9 @@ function PeriodReturnTooltip({ active, payload, hideValues }) {
   );
 }
 
-export default function PerformanceCharts({ hideValues, cashflowData, derivedSeries, netWorthDomain }) {
+export default function PerformanceCharts({ hideValues, cashflowData, derivedSeries, netWorthDomain, baseCurrency = 'USD' }) {
   const [isSmallScreen, setIsSmallScreen] = useState(false);
+  const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 980px)');
@@ -243,12 +246,12 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                 domain={netWorthDomain}
                 tick={isSmallScreen ? false : { fill: '#94a3b8', fontSize: 12 }}
                 tickLine={!isSmallScreen}
-                tickFormatter={isSmallScreen ? undefined : (value) => formatMaybeHidden(hideValues, formatCny, Number(value) || 0, '')}
+                tickFormatter={isSmallScreen ? undefined : (value) => formatMaybeHidden(hideValues, formatValue, Number(value) || 0, '')}
                 width={isSmallScreen ? 8 : 120}
                 tickMargin={isSmallScreen ? 0 : 6}
               />
               <Tooltip
-                formatter={(value) => formatMaybeHidden(hideValues, formatCny, Number(value) || 0)}
+                formatter={(value) => formatMaybeHidden(hideValues, formatValue, Number(value) || 0)}
                 labelFormatter={(label, payload) => {
                   const point = payload?.[0]?.payload;
                   return formatLocalDateTime(point?.recordedAtUtc || point?.dateTimeLabel || label);
@@ -279,7 +282,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                       color={marker.color}
                       side={marker.side}
                       offsetY={marker.offsetY}
-                      value={`${marker.labels.join('/')} ${formatMaybeHidden(hideValues, formatCny, marker.point.netWorth, 'Hidden')}`}
+                      value={`${marker.labels.join('/')} ${formatMaybeHidden(hideValues, formatValue, marker.point.netWorth, 'Hidden')}`}
                     />
                   )}
                 />
@@ -298,7 +301,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
               <XAxis dataKey="date" tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis tickFormatter={(value) => `${value}%`} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <Tooltip
-                content={<PeriodReturnTooltip hideValues={hideValues} />}
+                content={<PeriodReturnTooltip hideValues={hideValues} baseCurrency={baseCurrency} />}
                 cursor={false}
                 contentStyle={{
                   backgroundColor: '#0b1220',

@@ -21,6 +21,7 @@ import {
   listCashComponents,
   listCoinbaseProducts,
   createCryptoPositionFromCoinbaseProduct,
+  listCurrencies,
   listUsStockSymbols,
   createStockPositionFromSymbol,
   updatePosition,
@@ -29,7 +30,7 @@ import {
   replaceCashComponents,
   replacePortfolioPositions,
 } from './repositories/financeRepository.js';
-import { markOnboardingCompleted } from './repositories/userRepository.js';
+import { markOnboardingCompleted, updateUserBaseCurrency } from './repositories/userRepository.js';
 import { resolveDashboardPayload } from './services/dashboardService.js';
 import { runDailySnapshots } from './services/snapshotService.js';
 
@@ -165,6 +166,7 @@ export default function createApp() {
         displayName: req.auth.user.displayName,
         publicId: req.auth.user.publicId,
         onboardingCompleted: req.auth.user.onboardingCompleted,
+        baseCurrency: req.auth.user.baseCurrency || 'USD',
       },
     });
   });
@@ -209,6 +211,15 @@ export default function createApp() {
       });
     } catch (error) {
       return res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/currencies', requireAuth, async (req, res) => {
+    try {
+      const currencies = await listCurrencies();
+      return res.json({ currencies });
+    } catch (error) {
+      return res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -301,7 +312,8 @@ export default function createApp() {
 
   app.get('/api/dashboard/net-worth', requireAuth, async (req, res) => {
     try {
-      const payload = await resolveDashboardPayload(req.auth.user.userId);
+      const baseCurrency = req.auth.user.baseCurrency || 'USD';
+      const payload = await resolveDashboardPayload(req.auth.user.userId, baseCurrency);
       return res.json(payload.netWorth);
     } catch (error) {
       return res.status(500).json({ message: getErrorMessage(error) });
@@ -310,10 +322,43 @@ export default function createApp() {
 
   app.get('/api/dashboard/portfolio', requireAuth, async (req, res) => {
     try {
-      const payload = await resolveDashboardPayload(req.auth.user.userId);
+      const baseCurrency = req.auth.user.baseCurrency || 'USD';
+      const payload = await resolveDashboardPayload(req.auth.user.userId, baseCurrency);
       return res.json(payload.portfolio);
     } catch (error) {
       return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.patch('/api/user/preferences', requireAuth, async (req, res) => {
+    try {
+      const baseCurrency = req.body?.baseCurrency;
+      if (baseCurrency === undefined || baseCurrency === null) {
+        return res.status(400).json({ message: 'baseCurrency is required.' });
+      }
+      const code = await updateUserBaseCurrency(req.auth.user.userId, baseCurrency);
+      return res.status(200).json({ ok: true, baseCurrency: code });
+    } catch (error) {
+      return res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.put('/api/cash', requireAuth, async (req, res) => {
+    try {
+      const list = Array.isArray(req.body?.cashComponents) ? req.body.cashComponents : [];
+      const normalized = list.map((item, index) => {
+        const name = String(item?.name ?? `Component ${index + 1}`).trim() || 'Cash';
+        const currency = String(item?.currency || 'CNY').trim().toUpperCase();
+        const balance = Number(item?.balance ?? item?.amount ?? 0);
+        if (!Number.isFinite(balance)) {
+          throw new Error('Each cash component must have a valid balance (number).');
+        }
+        return { name, currency, balance };
+      });
+      await replaceCashComponents(req.auth.user.userId, normalized);
+      return res.status(200).json({ ok: true });
+    } catch (error) {
+      return res.status(400).json({ message: getErrorMessage(error) });
     }
   });
 

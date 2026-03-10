@@ -17,24 +17,33 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
         listPortfolioPositions(user.id),
         listNetWorthHistory(user.id),
       ]);
+      const currenciesFromCash = [
+        ...new Set((cashComponents || []).map((c) => String(c?.currency || '').toUpperCase()).filter(Boolean)),
+      ];
       const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
         getStockQuoteMapForPositions(positions),
         getCryptoQuoteMapForPositions(positions),
-        getLiveFxRates(),
+        getLiveFxRates(currenciesFromCash),
       ]);
-      const payload = buildNetWorthPayload({
+      const payloadCny = buildNetWorthPayload({
         cashComponents,
         positions,
         history,
         stockQuotes,
         cryptoQuotes,
         fxRatesOverride: fxRates,
+        baseCurrency: 'CNY',
       });
+      const totalCny = payloadCny.overview.totalNetWorth;
+      const usdRate = Number(fxRates.USD);
+      const totalUsd =
+        Number.isFinite(usdRate) && usdRate > 0 ? totalCny / usdRate : null;
       await upsertNetWorthSnapshot({
         userId: user.id,
         dateUtc,
-        totalCny: payload.overview.totalNetWorth,
-        qualityStatus: payload.overview.missingInputs.length > 0 ? 'partial' : 'full',
+        totalCny,
+        totalUsd,
+        qualityStatus: payloadCny.overview.missingInputs.length > 0 ? 'partial' : 'full',
       });
       results.push({ userId: user.id, status: 'ok' });
     } catch (error) {

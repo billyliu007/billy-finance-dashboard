@@ -76,9 +76,16 @@ export async function getCryptoQuoteMapForPositions(positions) {
   return quotes;
 }
 
-export async function getLiveFxRates() {
+/**
+ * Fetch FX rates to CNY. Optionally pass currencies from cash components so all used currencies get a rate.
+ * @param {string[]} [currenciesFromCash] - e.g. ['USD', 'SGD', 'EUR'] from user's cash rows
+ */
+export async function getLiveFxRates(currenciesFromCash = []) {
   if (FX_PROVIDER === 'frankfurter') {
-    return fetchFrankfurterFxRates();
+    const normalized = (currenciesFromCash || [])
+      .map((c) => String(c || '').trim().toUpperCase())
+      .filter((c) => c && c !== 'CNY');
+    return fetchFrankfurterFxRates(normalized);
   }
   return {};
 }

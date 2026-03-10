@@ -47,6 +47,10 @@ export async function patchJson(path, body, { signal } = {}) {
   return requestJson(path, { signal, method: 'PATCH', body });
 }
 
+export async function putJson(path, body, { signal } = {}) {
+  return requestJson(path, { signal, method: 'PUT', body });
+}
+
 export async function deleteJson(path, { signal } = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     signal,

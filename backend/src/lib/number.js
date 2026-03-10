@@ -8,9 +8,12 @@ export function parseMoney(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** USDT and USDC are treated as USD for aggregation. */
 export function normalizeCurrencyCode(currency) {
   const normalized = String(currency || 'USD').toUpperCase();
-  return normalized === 'RMB' ? 'CNY' : normalized;
+  if (normalized === 'RMB') return 'CNY';
+  if (normalized === 'USDT' || normalized === 'USDC') return 'USD';
+  return normalized;
 }
 
 export function percentFromReference(current, reference) {

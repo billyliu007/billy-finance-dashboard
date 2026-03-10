@@ -20,12 +20,15 @@ const DATA_SOURCE = String(process.env.DATA_SOURCE || 'db').trim().toLowerCase()
 /**
  * Load all data required for the dashboard and return net worth, portfolio, fx rates, and raw positions.
  * @param {string} userId
+ * @param {string} [baseCurrency='USD'] - User's preferred base currency for net worth display
  * @returns {Promise<{ netWorth: object, portfolio: object, fxRates: object, positions: object[] }>}
  */
-export async function resolveDashboardPayload(userId) {
+export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
   if (DATA_SOURCE !== 'db' && DATA_SOURCE !== 'hybrid') {
     throw new Error(`Unsupported DATA_SOURCE value: ${DATA_SOURCE}. Expected db or hybrid.`);
   }
+
+  const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
 
   const [cashComponents, positions, history] = await Promise.all([
     listCashComponents(userId),
@@ -33,10 +36,17 @@ export async function resolveDashboardPayload(userId) {
     listNetWorthHistory(userId),
   ]);
 
+  const currenciesFromCash = [
+    ...new Set((cashComponents || []).map((c) => String(c?.currency || '').toUpperCase()).filter(Boolean)),
+  ];
+  if (base !== 'CNY') {
+    currenciesFromCash.push(base);
+  }
+
   const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
     getStockQuoteMapForPositions(positions),
     getCryptoQuoteMapForPositions(positions),
-    getLiveFxRates(),
+    getLiveFxRates(currenciesFromCash),
   ]);
 
   const netWorth = buildNetWorthPayload({
@@ -46,7 +56,10 @@ export async function resolveDashboardPayload(userId) {
     stockQuotes,
     cryptoQuotes,
     fxRatesOverride: fxRates,
+    baseCurrency: base,
   });
+  netWorth.overview.cashComponents = cashComponents;
+  netWorth.overview.baseCurrency = base;
 
   const portfolio = buildPortfolioPayload({
     positions,

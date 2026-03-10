@@ -1,21 +1,34 @@
 import { query, withDbClient } from '../db/client.js';
 
 /**
- * List cash/debt components for a user.
- * @param {string} userId
+ * List active currencies (code, name) for dropdowns and validation.
  * @returns {Promise<object[]>}
+ */
+export async function listCurrencies() {
+  const result = await query(
+    `SELECT code, name
+     FROM currencies
+     WHERE active = true
+     ORDER BY code ASC`,
+    [],
+  );
+  return result.rows;
+}
+
+/**
+ * List cash components for a user. Balance in local currency; negative = debt.
+ * @param {string} userId
+ * @returns {Promise<object[]>} { currency, name, balance }[]
  */
 export async function listCashComponents(userId) {
   const result = await query(
-    `SELECT component_key AS key,
-            display_name AS name,
-            component_type AS type,
-            category,
+    `SELECT id,
             upper(currency) AS currency,
-            amount::float8 AS amount
-     FROM cash_components
+            name,
+            balance::float8 AS balance
+     FROM cash
      WHERE user_id = $1
-     ORDER BY component_key ASC`,
+     ORDER BY currency ASC, name ASC`,
     [userId],
   );
   return result.rows;
@@ -25,19 +38,18 @@ export async function replaceCashComponents(userId, components) {
   await withDbClient(async (client) => {
     await client.query('BEGIN');
     try {
-      await client.query(`DELETE FROM cash_components WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM cash WHERE user_id = $1`, [userId]);
       for (const item of components) {
+        const balance = Number(item.balance ?? item.amount ?? 0);
+        if (!Number.isFinite(balance)) continue;
         await client.query(
-          `INSERT INTO cash_components (user_id, component_key, display_name, component_type, category, currency, amount)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO cash (user_id, currency, name, balance)
+           VALUES ($1, $2, $3, $4)`,
           [
             userId,
-            item.key,
-            item.name,
-            item.type,
-            item.category || 'Cash',
             String(item.currency || '').toUpperCase(),
-            Number(item.amount || 0),
+            String(item.name ?? item.displayName ?? '').trim() || 'Cash',
+            balance,
           ],
         );
       }
@@ -134,7 +146,8 @@ export async function listNetWorthHistory(userId) {
   const result = await query(
     `SELECT to_char(date_utc, 'YYYY-MM-DD') AS date,
             to_char(recorded_at_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "recordedAtUtc",
-            total_cny::float8 AS "netWorth"
+            total_cny::float8 AS "netWorthCny",
+            total_usd::float8 AS "netWorthUsd"
      FROM networth_history
      WHERE user_id = $1
      ORDER BY recorded_at_utc ASC`,
@@ -169,7 +182,7 @@ export async function replaceNetWorthHistory(userId, historyRows) {
   });
 }
 
-export async function upsertNetWorthSnapshot({ userId, dateUtc, totalCny, qualityStatus = 'full' }) {
+export async function upsertNetWorthSnapshot({ userId, dateUtc, totalCny, totalUsd = null, qualityStatus = 'full' }) {
   await withDbClient(async (client) => {
     await client.query('BEGIN');
     try {
@@ -178,10 +191,11 @@ export async function upsertNetWorthSnapshot({ userId, dateUtc, totalCny, qualit
          WHERE user_id = $1 AND date_utc = $2 AND source = 'daily'`,
         [userId, dateUtc],
       );
+      const usdVal = totalUsd != null && Number.isFinite(Number(totalUsd)) ? Number(totalUsd) : null;
       await client.query(
-        `INSERT INTO networth_history (user_id, date_utc, recorded_at_utc, source, total_cny, quality_status, computed_at)
-         VALUES ($1, $2, NOW(), 'daily', $3, $4, NOW())`,
-        [userId, dateUtc, Number(totalCny || 0), qualityStatus],
+        `INSERT INTO networth_history (user_id, date_utc, recorded_at_utc, source, total_cny, total_usd, quality_status, computed_at)
+         VALUES ($1, $2, NOW(), 'daily', $3, $4, $5, NOW())`,
+        [userId, dateUtc, Number(totalCny || 0), usdVal, qualityStatus],
       );
       await client.query('COMMIT');
     } catch (error) {

@@ -1,7 +1,8 @@
 import KpiIcon from '../KpiIcon.jsx';
-import { formatCny, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+import { formatBaseCurrency, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
 
-export default function PerformanceKpis({ hideValues, summary }) {
+export default function PerformanceKpis({ hideValues, summary, baseCurrency = 'USD' }) {
+  const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
   return (
     <div className="kpiRow">
       <article className="miniKpi">
@@ -9,7 +10,7 @@ export default function PerformanceKpis({ hideValues, summary }) {
           <KpiIcon type="latest" />
           <span>Latest Net Worth Snapshot</span>
         </p>
-        <h3>{formatMaybeHidden(hideValues, formatCny, summary.latest.netWorth)}</h3>
+        <h3>{formatMaybeHidden(hideValues, formatValue, summary.latest.netWorth)}</h3>
         <small>
           {formatLocalDateTime(summary.latest.dateTimeLabel || summary.latest.recordedAtUtc || summary.latest.date, {
             includeSeconds: false,
@@ -33,7 +34,7 @@ export default function PerformanceKpis({ hideValues, summary }) {
           <KpiIcon type="peak" />
           <span>All-Time High Net Worth</span>
         </p>
-        <h3 className="pos">{formatMaybeHidden(hideValues, formatCny, summary.peak.netWorth)}</h3>
+        <h3 className="pos">{formatMaybeHidden(hideValues, formatValue, summary.peak.netWorth)}</h3>
         <small>
           {formatLocalDateTime(summary.peak.dateTimeLabel || summary.peak.recordedAtUtc || summary.peak.date, {
             includeSeconds: false,
@@ -45,7 +46,7 @@ export default function PerformanceKpis({ hideValues, summary }) {
           <KpiIcon type="atl" />
           <span>All-Time Low Net Worth</span>
         </p>
-        <h3 className="neg">{formatMaybeHidden(hideValues, formatCny, summary.bottom.netWorth)}</h3>
+        <h3 className="neg">{formatMaybeHidden(hideValues, formatValue, summary.bottom.netWorth)}</h3>
         <small>
           {formatLocalDateTime(summary.bottom.dateTimeLabel || summary.bottom.recordedAtUtc || summary.bottom.date, {
             includeSeconds: false,

@@ -4,9 +4,9 @@ import { buildNetWorthPayload } from '../src/services/netWorthService.js';
 
 function mockCashComponents() {
   return [
-    { key: 'sgd_cash', name: 'SGD Cash', type: 'asset', category: 'Cash', currency: 'SGD', amount: 10000 },
-    { key: 'usd_cash', name: 'USD Cash', type: 'asset', category: 'Cash', currency: 'USD', amount: 7000 },
-    { key: 'cny_cash_debt', name: 'CNY Debt', type: 'liability', category: 'Debt', currency: 'CNY', amount: 3000 },
+    { id: '1', currency: 'SGD', name: 'SGD Cash', balance: 10000 },
+    { id: '2', currency: 'USD', name: 'USD Cash', balance: 7000 },
+    { id: '3', currency: 'CNY', name: 'CNY Debt', balance: -3000 },
   ];
 }
 

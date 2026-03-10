@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { postJson } from '../utils/api.js';
 
 const DEFAULT_CASH_ROWS = [
-  { key: 'sgd_cash', name: 'SGD Cash', type: 'asset', category: 'Cash', currency: 'SGD', amount: '' },
-  { key: 'usd_cash', name: 'USD Cash', type: 'asset', category: 'Cash', currency: 'USD', amount: '' },
-  { key: 'cny_cash_debt', name: 'CNY Cash Debt', type: 'liability', category: 'Debt', currency: 'CNY', amount: '' },
+  { name: 'SGD Cash', currency: 'SGD', balance: '' },
+  { name: 'USD Cash', currency: 'USD', balance: '' },
+  { name: 'CNY Debt', currency: 'CNY', balance: '' },
 ];
 
 const DEFAULT_ASSET_ROWS = [
@@ -38,8 +38,9 @@ export default function OnboardingPage({ onCompleted }) {
       await postJson('/api/onboarding/initialize', {
         displayName,
         cashComponents: cashComponents.map((item) => ({
-          ...item,
-          amount: Number(item.amount || 0),
+          name: item.name,
+          currency: item.currency,
+          balance: Number(item.balance ?? 0),
         })),
         positions: positions.map((item) => ({
           ...item,
@@ -74,16 +75,13 @@ export default function OnboardingPage({ onCompleted }) {
           </label>
           <div>
             <h3>Cash / Debt</h3>
+            <p className="hint">Use negative balance for debt (e.g. -5000).</p>
             <div className="onboardingGrid">
               {cashComponents.map((row, index) => (
-                <div className="onboardingRow" key={row.key}>
-                  <input value={row.name} onChange={(event) => updateCashRow(index, 'name', event.target.value)} placeholder="Name" required />
-                  <input value={row.currency} onChange={(event) => updateCashRow(index, 'currency', event.target.value.toUpperCase())} placeholder="Currency" required />
-                  <select value={row.type} onChange={(event) => updateCashRow(index, 'type', event.target.value)}>
-                    <option value="asset">Asset</option>
-                    <option value="liability">Liability</option>
-                  </select>
-                  <input type="number" step="0.01" value={row.amount} onChange={(event) => updateCashRow(index, 'amount', event.target.value)} placeholder="Amount" required />
+                <div className="onboardingRow" key={`${row.currency}-${row.name}-${index}`}>
+                  <input value={row.name} onChange={(e) => updateCashRow(index, 'name', e.target.value)} placeholder="Name" required />
+                  <input value={row.currency} onChange={(e) => updateCashRow(index, 'currency', e.target.value.toUpperCase())} placeholder="Currency" required />
+                  <input type="number" step="0.01" value={row.balance} onChange={(e) => updateCashRow(index, 'balance', e.target.value)} placeholder="Balance (negative = debt)" required />
                 </div>
               ))}
             </div>

@@ -1,17 +1,18 @@
+import { useState } from 'react';
 import KpiIcon from '../KpiIcon.jsx';
-import { formatCny, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+import { formatBaseCurrency, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+import useApiData from '../../hooks/useApiData.js';
+import { patchJson } from '../../utils/api.js';
 
 function renderKpiName(name) {
-  const suffix = ' (As in CNY)';
-  if (!String(name).endsWith(suffix)) {
+  const match = String(name).match(/^(.+?)\s+\((As in [A-Z]{3})\)$/);
+  if (!match) {
     return name;
   }
-
-  const base = name.slice(0, -suffix.length);
   return (
     <>
-      <span>{base}</span>
-      <span className="kpiNameSuffix">{suffix}</span>
+      <span>{match[1].trim()}</span>
+      <span className="kpiNameSuffix"> {match[2]}</span>
     </>
   );
 }
@@ -22,16 +23,53 @@ export default function NetWorthSummaryCard({
   netWorthBounds,
   componentValues,
   missingInputs,
+  baseCurrency = 'USD',
+  onBaseCurrencyChange,
 }) {
+  const { data: currenciesData } = useApiData('/api/currencies', { refreshMs: 0 });
+  const currencies = currenciesData?.currencies ?? [];
+  const [isSavingPref, setIsSavingPref] = useState(false);
+
+  async function handleBaseCurrencyChange(event) {
+    const code = event?.target?.value;
+    if (!code || code === baseCurrency || !onBaseCurrencyChange) return;
+    try {
+      setIsSavingPref(true);
+      await patchJson('/api/user/preferences', { baseCurrency: code });
+      onBaseCurrencyChange?.(code);
+    } finally {
+      setIsSavingPref(false);
+    }
+  }
+
+  const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
+
   return (
     <div className="kpiCard">
       <p className="kpiLabel">
         <KpiIcon type="networth" />
         <span>Total Net Worth</span>
       </p>
-      <p className={`kpiValue ${totalNetWorth >= 0 ? 'pos' : 'neg'}`}>
-        {formatMaybeHidden(hideValues, formatCny, totalNetWorth)}
-      </p>
+      <div className="kpiValueRow">
+        <p className={`kpiValue ${totalNetWorth >= 0 ? 'pos' : 'neg'}`}>
+          {formatMaybeHidden(hideValues, formatValue, totalNetWorth)}
+        </p>
+        {currencies.length > 0 && (
+          <select
+            className="kpiBaseCurrencySelect"
+            value={baseCurrency}
+            onChange={handleBaseCurrencyChange}
+            disabled={isSavingPref}
+            aria-label="Base currency"
+          >
+            {currencies.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
       {netWorthBounds && (
         <div className="kpiDeltaRow">
           <span className={`kpiDeltaItem ${netWorthBounds.pctToAth >= 0 ? 'pos' : 'neg'}`}>
@@ -50,7 +88,7 @@ export default function NetWorthSummaryCard({
           <li key={component.key}>
             <span className="kpiName">{renderKpiName(component.name)}</span>
             <strong className={component.value >= 0 ? 'pos' : 'neg'}>
-              {component.found ? formatMaybeHidden(hideValues, formatCny, component.value) : 'Not found'}
+              {component.found ? formatMaybeHidden(hideValues, formatValue, component.value) : 'Not found'}
             </strong>
           </li>
         ))}

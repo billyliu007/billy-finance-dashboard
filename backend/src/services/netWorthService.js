@@ -5,11 +5,17 @@ import {
 } from '../lib/number.js';
 import { isCryptoAsset, isStockAsset } from '../lib/assetUtils.js';
 
-const NET_WORTH_COMPONENTS = [
-  { key: 'sgd_assets_in_cny', displayName: 'SGD Assets Total (As in CNY)' },
-  { key: 'usd_assets_in_cny', displayName: 'USD Assets Total (As in CNY)' },
-  { key: 'cny_assets_total', displayName: 'CNY Assets Total' },
-];
+function currencyToComponentKey(currency) {
+  return currency === 'CNY' ? 'cny_assets_total' : `${currency.toLowerCase()}_assets_in_cny`;
+}
+
+function componentKeyToDisplayName(key, baseCurrency = 'CNY') {
+  const base = String(baseCurrency || 'CNY').toUpperCase();
+  if (key === 'cny_assets_total') return 'CNY Assets Total';
+  const match = key.match(/^([a-z]{3})_assets_in_cny$/i);
+  const cur = match ? match[1].toUpperCase() : key;
+  return `${cur} Assets Total (As in ${base})`;
+}
 
 function shouldHideCashRow(value) {
   const num = Number(value);
@@ -22,18 +28,18 @@ function shouldHideCashRow(value) {
 
 function buildDetailRows(cashComponents, fxRates) {
   return (cashComponents || []).map((item) => {
-    const type = String(item.type || 'asset').toLowerCase() === 'liability' ? 'liability' : 'asset';
-    const category = item.category || 'Cash';
+    const balance = Number(item.balance ?? item.amount ?? 0);
+    const signedValue = Number.isFinite(balance) ? balance : 0;
+    const type = signedValue < 0 ? 'liability' : 'asset';
     const currency = normalizeCurrencyCode(item.currency || 'CNY');
-    const amount = Number(item.amount || 0);
-    const signedValue = type === 'liability' ? -Math.abs(amount) : amount;
     const rate = fxRates[currency];
+    const key = item.id ?? `cash_${currency}_${String(item.name || '').replace(/\s+/g, '_')}`;
 
     return {
-      key: item.key,
-      name: item.name || item.displayName || item.key,
+      key,
+      name: item.name || 'Cash',
       type,
-      category,
+      category: 'Cash',
       currency,
       value: signedValue,
       fxRate: Number.isFinite(rate) ? rate : null,
@@ -74,66 +80,98 @@ function computeUsdPositionsTotal(positions, stockQuotes = {}, cryptoQuotes = {}
 }
 
 function aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates) {
-  const sgdAssets = visibleDetailRows.filter((item) => item.type === 'asset' && item.currency === 'SGD');
-  const cnyRows = visibleDetailRows.filter((item) => item.currency === 'CNY');
-  const usdAssets = visibleDetailRows.filter((item) => item.type === 'asset' && item.currency === 'USD');
-  const sgdAssetsInCny = sgdAssets.reduce((sum, item) => sum + (item.cnyValue ?? 0), 0);
-  const cnyAssetsTotal = cnyRows.reduce((sum, item) => sum + item.value, 0);
-  const usdCashTotal = usdAssets.reduce((sum, item) => sum + item.value, 0);
+  const currencies = new Set(visibleDetailRows.map((item) => item.currency));
+  if (usdPositionsTotal > 0) currencies.add('USD');
   const usdRate = fxRates.USD;
-  const usdAssetsInCny = Number.isFinite(usdRate) ? (usdCashTotal + usdPositionsTotal) * usdRate : 0;
-  const sgdFound = sgdAssets.length > 0 && sgdAssets.every((item) => item.cnyValue != null);
-  const cnyFound = cnyRows.length > 0;
-  const usdFound = Number.isFinite(usdRate) && (usdAssets.length > 0 || usdPositionsTotal > 0);
-
-  return {
-    sgd_assets_in_cny: {
-      found: sgdFound,
-      value: sgdAssetsInCny,
-      reason: sgdFound ? null : sgdAssets.length === 0 ? 'No SGD cash rows' : 'Missing SGD/CNY rate',
-    },
-    cny_assets_total: {
-      found: cnyFound,
-      value: cnyAssetsTotal,
-      reason: cnyFound ? null : 'No CNY cash rows',
-    },
-    usd_assets_in_cny: {
-      found: usdFound,
-      value: usdAssetsInCny,
-      reason: usdFound ? null : !Number.isFinite(usdRate) ? 'Missing USD/CNY rate' : 'No USD cash or positions',
-    },
-  };
+  const result = {};
+  for (const currency of currencies) {
+    const key = currencyToComponentKey(currency);
+    const rows = visibleDetailRows.filter((item) => item.currency === currency);
+    if (currency === 'CNY') {
+      const value = rows.reduce((sum, item) => sum + item.value, 0);
+      result[key] = {
+        found: rows.length > 0,
+        value,
+        reason: rows.length === 0 ? 'No CNY cash rows' : null,
+      };
+    } else {
+      const cnySum = rows.reduce((sum, item) => sum + (item.cnyValue ?? 0), 0);
+      const hasRate = Number.isFinite(fxRates[currency]);
+      const positionsCny = currency === 'USD' && Number.isFinite(usdRate) ? usdPositionsTotal * usdRate : 0;
+      const value = (Number.isFinite(cnySum) ? cnySum : 0) + positionsCny;
+      const hasCashWithRate = rows.length > 0 && rows.every((item) => item.cnyValue != null);
+      const hasUsdPositions = currency === 'USD' && usdPositionsTotal > 0;
+      const found = hasCashWithRate || hasUsdPositions;
+      result[key] = {
+        found,
+        value,
+        reason: found ? null : !hasRate ? `Missing ${currency}/CNY rate` : `No ${currency} cash or positions`,
+      };
+    }
+  }
+  return result;
 }
 
-function mapCashDetailRowsToTableRows(visibleDetailRows) {
+function mapCashDetailRowsToTableRows(visibleDetailRows, baseCurrency = 'CNY', rateToBase = 1) {
   return visibleDetailRows
     .filter((item) => !shouldHideCashRow(item.value))
-    .map((item) => ({
-    key: `cash_${item.key}`,
-    className: item.category,
-    instrument: item.name,
-    currency: item.currency,
-    amountLocal: item.value,
-    fxRate: item.fxRate,
-    amountCny: item.cnyValue,
-    amountClass: item.value >= 0 ? 'pos' : 'neg',
-    amountCnyClass: item.cnyValue == null ? '' : item.cnyValue >= 0 ? 'pos' : 'neg',
-  }));
+    .map((item) => {
+      const cnyVal = item.cnyValue;
+      const amountBase = cnyVal != null && Number.isFinite(rateToBase) && rateToBase > 0
+        ? cnyVal / rateToBase
+        : null;
+      return {
+        id: item.key,
+        key: `cash_${item.key}`,
+        className: item.category,
+        instrument: item.name,
+        currency: item.currency,
+        amountLocal: item.value,
+        fxRate: item.fxRate,
+        amountCny: amountBase,
+        amountClass: item.value >= 0 ? 'pos' : 'neg',
+        amountCnyClass: amountBase == null ? '' : amountBase >= 0 ? 'pos' : 'neg',
+      };
+    });
 }
 
-function parseCashflowRows(rows) {
+/**
+ * Resolve history rows to display values in base currency.
+ * Uses stored CNY when base is CNY; uses stored USD when base is USD; otherwise converts via FX.
+ * Legacy rows have only netWorthCny (total_usd null).
+ */
+function parseCashflowRows(rows, baseCurrency, fxRates) {
+  const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
+  const rateToBase = Number.isFinite(fxRates[base]) && fxRates[base] > 0 ? fxRates[base] : 1;
+  const usdRate = Number.isFinite(fxRates.USD) && fxRates.USD > 0 ? fxRates.USD : null;
+
   return (rows || [])
-    .map((row) => ({
-      date: String(row?.date || '').trim(),
-      recordedAtUtc: String(row?.recordedAtUtc || '').trim(),
-      netWorth: Number(row?.netWorth || 0),
-    }))
-    .filter((item) => item.date !== '' && Number.isFinite(item.netWorth))
-    .map((item) => ({
-      ...item,
-      // Keep date-only for chart x-axis density, but expose timestamp for UI local-time formatting.
-      dateTimeLabel: item.recordedAtUtc || item.date,
-    }));
+    .map((row) => {
+      const date = String(row?.date || '').trim();
+      const recordedAtUtc = String(row?.recordedAtUtc || '').trim();
+      const cnyRaw = row?.netWorthCny ?? row?.netWorth;
+      const cny = cnyRaw != null && Number.isFinite(Number(cnyRaw)) ? Number(cnyRaw) : null;
+      const usd = row?.netWorthUsd != null && Number.isFinite(Number(row.netWorthUsd)) ? Number(row.netWorthUsd) : null;
+
+      let netWorth = null;
+      if (base === 'CNY' && cny != null) {
+        netWorth = cny;
+      } else if (base === 'USD' && usd != null) {
+        netWorth = usd;
+      } else if (cny != null && rateToBase > 0) {
+        netWorth = cny / rateToBase;
+      } else if (usd != null && usdRate != null && rateToBase > 0) {
+        netWorth = (usd * usdRate) / rateToBase;
+      }
+      if (netWorth == null || !Number.isFinite(netWorth) || date === '') return null;
+      return {
+        date,
+        recordedAtUtc,
+        netWorth,
+        dateTimeLabel: recordedAtUtc || date,
+      };
+    })
+    .filter(Boolean);
 }
 
 function buildDerivedChangeSeries(cashflowData) {
@@ -247,7 +285,9 @@ export function buildNetWorthPayload({
   stockQuotes = {},
   cryptoQuotes = {},
   fxRatesOverride = {},
+  baseCurrency = 'USD',
 }) {
+  const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
   const fxRates = {
     CNY: 1,
     ...Object.entries(fxRatesOverride).reduce((acc, [currency, rate]) => {
@@ -258,21 +298,36 @@ export function buildNetWorthPayload({
       return acc;
     }, {}),
   };
+  const rateToBase = Number.isFinite(fxRates[base]) && fxRates[base] > 0 ? fxRates[base] : 1;
+
   const detailRows = buildDetailRows(cashComponents, fxRates);
   const visibleDetailRows = detailRows.filter((item) => item.found);
-  const cashRows = mapCashDetailRowsToTableRows(visibleDetailRows);
+  const cashRows = mapCashDetailRowsToTableRows(visibleDetailRows, base, rateToBase);
   const usdPositionsTotal = computeUsdPositionsTotal(positions, stockQuotes, cryptoQuotes);
   const aggregatedTotalsByKey = aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates);
-  const componentValues = NET_WORTH_COMPONENTS.map((component) => ({
-    key: component.key,
-    name: component.displayName,
-    ...(aggregatedTotalsByKey[component.key] || { found: false, value: 0, reason: 'Missing data' }),
-  }));
+  const orderedKeys = Object.keys(aggregatedTotalsByKey).sort((a, b) => {
+    if (a === 'cny_assets_total') return -1;
+    if (b === 'cny_assets_total') return 1;
+    if (a === 'usd_assets_in_cny') return -1;
+    if (b === 'usd_assets_in_cny') return 1;
+    return a.localeCompare(b);
+  });
+  const componentValues = orderedKeys.map((key) => {
+    const agg = aggregatedTotalsByKey[key] || { found: false, value: 0, reason: 'Missing data' };
+    const valueInBase = agg.value != null && rateToBase > 0 ? agg.value / rateToBase : agg.value;
+    return {
+      key,
+      name: componentKeyToDisplayName(key, base),
+      ...agg,
+      value: valueInBase,
+    };
+  });
   const missingInputs = componentValues
     .filter((item) => !item.found)
     .map((item) => `${item.name}: ${item.reason || 'Missing data'}`);
-  const totalNetWorth = componentValues.reduce((sum, component) => sum + component.value, 0);
-  const cashflowData = parseCashflowRows(history);
+  const totalNetWorth = componentValues.reduce((sum, component) => sum + (component.value ?? 0), 0);
+
+  const cashflowData = parseCashflowRows(history, base, fxRates);
   const monthEndSeries = buildMonthEndSeries(cashflowData);
   const derivedSeries = buildDerivedChangeSeries(monthEndSeries);
   const summary = summarizeCashflow(cashflowData);
