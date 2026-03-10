@@ -69,7 +69,7 @@ export default function OnboardingPage({ onCompleted }) {
               required
               minLength={2}
               maxLength={30}
-              placeholder="MyWorthTrack User"
+              placeholder="My Worth Track User"
             />
           </label>
           <div>
