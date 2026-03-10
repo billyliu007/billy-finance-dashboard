@@ -36,11 +36,17 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
       clearTimeout(debounceRef.current);
     }
 
+    const trimmedQuery = normalizeText(query);
+    if (!trimmedQuery) {
+      setProducts([]);
+      return;
+    }
+
     debounceRef.current = setTimeout(async () => {
       try {
         setIsLoadingProducts(true);
         const response = await fetchJson('/api/market/coinbase-products', {
-          params: new URLSearchParams({ q: normalizeText(query), limit: '200' }),
+          params: new URLSearchParams({ q: trimmedQuery, limit: '200' }),
         });
         setProducts(Array.isArray(response?.products) ? response.products : []);
       } catch (err) {
@@ -126,10 +132,10 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
           {!selected && (
             <div className="modalProductList">
               {isLoadingProducts && <p className="modalHint">Loading products...</p>}
-              {!isLoadingProducts && products.length === 0 && (
+              {!isLoadingProducts && normalizeText(query) && products.length === 0 && (
                 <p className="modalHint">No matching Coinbase products. Try a different asset name or symbol.</p>
               )}
-              {!isLoadingProducts && products.length > 0 && (
+              {!isLoadingProducts && normalizeText(query) && products.length > 0 && (
                 <ul>
                   {products.map((item) => (
                     <li key={item.productId}>
@@ -138,7 +144,7 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
                         className="modalProductItem"
                         onClick={() => {
                           setSelectedProductId(item.productId);
-                          setQuery(`${item.baseCurrency} (${item.productId})`);
+                          setQuery(item.productId);
                         }}
                       >
                         <span className="modalProductMain">
