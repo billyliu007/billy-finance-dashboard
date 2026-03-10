@@ -1,5 +1,10 @@
 import PORTFOLIO_CONFIG from '../config/portfolioConfig.js';
 
+function isNonPositiveOrInvalidQuantity(value) {
+  const num = Number(value);
+  return !Number.isFinite(num) || num <= 0;
+}
+
 function isStockAsset(asset) {
   return /stock/i.test(String(asset?.category || ''));
 }
@@ -58,7 +63,9 @@ export function buildPortfolioPayload({ positions = [], stockQuotes = {}, crypto
     const currentValue = asset.qty * currentPrice;
     const pnl = currentValue - totalPurchaseCost;
     const pnlPct = totalPurchaseCost === 0 ? 0 : (pnl / totalPurchaseCost) * 100;
-    const found = Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice);
+    const found =
+      !isNonPositiveOrInvalidQuantity(asset.qty) &&
+      (Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice));
 
     return {
       ...asset,

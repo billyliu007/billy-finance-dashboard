@@ -10,6 +10,15 @@ const NET_WORTH_COMPONENTS = [
   { key: 'cny_assets_total', displayName: 'CNY Assets Total' },
 ];
 
+function shouldHideCashRow(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return true;
+  }
+  // Hide only exact 0. Any negative value is a debt and should remain visible.
+  return num === 0;
+}
+
 function buildDetailRows(cashComponents, fxRates) {
   return (cashComponents || []).map((item) => {
     const type = String(item.type || 'asset').toLowerCase() === 'liability' ? 'liability' : 'asset';
@@ -104,7 +113,9 @@ function aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates) 
 }
 
 function mapCashDetailRowsToTableRows(visibleDetailRows) {
-  return visibleDetailRows.map((item) => ({
+  return visibleDetailRows
+    .filter((item) => !shouldHideCashRow(item.value))
+    .map((item) => ({
     key: `cash_${item.key}`,
     className: item.category,
     instrument: item.name,
