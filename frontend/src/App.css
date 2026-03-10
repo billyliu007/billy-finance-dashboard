@@ -1050,4 +1050,105 @@ tbody tr:hover td {
     text-align: right;
     white-space: nowrap;
   }
+
+  /* Add Asset modal: full-bleed, stacked layout, scrollable on small screens */
+  .modalOverlay {
+    padding: 10px;
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .modalCard {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100vh - 20px);
+    display: flex;
+    flex-direction: column;
+    margin: auto;
+  }
+
+  .modalHeader {
+    padding: 12px 14px;
+    flex-shrink: 0;
+  }
+
+  .modalHeader h2 {
+    font-size: 1rem;
+  }
+
+  .modalCloseBtn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 8px;
+  }
+
+  .modalBody {
+    padding: 12px 14px 6px;
+    gap: 12px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .modalGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .modalProductList {
+    max-height: min(180px, 40vh);
+  }
+
+  .modalProductItem {
+    padding: 10px 12px;
+  }
+
+  .modalFooter {
+    padding: 10px 14px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .modalFooter .modalBtn {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  /* Onboarding (add assets) form: stack rows on narrow viewports */
+  .authScreen {
+    padding: 16px;
+  }
+
+  .authCard.wide {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px 14px 16px;
+  }
+
+  .authCard.wide h1 {
+    font-size: 1.35rem;
+  }
+
+  .onboardingRow {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .onboardingForm input,
+  .onboardingForm select {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .modalOverlay {
+    padding: 6px;
+  }
+
+  .modalCard {
+    max-height: calc(100vh - 12px);
+  }
+
+  .onboardingRow {
+    grid-template-columns: 1fr;
+  }
 }
