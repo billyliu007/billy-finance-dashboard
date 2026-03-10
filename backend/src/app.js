@@ -22,6 +22,8 @@ import {
 } from './services/authService.js';
 import {
   listCashComponents,
+  listCoinbaseProducts,
+  createCryptoPositionFromCoinbaseProduct,
   listNetWorthHistory,
   listPortfolioPositions,
   replaceCashComponents,
@@ -305,6 +307,36 @@ export default function createApp() {
       });
     } catch (error) {
       return res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get('/api/market/coinbase-products', requireAuth, async (req, res) => {
+    try {
+      const queryText = String(req.query.q || '').trim();
+      const limit = Number(req.query.limit || 200);
+      const products = await listCoinbaseProducts({ queryText, limit });
+      return res.json({ products });
+    } catch (error) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.post('/api/portfolio/positions/crypto', requireAuth, async (req, res) => {
+    try {
+      const productId = String(req.body?.productId || '').trim();
+      const qty = Number(req.body?.qty);
+      const avgCostPerUnit = Number(req.body?.avgCostPerUnit);
+      const result = await createCryptoPositionFromCoinbaseProduct({
+        userId: req.auth.user.userId,
+        productId,
+        qty,
+        avgCostPerUnit,
+      });
+      return res.status(201).json({ ok: true, ...result });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      const status = /already exists/i.test(message) ? 409 : 400;
+      return res.status(status).json({ message });
     }
   });
 

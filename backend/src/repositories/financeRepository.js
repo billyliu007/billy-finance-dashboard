@@ -50,7 +50,9 @@ export async function listPortfolioPositions(userId) {
             display_name AS name,
             category,
             qty::float8 AS qty,
-            purchase_price::float8 AS "purchasePrice"
+            purchase_price::float8 AS "purchasePrice",
+            market_provider AS "marketProvider",
+            market_instrument_id AS "marketInstrumentId"
      FROM portfolio_positions
      WHERE user_id = $1
      ORDER BY symbol ASC`,
@@ -66,8 +68,8 @@ export async function replacePortfolioPositions(userId, positions) {
       await client.query(`DELETE FROM portfolio_positions WHERE user_id = $1`, [userId]);
       for (const item of positions) {
         await client.query(
-          `INSERT INTO portfolio_positions (user_id, symbol, display_name, category, qty, purchase_price)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+          `INSERT INTO portfolio_positions (user_id, symbol, display_name, category, qty, purchase_price, market_provider, market_instrument_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             userId,
             String(item.symbol || '').toUpperCase(),
@@ -75,6 +77,8 @@ export async function replacePortfolioPositions(userId, positions) {
             item.category || 'Stock Assets',
             Number(item.qty || 0),
             Number(item.purchasePrice || 0),
+            item.marketProvider || null,
+            item.marketInstrumentId || null,
           ],
         );
       }
@@ -145,4 +149,114 @@ export async function upsertNetWorthSnapshot({ userId, dateUtc, totalCny, qualit
       throw error;
     }
   });
+}
+
+export async function listCoinbaseProducts({ queryText = '', limit = 200 } = {}) {
+  const q = String(queryText || '').trim().toUpperCase();
+  const safeLimit = Math.max(1, Math.min(500, Number(limit) || 200));
+  const result = await query(
+    `SELECT product_id AS "productId",
+            base_currency AS "baseCurrency",
+            quote_currency AS "quoteCurrency",
+            status,
+            updated_at AS "updatedAt"
+     FROM coinbase_products
+     WHERE quote_currency IN ('USDC', 'USDT')
+       AND (
+         $1 = ''
+         OR product_id ILIKE '%' || $1 || '%'
+         OR base_currency ILIKE '%' || $1 || '%'
+       )
+     ORDER BY base_currency ASC, quote_currency ASC
+     LIMIT ${safeLimit}`,
+    [q],
+  );
+  return result.rows;
+}
+
+export async function findCoinbaseProduct(productId) {
+  const id = String(productId || '').trim().toUpperCase();
+  if (!id) {
+    return null;
+  }
+  const result = await query(
+    `SELECT product_id AS "productId",
+            base_currency AS "baseCurrency",
+            quote_currency AS "quoteCurrency",
+            status
+     FROM coinbase_products
+     WHERE product_id = $1`,
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
+export async function createCryptoPositionFromCoinbaseProduct({
+  userId,
+  productId,
+  qty,
+  avgCostPerUnit,
+}) {
+  const resolvedUserId = String(userId || '').trim();
+  const resolvedQty = Number(qty);
+  const resolvedCost = Number(avgCostPerUnit);
+  if (!resolvedUserId) {
+    throw new Error('Missing user id.');
+  }
+  if (!Number.isFinite(resolvedQty) || resolvedQty <= 0) {
+    throw new Error('Quantity must be greater than 0.');
+  }
+  if (!Number.isFinite(resolvedCost) || resolvedCost < 0) {
+    throw new Error('Average cost per unit must be 0 or greater.');
+  }
+
+  const product = await findCoinbaseProduct(productId);
+  if (!product) {
+    throw new Error('Selected Coinbase product was not found.');
+  }
+  if (product.quoteCurrency !== 'USDC' && product.quoteCurrency !== 'USDT') {
+    throw new Error('Selected Coinbase product must be quoted in USDC or USDT.');
+  }
+
+  const symbol = String(product.baseCurrency || '').trim().toUpperCase();
+  if (!symbol) {
+    throw new Error('Selected Coinbase product is missing base currency.');
+  }
+
+  await withDbClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const existing = await client.query(
+        `SELECT 1
+         FROM portfolio_positions
+         WHERE user_id = $1 AND symbol = $2`,
+        [resolvedUserId, symbol],
+      );
+      if (existing.rowCount > 0) {
+        throw new Error(`Position already exists for ${symbol}.`);
+      }
+
+      await client.query(
+        `INSERT INTO portfolio_positions (
+          user_id,
+          symbol,
+          display_name,
+          category,
+          qty,
+          purchase_price,
+          market_provider,
+          market_instrument_id
+        )
+        VALUES ($1, $2, $3, 'Crypto Assets', $4, $5, 'coinbase', $6)`,
+        [resolvedUserId, symbol, symbol, resolvedQty, resolvedCost, product.productId],
+      );
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+
+  return { symbol, product };
 }

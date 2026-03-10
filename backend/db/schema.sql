@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS portfolio_positions (
   category TEXT NOT NULL,
   qty NUMERIC(20, 8) NOT NULL,
   purchase_price NUMERIC(20, 8) NOT NULL,
+  market_provider TEXT,
+  market_instrument_id TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, symbol)
 );
@@ -65,9 +67,33 @@ CREATE TABLE IF NOT EXISTS networth_history (
   computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS coinbase_products (
+  product_id TEXT PRIMARY KEY,
+  base_currency TEXT NOT NULL,
+  quote_currency TEXT NOT NULL,
+  status TEXT NOT NULL,
+  raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS us_stock_symbols (
+  symbol TEXT PRIMARY KEY,
+  security_name TEXT,
+  exchange TEXT,
+  market_category TEXT,
+  etf BOOLEAN,
+  test_issue BOOLEAN,
+  financial_status TEXT,
+  round_lot_size INTEGER,
+  raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
 CREATE INDEX IF NOT EXISTS idx_cash_components_user_id ON cash_components (user_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_positions_user_id ON portfolio_positions (user_id);
 CREATE INDEX IF NOT EXISTS idx_networth_history_user_id_date ON networth_history (user_id, date_utc DESC);
+CREATE INDEX IF NOT EXISTS idx_coinbase_products_base_quote ON coinbase_products (base_currency, quote_currency);
+CREATE INDEX IF NOT EXISTS idx_us_stock_symbols_exchange ON us_stock_symbols (exchange);

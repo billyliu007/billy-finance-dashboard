@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchJson, getSheetLoadErrorMessage, isAbortError } from '../utils/api.js';
 
 export default function useApiData(path, { refreshMs = 0 } = {}) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadNonce, setReloadNonce] = useState(0);
+
+  const refresh = useCallback(() => {
+    setReloadNonce((prev) => prev + 1);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -71,7 +76,7 @@ export default function useApiData(path, { refreshMs = 0 } = {}) {
       window.clearInterval(intervalId);
       activeController?.abort();
     };
-  }, [path, refreshMs]);
+  }, [path, refreshMs, reloadNonce]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refresh };
 }

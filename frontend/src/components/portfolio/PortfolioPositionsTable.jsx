@@ -7,7 +7,7 @@ import {
   formatQty,
 } from '../../utils/formatters.js';
 
-export default function PortfolioPositionsTable({ hideValues, rows }) {
+export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto }) {
   const [showMobileDetails, setShowMobileDetails] = useState(true);
   const groupedRows = useMemo(() => {
     const grouped = new Map();
@@ -24,7 +24,19 @@ export default function PortfolioPositionsTable({ hideValues, rows }) {
   return (
     <>
       <article className="tableCard portfolioPositionsCard">
-        <h2>Positions</h2>
+        <div className="tableHeaderRow">
+          <h2>Positions</h2>
+          {onAddCrypto && (
+            <button
+              type="button"
+              className="headerIconBtn"
+              onClick={onAddCrypto}
+              aria-label="Add crypto position"
+            >
+              +
+            </button>
+          )}
+        </div>
         <div className="tableWrap">
           <table className="positionsMobileCompact">
             <thead>

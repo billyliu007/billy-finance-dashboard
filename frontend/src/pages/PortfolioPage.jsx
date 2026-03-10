@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { HOLDING_COLORS } from '../constants.js';
 import PortfolioCharts from '../components/portfolio/PortfolioCharts.jsx';
 import PortfolioKpis from '../components/portfolio/PortfolioKpis.jsx';
 import PortfolioPositionsTable from '../components/portfolio/PortfolioPositionsTable.jsx';
+import AddCryptoPositionModal from '../components/portfolio/AddCryptoPositionModal.jsx';
 import useApiData from '../hooks/useApiData.js';
 
 export default function PortfolioPage({ hideValues }) {
-  const { data, isLoading, error } = useApiData('/api/dashboard/portfolio', { refreshMs: 60_000 });
+  const { data, isLoading, error, refresh } = useApiData('/api/dashboard/portfolio', { refreshMs: 60_000 });
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const rows = useMemo(() => data?.tableRows || [], [data]);
   const allocationData = useMemo(() => data?.allocationData || [], [data]);
   const chartData = useMemo(() => data?.chartData || [], [data]);
@@ -39,9 +41,15 @@ export default function PortfolioPage({ hideValues }) {
               chartData={chartData}
               assetColorMap={assetColorMap}
             />
-            <PortfolioPositionsTable hideValues={hideValues} rows={rows} />
+            <PortfolioPositionsTable hideValues={hideValues} rows={rows} onAddCrypto={() => setIsAddOpen(true)} />
           </>
         )}
+
+        <AddCryptoPositionModal
+          open={isAddOpen}
+          onClose={() => setIsAddOpen(false)}
+          onSaved={() => refresh?.()}
+        />
       </div>
     </section>
   );

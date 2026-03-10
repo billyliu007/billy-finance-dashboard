@@ -48,6 +48,25 @@ async function run() {
       CREATE INDEX IF NOT EXISTS idx_networth_history_user_id_date
       ON networth_history (user_id, date_utc DESC);
     `);
+    await client.query(`
+      ALTER TABLE portfolio_positions
+      ADD COLUMN IF NOT EXISTS market_provider TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_positions
+      ADD COLUMN IF NOT EXISTS market_instrument_id TEXT;
+    `);
+    await client.query(`
+      UPDATE portfolio_positions
+      SET market_provider = 'coinbase',
+          market_instrument_id = CASE UPPER(symbol)
+            WHEN 'BTC' THEN 'BTC-USDT'
+            WHEN 'ETH' THEN 'ETH-USDT'
+            ELSE market_instrument_id
+          END
+      WHERE category ILIKE '%crypto%'
+        AND market_provider IS NULL;
+    `);
   });
   // eslint-disable-next-line no-console
   console.log('Database schema migration completed.');
