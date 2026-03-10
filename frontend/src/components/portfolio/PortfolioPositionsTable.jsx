@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   formatMaybeHidden,
   formatMoney,
@@ -7,8 +7,20 @@ import {
   formatQty,
 } from '../../utils/formatters.js';
 
-export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto }) {
+export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto, onAddStock }) {
   const [showMobileDetails, setShowMobileDetails] = useState(true);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+
+  useEffect(() => {
+    if (!showAddMenu) return;
+    function handleClickOutside(event) {
+      if (event.target.closest('.addMenuToggle, .addMenuPopover')) return;
+      setShowAddMenu(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAddMenu]);
+
   const groupedRows = useMemo(() => {
     const grouped = new Map();
     rows.forEach((item) => {
@@ -26,16 +38,47 @@ export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto 
       <article className="tableCard portfolioPositionsCard">
         <div className="tableHeaderRow">
           <h2>Positions</h2>
-          {onAddCrypto && (
-            <button
-              type="button"
-              className="headerIconBtn"
-              onClick={onAddCrypto}
-              aria-label="Add crypto position"
-            >
-              +
-            </button>
-          )}
+          <div className="tableHeaderActions">
+            {(onAddStock || onAddCrypto) && (
+              <>
+                <button
+                  type="button"
+                  className="headerIconBtn addMenuToggle"
+                  onClick={() => setShowAddMenu((prev) => !prev)}
+                  aria-label="Add position"
+                  aria-expanded={showAddMenu}
+                >
+                  +
+                </button>
+                {showAddMenu && (
+                  <div className="addMenuPopover">
+                    {onAddStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddMenu(false);
+                          onAddStock();
+                        }}
+                      >
+                        Stock position
+                      </button>
+                    )}
+                    {onAddCrypto && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddMenu(false);
+                          onAddCrypto();
+                        }}
+                      >
+                        Crypto position
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
         <div className="tableWrap">
           <table className="positionsMobileCompact">
@@ -81,26 +124,45 @@ export default function PortfolioPositionsTable({ hideValues, rows, onAddCrypto 
         <div className="detailsHeaderRow">
           <h2>Positions</h2>
           <div className="detailsHeaderActions">
-            {onAddCrypto && (
-              <button
-                type="button"
-                className="detailsAddBtn"
-                onClick={onAddCrypto}
-              >
-                + Add
-              </button>
+            {(onAddStock || onAddCrypto) && (
+              <>
+                <button
+                  type="button"
+                  className="headerIconBtn addMenuToggle"
+                  onClick={() => setShowAddMenu((prev) => !prev)}
+                  aria-label="Add position"
+                  aria-expanded={showAddMenu}
+                >
+                  +
+                </button>
+                {showAddMenu && (
+                  <div className="addMenuPopover">
+                    {onAddStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddMenu(false);
+                          onAddStock();
+                        }}
+                      >
+                        Stock position
+                      </button>
+                    )}
+                    {onAddCrypto && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddMenu(false);
+                          onAddCrypto();
+                        }}
+                      >
+                        Crypto position
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-            <button
-              type="button"
-              className="detailsToggleBtn"
-              onClick={() => setShowMobileDetails((prev) => !prev)}
-              aria-expanded={showMobileDetails}
-            >
-              {showMobileDetails ? 'Hide details' : 'Show details'}
-              <span className={`detailsChevron ${showMobileDetails ? 'isOpen' : ''}`} aria-hidden="true">
-                ▾
-              </span>
-            </button>
           </div>
         </div>
 

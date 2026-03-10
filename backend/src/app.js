@@ -24,6 +24,8 @@ import {
   listCashComponents,
   listCoinbaseProducts,
   createCryptoPositionFromCoinbaseProduct,
+  listUsStockSymbols,
+  createStockPositionFromSymbol,
   listNetWorthHistory,
   listPortfolioPositions,
   replaceCashComponents,
@@ -88,14 +90,20 @@ function parseOnboardingPayload(body) {
 
   const normalizedPositions = positions.map((item) => {
     const symbol = String(item?.symbol || '').trim().toUpperCase();
-    const name = String(item?.name || symbol).trim();
     const category = String(item?.category || '').trim();
     const qty = Number(item?.qty || 0);
     const purchasePrice = Number(item?.purchasePrice || 0);
-    if (!symbol || !name || !category || !Number.isFinite(qty) || !Number.isFinite(purchasePrice)) {
+    if (!symbol || !category || !Number.isFinite(qty) || !Number.isFinite(purchasePrice)) {
       throw new Error('Invalid asset input.');
     }
-    return { symbol, name, category, qty, purchasePrice };
+    return {
+      symbol,
+      category,
+      qty,
+      purchasePrice,
+      marketProvider: item?.marketProvider || null,
+      marketInstrumentId: item?.marketInstrumentId || null,
+    };
   });
 
   return {
@@ -321,6 +329,17 @@ export default function createApp() {
     }
   });
 
+  app.get('/api/market/us-stock-symbols', requireAuth, async (req, res) => {
+    try {
+      const queryText = String(req.query.q || '').trim();
+      const limit = Number(req.query.limit || 50);
+      const symbols = await listUsStockSymbols({ queryText, limit });
+      return res.json({ symbols });
+    } catch (error) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.post('/api/portfolio/positions/crypto', requireAuth, async (req, res) => {
     try {
       const productId = String(req.body?.productId || '').trim();
@@ -329,6 +348,25 @@ export default function createApp() {
       const result = await createCryptoPositionFromCoinbaseProduct({
         userId: req.auth.user.userId,
         productId,
+        qty,
+        avgCostPerUnit,
+      });
+      return res.status(201).json({ ok: true, ...result });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      const status = /already exists/i.test(message) ? 409 : 400;
+      return res.status(status).json({ message });
+    }
+  });
+
+  app.post('/api/portfolio/positions/stock', requireAuth, async (req, res) => {
+    try {
+      const symbol = String(req.body?.symbol || '').trim().toUpperCase();
+      const qty = Number(req.body?.qty);
+      const avgCostPerUnit = Number(req.body?.avgCostPerUnit);
+      const result = await createStockPositionFromSymbol({
+        userId: req.auth.user.userId,
+        symbol,
         qty,
         avgCostPerUnit,
       });

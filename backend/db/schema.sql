@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS portfolio_positions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   symbol TEXT NOT NULL,
-  display_name TEXT NOT NULL,
   category TEXT NOT NULL,
   qty NUMERIC(20, 8) NOT NULL,
   purchase_price NUMERIC(20, 8) NOT NULL,

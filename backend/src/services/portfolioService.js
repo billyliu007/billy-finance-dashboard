@@ -104,6 +104,7 @@ export function buildPortfolioPayload({ positions = [], stockQuotes = {}, crypto
     .map((position) => ({ name: position.name, value: position.currentValue }));
   const tableRows = visiblePositions.map((position) => ({
     ...position,
+    key: position.symbol,
     weightPct: totals.value === 0 ? 0 : (position.currentValue / totals.value) * 100,
   }));
 

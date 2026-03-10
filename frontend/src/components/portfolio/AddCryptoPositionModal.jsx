@@ -120,10 +120,16 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
 
         <div className="modalBody">
           <label className="modalLabel">
-            Asset (Coinbase product)
+            Asset
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                const nextQuery = event.target.value;
+                setQuery(nextQuery);
+                if (normalizeText(nextQuery) !== selectedProductId) {
+                  setSelectedProductId('');
+                }
+              }}
               placeholder="Type asset name or symbol (e.g. BTC, ETH, BTC-USDT)"
               className="modalInput"
             />
@@ -169,6 +175,8 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
                 value={qty}
                 onChange={(event) => setQty(event.target.value)}
                 className="modalInput"
+                disabled={!selected}
+                aria-disabled={!selected}
               />
             </label>
             <label className="modalLabel">
@@ -180,6 +188,8 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
                 value={avgCost}
                 onChange={(event) => setAvgCost(event.target.value)}
                 className="modalInput"
+                disabled={!selected}
+                aria-disabled={!selected}
               />
             </label>
           </div>
@@ -191,10 +201,13 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </button>
-          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving}>
+          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected}>
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </footer>
+        <p className="modalDisclaimer">
+          List shows Coinbase products in USDT and USDC pairs only.
+        </p>
       </section>
     </div>
   );

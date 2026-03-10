@@ -15,12 +15,20 @@ export default function App() {
     const saved = localStorage.getItem('hide_values_enabled');
     return saved === 'true';
   });
+  const [sideNavOpen, setSideNavOpen] = useState(() => {
+    const saved = localStorage.getItem('side_nav_open');
+    return saved !== 'false';
+  });
   const [session, setSession] = useState({ isLoading: true, authenticated: false, user: null, error: '' });
   const [buildVersion] = useState(() => resolveFrontendBuildVersion());
 
   useEffect(() => {
     localStorage.setItem('hide_values_enabled', String(hideValues));
   }, [hideValues]);
+
+  useEffect(() => {
+    localStorage.setItem('side_nav_open', String(sideNavOpen));
+  }, [sideNavOpen]);
 
   async function refreshSession() {
     try {
@@ -69,34 +77,47 @@ export default function App() {
   }
 
   return (
-    <div className="appShell">
-      <aside className="sideNav">
-        <p className="sideTitle">MyWorthTrack</p>
-        <p className="sideSubtitle">{session.user.displayName || session.user.email}</p>
-        <label className="privacyToggle">
-          <input
-            type="checkbox"
-            checked={hideValues}
-            onChange={(event) => setHideValues(event.target.checked)}
-          />
-          <span>Privacy Mode (Hide Amounts)</span>
-        </label>
-        <nav>
-          <NavLink to="/net-worth" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
-            Net Worth
-          </NavLink>
-          <NavLink to="/portfolio" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
-            Portfolio Holdings
-          </NavLink>
-          {SHOW_DEVELOPMENT_PAGE && (
-            <NavLink to="/development" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
-              Development
-            </NavLink>
-          )}
-        </nav>
-        <button type="button" className="logoutBtn" onClick={handleLogout}>
-          Log out
+    <div className={`appShell${sideNavOpen ? '' : ' sideNavCollapsed'}`}>
+      <aside className={`sideNav${sideNavOpen ? '' : ' sideNav--collapsed'}`} aria-hidden={!sideNavOpen}>
+        <button
+          type="button"
+          className="sideNavToggle"
+          onClick={() => setSideNavOpen((prev) => !prev)}
+          aria-label={sideNavOpen ? 'Hide navigation' : 'Show navigation'}
+          title={sideNavOpen ? 'Hide panel' : 'Show panel'}
+        >
+          {sideNavOpen ? '◀' : '▶'}
         </button>
+        {sideNavOpen && (
+          <>
+            <p className="sideTitle">MyWorthTrack</p>
+            <p className="sideSubtitle">{session.user.displayName || session.user.email}</p>
+            <label className="privacyToggle">
+              <input
+                type="checkbox"
+                checked={hideValues}
+                onChange={(event) => setHideValues(event.target.checked)}
+              />
+              <span>Privacy Mode (Hide Amounts)</span>
+            </label>
+            <nav>
+              <NavLink to="/net-worth" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
+                Net Worth
+              </NavLink>
+              <NavLink to="/portfolio" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
+                Portfolio Holdings
+              </NavLink>
+              {SHOW_DEVELOPMENT_PAGE && (
+                <NavLink to="/development" className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}>
+                  Development
+                </NavLink>
+              )}
+            </nav>
+            <button type="button" className="logoutBtn" onClick={handleLogout}>
+              Log out
+            </button>
+          </>
+        )}
       </aside>
 
       <main className="mainContent">

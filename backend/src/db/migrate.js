@@ -67,6 +67,10 @@ async function run() {
       WHERE category ILIKE '%crypto%'
         AND market_provider IS NULL;
     `);
+    await client.query(`
+      ALTER TABLE portfolio_positions
+      DROP COLUMN IF EXISTS display_name;
+    `);
   });
   // eslint-disable-next-line no-console
   console.log('Database schema migration completed.');

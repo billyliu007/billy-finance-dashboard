@@ -47,7 +47,7 @@ export async function replaceCashComponents(userId, components) {
 export async function listPortfolioPositions(userId) {
   const result = await query(
     `SELECT symbol,
-            display_name AS name,
+            symbol AS name,
             category,
             qty::float8 AS qty,
             purchase_price::float8 AS "purchasePrice",
@@ -68,12 +68,11 @@ export async function replacePortfolioPositions(userId, positions) {
       await client.query(`DELETE FROM portfolio_positions WHERE user_id = $1`, [userId]);
       for (const item of positions) {
         await client.query(
-          `INSERT INTO portfolio_positions (user_id, symbol, display_name, category, qty, purchase_price, market_provider, market_instrument_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO portfolio_positions (user_id, symbol, category, qty, purchase_price, market_provider, market_instrument_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             userId,
             String(item.symbol || '').toUpperCase(),
-            item.name || String(item.symbol || '').toUpperCase(),
             item.category || 'Stock Assets',
             Number(item.qty || 0),
             Number(item.purchasePrice || 0),
@@ -88,6 +87,27 @@ export async function replacePortfolioPositions(userId, positions) {
       throw error;
     }
   });
+}
+
+export async function listUsStockSymbols({ queryText, limit = 50 } = {}) {
+  const trimmed = String(queryText || '').trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const like = `%${trimmed}%`;
+  const result = await query(
+    `SELECT symbol,
+            security_name AS "securityName",
+            exchange
+     FROM us_stock_symbols
+     WHERE (symbol ILIKE $1 OR security_name ILIKE $1)
+       AND COALESCE(test_issue, FALSE) = FALSE
+     ORDER BY symbol ASC
+     LIMIT $2`,
+    [like, Math.max(1, Math.min(Number(limit) || 50, 200))],
+  );
+  return result.rows;
 }
 
 export async function listNetWorthHistory(userId) {
@@ -240,15 +260,14 @@ export async function createCryptoPositionFromCoinbaseProduct({
         `INSERT INTO portfolio_positions (
           user_id,
           symbol,
-          display_name,
           category,
           qty,
           purchase_price,
           market_provider,
           market_instrument_id
         )
-        VALUES ($1, $2, $3, 'Crypto Assets', $4, $5, 'coinbase', $6)`,
-        [resolvedUserId, symbol, symbol, resolvedQty, resolvedCost, product.productId],
+        VALUES ($1, $2, 'Crypto Assets', $3, $4, 'coinbase', $5)`,
+        [resolvedUserId, symbol, resolvedQty, resolvedCost, product.productId],
       );
 
       await client.query('COMMIT');
@@ -259,4 +278,60 @@ export async function createCryptoPositionFromCoinbaseProduct({
   });
 
   return { symbol, product };
+}
+
+export async function createStockPositionFromSymbol({ userId, symbol, qty, avgCostPerUnit }) {
+  const resolvedUserId = String(userId || '').trim();
+  const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+  const resolvedQty = Number(qty);
+  const resolvedCost = Number(avgCostPerUnit);
+
+  if (!resolvedUserId) {
+    throw new Error('Missing user id.');
+  }
+  if (!normalizedSymbol) {
+    throw new Error('Stock symbol is required.');
+  }
+  if (!Number.isFinite(resolvedQty) || resolvedQty <= 0) {
+    throw new Error('Quantity must be greater than 0.');
+  }
+  if (!Number.isFinite(resolvedCost) || resolvedCost < 0) {
+    throw new Error('Average cost per unit must be 0 or greater.');
+  }
+
+  await withDbClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const existing = await client.query(
+        `SELECT 1
+         FROM portfolio_positions
+         WHERE user_id = $1 AND symbol = $2`,
+        [resolvedUserId, normalizedSymbol],
+      );
+      if (existing.rowCount > 0) {
+        throw new Error(`Position already exists for ${normalizedSymbol}.`);
+      }
+
+      await client.query(
+        `INSERT INTO portfolio_positions (
+          user_id,
+          symbol,
+          category,
+          qty,
+          purchase_price,
+          market_provider,
+          market_instrument_id
+        )
+        VALUES ($1, $2, 'Stock Assets', $3, $4, NULL, NULL)`,
+        [resolvedUserId, normalizedSymbol, resolvedQty, resolvedCost],
+      );
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+
+  return { symbol: normalizedSymbol };
 }
