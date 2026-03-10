@@ -64,7 +64,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://netpulse-backend-qrqx.onrender.com
+        value: https://api.myworthtrack.com
       - key: VITE_SHOW_DEVELOPMENT_PAGE
         value: "false"
 
