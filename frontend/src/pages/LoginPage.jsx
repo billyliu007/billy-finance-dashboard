@@ -14,7 +14,7 @@ export default function LoginPage() {
   return (
     <main className="authScreen">
       <section className="authCard">
-        <h1>NetPulse</h1>
+        <h1>MyWorthTrack</h1>
         <p>Sign in to access your personal dashboard data.</p>
         <div className="authActions">
           <a href={authHref('google')} className="authBtn">

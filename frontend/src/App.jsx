@@ -53,7 +53,7 @@ export default function App() {
     return (
       <main className="authScreen">
         <section className="authCard">
-          <h1>NetPulse</h1>
+          <h1>MyWorthTrack</h1>
           <p>Checking your session...</p>
         </section>
       </main>
@@ -71,7 +71,7 @@ export default function App() {
   return (
     <div className="appShell">
       <aside className="sideNav">
-        <p className="sideTitle">NetPulse</p>
+        <p className="sideTitle">MyWorthTrack</p>
         <p className="sideSubtitle">{session.user.displayName || session.user.email}</p>
         <label className="privacyToggle">
           <input
