@@ -1,68 +1,39 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchJson, postJson } from '../../utils/api.js';
-
-function normalizeText(value) {
-  return String(value || '').trim();
-}
+import { normalizeText } from '../../utils/strings.js';
+import { useDebouncedSearch } from '../../hooks/useDebouncedSearch.js';
 
 export default function AddStockPositionModal({ open, onClose, onSaved }) {
   const [query, setQuery] = useState('');
-  const [symbols, setSymbols] = useState([]);
   const [selectedSymbol, setSelectedSymbol] = useState('');
   const [qty, setQty] = useState('');
   const [avgCost, setAvgCost] = useState('');
-  const [isLoadingSymbols, setIsLoadingSymbols] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
-  const debounceRef = useRef(null);
+
+  const fetchSymbols = useCallback(async (q) => {
+    const res = await fetchJson('/api/market/us-stock-symbols', {
+      params: new URLSearchParams({ q, limit: '50' }),
+    });
+    return Array.isArray(res?.symbols) ? res.symbols : [];
+  }, []);
+  const { items: symbols, isLoading: isLoadingSymbols } = useDebouncedSearch(
+    query,
+    open,
+    fetchSymbols,
+    250,
+    setError,
+    'Failed to load stock symbols.',
+  );
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
     setError('');
     setSelectedSymbol('');
     setQty('');
     setAvgCost('');
     setQuery('');
   }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    const trimmedQuery = normalizeText(query);
-    if (!trimmedQuery) {
-      setSymbols([]);
-      return;
-    }
-
-    debounceRef.current = setTimeout(async () => {
-      try {
-        setIsLoadingSymbols(true);
-        const response = await fetchJson('/api/market/us-stock-symbols', {
-          params: new URLSearchParams({ q: trimmedQuery, limit: '50' }),
-        });
-        setSymbols(Array.isArray(response?.symbols) ? response.symbols : []);
-      } catch (err) {
-        setSymbols([]);
-        setError(err?.message || 'Failed to load stock symbols.');
-      } finally {
-        setIsLoadingSymbols(false);
-      }
-    }, 250);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [open, query]);
 
   const selected = useMemo(
     () => symbols.find((item) => item.symbol === selectedSymbol) || null,
@@ -81,6 +52,10 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
     }
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
       setError('Quantity must be greater than 0.');
+      return;
+    }
+    if (!normalizeText(avgCost)) {
+      setError('Please enter avg cost per unit.');
       return;
     }
     if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
@@ -201,12 +176,12 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </button>
-          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected}>
+          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected || !normalizeText(avgCost)}>
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </footer>
         <p className="modalDisclaimer">
-          List shows US-listed stocks from synced symbol data.
+          List shows US-listed stock and ETF symbols.
         </p>
       </section>
     </div>

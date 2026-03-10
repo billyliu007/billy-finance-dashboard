@@ -1,16 +1,9 @@
 import PORTFOLIO_CONFIG from '../config/portfolioConfig.js';
+import { isCryptoAsset, isStockAsset } from '../lib/assetUtils.js';
 
 function isNonPositiveOrInvalidQuantity(value) {
   const num = Number(value);
   return !Number.isFinite(num) || num <= 0;
-}
-
-function isStockAsset(asset) {
-  return /stock/i.test(String(asset?.category || ''));
-}
-
-function isCryptoAsset(asset) {
-  return /crypto/i.test(String(asset?.category || ''));
 }
 
 function resolveCurrentPrice(asset, stockQuotes, cryptoQuotes) {
@@ -27,7 +20,6 @@ function resolveCurrentPrice(asset, stockQuotes, cryptoQuotes) {
       priceTimestamp: null,
     };
   }
-
   return {
     currentPrice: livePrice,
     priceSource: isStockAsset(asset)
@@ -39,11 +31,8 @@ function resolveCurrentPrice(asset, stockQuotes, cryptoQuotes) {
   };
 }
 
-export function buildPortfolioPayload({ positions = [], stockQuotes = {}, cryptoQuotes = {} }) {
-  const configuredAssetMap = new Map(
-    (PORTFOLIO_CONFIG.assets || []).map((asset) => [String(asset.name || '').toUpperCase(), asset]),
-  );
-  const normalized = positions.map((position) => {
+function normalizePositionsWithConfig(positions, configuredAssetMap) {
+  return positions.map((position) => {
     const symbol = String(position?.symbol || '').toUpperCase();
     const configured = configuredAssetMap.get(symbol) || {};
     return {
@@ -55,35 +44,34 @@ export function buildPortfolioPayload({ positions = [], stockQuotes = {}, crypto
       purchasePrice: Number(position?.purchasePrice || 0),
     };
   });
+}
 
-  const computedPositions = normalized.map((asset) => {
-    const priceResolution = resolveCurrentPrice(asset, stockQuotes, cryptoQuotes);
-    const currentPrice = Number.isFinite(priceResolution.currentPrice) ? priceResolution.currentPrice : 0;
-    const totalPurchaseCost = asset.qty * asset.purchasePrice;
-    const currentValue = asset.qty * currentPrice;
-    const pnl = currentValue - totalPurchaseCost;
-    const pnlPct = totalPurchaseCost === 0 ? 0 : (pnl / totalPurchaseCost) * 100;
-    const found =
-      !isNonPositiveOrInvalidQuantity(asset.qty) &&
-      (Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice));
+function computePositionMetrics(asset, priceResolution) {
+  const currentPrice = Number.isFinite(priceResolution.currentPrice) ? priceResolution.currentPrice : 0;
+  const totalPurchaseCost = asset.qty * asset.purchasePrice;
+  const currentValue = asset.qty * currentPrice;
+  const pnl = currentValue - totalPurchaseCost;
+  const pnlPct = totalPurchaseCost === 0 ? 0 : (pnl / totalPurchaseCost) * 100;
+  const found =
+    !isNonPositiveOrInvalidQuantity(asset.qty) &&
+    (Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice));
+  return {
+    ...asset,
+    found,
+    qty: asset.qty,
+    purchasePrice: asset.purchasePrice,
+    currentPrice,
+    priceSource: priceResolution.priceSource,
+    priceTimestamp: priceResolution.priceTimestamp,
+    totalPurchaseCost,
+    currentValue,
+    pnl,
+    pnlPct,
+  };
+}
 
-    return {
-      ...asset,
-      found,
-      qty: asset.qty,
-      purchasePrice: asset.purchasePrice,
-      currentPrice,
-      priceSource: priceResolution.priceSource,
-      priceTimestamp: priceResolution.priceTimestamp,
-      totalPurchaseCost,
-      currentValue,
-      pnl,
-      pnlPct,
-    };
-  });
-
-  const visiblePositions = computedPositions.filter((position) => position.found);
-  const totals = visiblePositions.reduce(
+function aggregateTotals(visiblePositions) {
+  return visiblePositions.reduce(
     (acc, position) => {
       acc.cost += position.totalPurchaseCost;
       acc.value += position.currentValue;
@@ -92,7 +80,27 @@ export function buildPortfolioPayload({ positions = [], stockQuotes = {}, crypto
     },
     { cost: 0, value: 0, pnl: 0 },
   );
+}
 
+/**
+ * Build the portfolio dashboard payload from positions and live quotes.
+ * @param {object} options
+ * @param {object[]} options.positions
+ * @param {object} options.stockQuotes
+ * @param {object} options.cryptoQuotes
+ * @returns {{ totals: object, totalPnlPct: number, chartData: object[], allocationData: object[], tableRows: object[], isEmpty: boolean }}
+ */
+export function buildPortfolioPayload({ positions = [], stockQuotes = {}, cryptoQuotes = {} }) {
+  const configuredAssetMap = new Map(
+    (PORTFOLIO_CONFIG.assets || []).map((asset) => [String(asset.name || '').toUpperCase(), asset]),
+  );
+  const normalized = normalizePositionsWithConfig(positions, configuredAssetMap);
+  const computedPositions = normalized.map((asset) => {
+    const priceResolution = resolveCurrentPrice(asset, stockQuotes, cryptoQuotes);
+    return computePositionMetrics(asset, priceResolution);
+  });
+  const visiblePositions = computedPositions.filter((position) => position.found);
+  const totals = aggregateTotals(visiblePositions);
   const totalPnlPct = totals.cost === 0 ? 0 : (totals.pnl / totals.cost) * 100;
   const chartData = visiblePositions.map((position) => ({
     name: position.name,

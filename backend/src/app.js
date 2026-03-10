@@ -1,13 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import { readFileSync } from 'node:fs';
-import { buildNetWorthPayload } from './services/netWorthService.js';
-import { buildPortfolioPayload } from './services/portfolioService.js';
+import { getErrorMessage, redirectToFrontend } from './lib/requestHelpers.js';
+import { parseOnboardingPayload } from './lib/onboardingPayload.js';
 import {
   buildProviderDiagnosticsForPositions,
-  getCryptoQuoteMapForPositions,
-  getLiveFxRates,
-  getStockQuoteMapForPositions,
 } from './services/marketDataService.js';
 import {
   buildAppleAuthUrl,
@@ -26,16 +23,15 @@ import {
   createCryptoPositionFromCoinbaseProduct,
   listUsStockSymbols,
   createStockPositionFromSymbol,
-  listNetWorthHistory,
   listPortfolioPositions,
   replaceCashComponents,
   replacePortfolioPositions,
 } from './repositories/financeRepository.js';
 import { markOnboardingCompleted } from './repositories/userRepository.js';
+import { resolveDashboardPayload } from './services/dashboardService.js';
 import { runDailySnapshots } from './services/snapshotService.js';
 
 const BACKEND_VERSION = resolveBackendVersion();
-const FRONTEND_BASE_URL = String(process.env.FRONTEND_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
 const DATA_SOURCE = String(process.env.DATA_SOURCE || 'db').trim().toLowerCase();
 
 function resolveBackendVersion() {
@@ -46,110 +42,6 @@ function resolveBackendVersion() {
   } catch {
     return 'unknown';
   }
-}
-
-function getErrorMessage(error) {
-  const data = error?.response?.data;
-  if (data?.error?.message) return data.error.message;
-  if (data?.message && typeof data.message === 'string') return data.message;
-  if (error?.message) return String(error.message);
-  return 'Request failed.';
-}
-
-function parseOnboardingPayload(body) {
-  const displayName = String(body?.displayName || '').trim();
-  const cashComponents = Array.isArray(body?.cashComponents) ? body.cashComponents : [];
-  const positions = Array.isArray(body?.positions) ? body.positions : [];
-  if (!displayName || displayName.length < 2 || displayName.length > 30) {
-    throw new Error('Display name must be between 2 and 30 characters.');
-  }
-  if (cashComponents.length === 0) {
-    throw new Error('At least one cash/debt component is required.');
-  }
-  if (positions.length === 0) {
-    throw new Error('At least one asset position is required.');
-  }
-  const normalizedCash = cashComponents.map((item, index) => {
-    const key = String(item?.key || `component_${index + 1}`).trim().toLowerCase();
-    const name = String(item?.name || key).trim();
-    const currency = String(item?.currency || 'CNY').trim().toUpperCase();
-    const type = String(item?.type || 'asset').trim().toLowerCase();
-    const amount = Number(item?.amount || 0);
-    if (!key || !name || !currency || !['asset', 'liability'].includes(type) || !Number.isFinite(amount)) {
-      throw new Error('Invalid cash/debt input.');
-    }
-    return {
-      key,
-      name,
-      currency,
-      type,
-      category: String(item?.category || 'Cash'),
-      amount,
-    };
-  });
-
-  const normalizedPositions = positions.map((item) => {
-    const symbol = String(item?.symbol || '').trim().toUpperCase();
-    const category = String(item?.category || '').trim();
-    const qty = Number(item?.qty || 0);
-    const purchasePrice = Number(item?.purchasePrice || 0);
-    if (!symbol || !category || !Number.isFinite(qty) || !Number.isFinite(purchasePrice)) {
-      throw new Error('Invalid asset input.');
-    }
-    return {
-      symbol,
-      category,
-      qty,
-      purchasePrice,
-      marketProvider: item?.marketProvider || null,
-      marketInstrumentId: item?.marketInstrumentId || null,
-    };
-  });
-
-  return {
-    displayName,
-    cashComponents: normalizedCash,
-    positions: normalizedPositions,
-  };
-}
-
-function redirectToFrontend(res, path, message = null) {
-  const params = new URLSearchParams();
-  if (message) {
-    params.set('message', message);
-  }
-  const suffix = params.toString() ? `?${params.toString()}` : '';
-  res.redirect(`${FRONTEND_BASE_URL}${path}${suffix}`);
-}
-
-async function resolveDashboardPayload(userId) {
-  if (DATA_SOURCE !== 'db' && DATA_SOURCE !== 'hybrid') {
-    throw new Error(`Unsupported DATA_SOURCE value: ${DATA_SOURCE}. Expected db or hybrid.`);
-  }
-  const [cashComponents, positions, history] = await Promise.all([
-    listCashComponents(userId),
-    listPortfolioPositions(userId),
-    listNetWorthHistory(userId),
-  ]);
-  const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
-    getStockQuoteMapForPositions(positions),
-    getCryptoQuoteMapForPositions(positions),
-    getLiveFxRates(),
-  ]);
-  const netWorth = buildNetWorthPayload({
-    cashComponents,
-    positions,
-    history,
-    stockQuotes,
-    cryptoQuotes,
-    fxRatesOverride: fxRates,
-  });
-  const portfolio = buildPortfolioPayload({
-    positions,
-    stockQuotes,
-    cryptoQuotes,
-  });
-  return { netWorth, portfolio, fxRates, positions };
 }
 
 export default function createApp() {

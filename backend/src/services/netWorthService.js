@@ -3,6 +3,7 @@ import {
   normalizeCurrencyCode,
   percentFromReference,
 } from '../lib/number.js';
+import { isCryptoAsset, isStockAsset } from '../lib/assetUtils.js';
 
 const NET_WORTH_COMPONENTS = [
   { key: 'sgd_assets_in_cny', displayName: 'SGD Assets Total (As in CNY)' },
@@ -40,14 +41,6 @@ function buildDetailRows(cashComponents, fxRates) {
       found: true,
     };
   });
-}
-
-function isStockAsset(asset) {
-  return /stock/i.test(String(asset?.category || ''));
-}
-
-function isCryptoAsset(asset) {
-  return /crypto/i.test(String(asset?.category || ''));
 }
 
 function resolvePositionCurrentPrice(asset, stockQuotes, cryptoQuotes) {

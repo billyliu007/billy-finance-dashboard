@@ -421,6 +421,16 @@ h1 {
   padding: 10px;
 }
 
+.modalCard input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.modalCard input[type="number"]::-webkit-inner-spin-button,
+.modalCard input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .modalGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

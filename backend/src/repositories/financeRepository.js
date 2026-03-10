@@ -1,5 +1,10 @@
 import { query, withDbClient } from '../db/client.js';
 
+/**
+ * List cash/debt components for a user.
+ * @param {string} userId
+ * @returns {Promise<object[]>}
+ */
 export async function listCashComponents(userId) {
   const result = await query(
     `SELECT component_key AS key,
@@ -44,6 +49,11 @@ export async function replaceCashComponents(userId, components) {
   });
 }
 
+/**
+ * List portfolio positions for a user (symbol as name).
+ * @param {string} userId
+ * @returns {Promise<object[]>}
+ */
 export async function listPortfolioPositions(userId) {
   const result = await query(
     `SELECT symbol,
@@ -89,6 +99,11 @@ export async function replacePortfolioPositions(userId, positions) {
   });
 }
 
+/**
+ * Search US stock symbols by symbol or security name (excludes test issues).
+ * @param {{ queryText?: string, limit?: number }} [options]
+ * @returns {Promise<object[]>}
+ */
 export async function listUsStockSymbols({ queryText, limit = 50 } = {}) {
   const trimmed = String(queryText || '').trim();
   if (!trimmed) {
@@ -110,6 +125,11 @@ export async function listUsStockSymbols({ queryText, limit = 50 } = {}) {
   return result.rows;
 }
 
+/**
+ * List net worth history rows for a user (date, recordedAtUtc, netWorth).
+ * @param {string} userId
+ * @returns {Promise<object[]>}
+ */
 export async function listNetWorthHistory(userId) {
   const result = await query(
     `SELECT to_char(date_utc, 'YYYY-MM-DD') AS date,
@@ -171,6 +191,11 @@ export async function upsertNetWorthSnapshot({ userId, dateUtc, totalCny, qualit
   });
 }
 
+/**
+ * List Coinbase products (USDC/USDT) matching query.
+ * @param {{ queryText?: string, limit?: number }} [options]
+ * @returns {Promise<object[]>}
+ */
 export async function listCoinbaseProducts({ queryText = '', limit = 200 } = {}) {
   const q = String(queryText || '').trim().toUpperCase();
   const safeLimit = Math.max(1, Math.min(500, Number(limit) || 200));
@@ -194,6 +219,11 @@ export async function listCoinbaseProducts({ queryText = '', limit = 200 } = {})
   return result.rows;
 }
 
+/**
+ * Fetch a single Coinbase product by id.
+ * @param {string} productId
+ * @returns {Promise<object|null>}
+ */
 export async function findCoinbaseProduct(productId) {
   const id = String(productId || '').trim().toUpperCase();
   if (!id) {
@@ -211,6 +241,11 @@ export async function findCoinbaseProduct(productId) {
   return result.rows[0] || null;
 }
 
+/**
+ * Create a crypto position from a Coinbase product (USDC/USDT). Throws if position exists.
+ * @param {{ userId: string, productId: string, qty: number, avgCostPerUnit: number }} options
+ * @returns {Promise<{ symbol: string, product: object }>}
+ */
 export async function createCryptoPositionFromCoinbaseProduct({
   userId,
   productId,
@@ -280,6 +315,11 @@ export async function createCryptoPositionFromCoinbaseProduct({
   return { symbol, product };
 }
 
+/**
+ * Create a stock position by symbol. Throws if position already exists.
+ * @param {{ userId: string, symbol: string, qty: number, avgCostPerUnit: number }} options
+ * @returns {Promise<{ symbol: string }>}
+ */
 export async function createStockPositionFromSymbol({ userId, symbol, qty, avgCostPerUnit }) {
   const resolvedUserId = String(userId || '').trim();
   const normalizedSymbol = String(symbol || '').trim().toUpperCase();

@@ -1,68 +1,39 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchJson, postJson } from '../../utils/api.js';
-
-function normalizeText(value) {
-  return String(value || '').trim();
-}
+import { normalizeText } from '../../utils/strings.js';
+import { useDebouncedSearch } from '../../hooks/useDebouncedSearch.js';
 
 export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
   const [query, setQuery] = useState('');
-  const [products, setProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [qty, setQty] = useState('');
   const [avgCost, setAvgCost] = useState('');
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
-  const debounceRef = useRef(null);
+
+  const fetchProducts = useCallback(async (q) => {
+    const res = await fetchJson('/api/market/coinbase-products', {
+      params: new URLSearchParams({ q, limit: '200' }),
+    });
+    return Array.isArray(res?.products) ? res.products : [];
+  }, []);
+  const { items: products, isLoading: isLoadingProducts } = useDebouncedSearch(
+    query,
+    open,
+    fetchProducts,
+    250,
+    setError,
+    'Failed to load Coinbase products.',
+  );
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return;
     setError('');
     setSelectedProductId('');
     setQty('');
     setAvgCost('');
     setQuery('');
   }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    const trimmedQuery = normalizeText(query);
-    if (!trimmedQuery) {
-      setProducts([]);
-      return;
-    }
-
-    debounceRef.current = setTimeout(async () => {
-      try {
-        setIsLoadingProducts(true);
-        const response = await fetchJson('/api/market/coinbase-products', {
-          params: new URLSearchParams({ q: trimmedQuery, limit: '200' }),
-        });
-        setProducts(Array.isArray(response?.products) ? response.products : []);
-      } catch (err) {
-        setProducts([]);
-        setError(err?.message || 'Failed to load Coinbase products.');
-      } finally {
-        setIsLoadingProducts(false);
-      }
-    }, 250);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [open, query]);
 
   const selected = useMemo(
     () => products.find((item) => item.productId === selectedProductId) || null,
@@ -81,6 +52,10 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
     }
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
       setError('Quantity must be greater than 0.');
+      return;
+    }
+    if (!normalizeText(avgCost)) {
+      setError('Please enter avg cost per unit.');
       return;
     }
     if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
@@ -201,7 +176,7 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
             Cancel
           </button>
-          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected}>
+          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected || !normalizeText(avgCost)}>
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </footer>

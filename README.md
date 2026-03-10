@@ -1,6 +1,6 @@
-# NetPulse (Postgres + OAuth)
+# My Worth Track
 
-A personal finance dashboard with multi-user support.
+A personal finance dashboard with multi-user support (net worth, portfolio holdings, live market data).
 
 ## Core capabilities
 
@@ -76,13 +76,13 @@ npm run dev
 ## API (main)
 
 - `GET /api/health`
-- `GET /api/auth/session`
-- `POST /api/auth/logout`
-- `GET /api/dashboard/net-worth`
-- `GET /api/dashboard/portfolio`
+- `GET /api/auth/session`, `POST /api/auth/logout`
+- `GET /api/auth/providers`, `GET /api/auth/{google,apple,wechat}/start`, `GET /api/auth/{google,apple,wechat}/callback`
+- `GET /api/dashboard/net-worth`, `GET /api/dashboard/portfolio`
+- `GET /api/market/coinbase-products`, `GET /api/market/us-stock-symbols`
+- `POST /api/portfolio/positions/crypto`, `POST /api/portfolio/positions/stock`
+- `GET /api/onboarding/status`, `POST /api/onboarding/initialize`
 - `GET /api/dev/status`
-- `GET /api/onboarding/status`
-- `POST /api/onboarding/initialize`
 
 Cron/internal:
 
