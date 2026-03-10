@@ -4,7 +4,6 @@ services:
     env: node
     rootDir: .
     buildCommand: npm ci --prefix backend
-    preDeployCommand: npm run db:migrate --prefix backend
     startCommand: npm run start --prefix backend
     healthCheckPath: /api/health
     envVars:
