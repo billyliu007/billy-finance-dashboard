@@ -405,6 +405,9 @@ export default function createApp() {
         if (!Number.isFinite(balance)) {
           throw new Error('Each cash component must have a valid balance (number).');
         }
+        if (balance === 0) {
+          throw new Error('Balance cannot be zero. Use a positive value for cash or negative for debt.');
+        }
         return { name, currency, balance };
       });
       await replaceCashComponents(req.auth.user.userId, normalized);

@@ -21,12 +21,28 @@ export default function AddCashModal({ open, onClose, onSaved, existingComponent
     setBalance('');
   }, [open]);
 
+  function handleBalanceChange(e) {
+    let raw = e.target.value;
+    if (raw === '' || raw === '-') {
+      setBalance(raw);
+      return;
+    }
+    raw = raw.replace(/[^\d.-]/g, '');
+    if (raw.indexOf('-') > 0) raw = raw.replace(/-/g, '');
+    const sanitized = raw.replace(/^([^.]*\.)(.*)$/, (_, a, b) => a + (b.replace(/\./g, '') || ''));
+    setBalance(sanitized);
+  }
+
   async function handleSave() {
     const nameTrim = String(name).trim() || 'Cash';
     const cur = String(currency || 'CNY').trim().toUpperCase();
     const bal = Number(balance);
     if (!Number.isFinite(bal)) {
       setError(t('errors.validBalance'));
+      return;
+    }
+    if (bal === 0) {
+      setError(t('errors.balanceCannotBeZero'));
       return;
     }
     try {
@@ -82,10 +98,11 @@ export default function AddCashModal({ open, onClose, onSaved, existingComponent
           <label className="modalLabel">
             {t('modals.balanceNegativeDebt')}
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
               value={balance}
-              onChange={(e) => setBalance(e.target.value)}
+              onChange={handleBalanceChange}
               className="modalInput"
               placeholder={t('modals.placeholderBalance')}
             />
@@ -100,7 +117,7 @@ export default function AddCashModal({ open, onClose, onSaved, existingComponent
             type="button"
             className="modalBtn"
             onClick={handleSave}
-            disabled={isSaving || !Number.isFinite(Number(balance))}
+            disabled={isSaving || !Number.isFinite(Number(balance)) || Number(balance) === 0}
           >
             {isSaving ? t('modals.saving') : t('modals.add')}
           </button>
