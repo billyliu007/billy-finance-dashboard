@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchJson, postJson } from '../../utils/api.js';
 import { normalizeText } from '../../utils/strings.js';
 import { useDebouncedSearch } from '../../hooks/useDebouncedSearch.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function AddStockPositionModal({ open, onClose, onSaved }) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [selectedSymbol, setSelectedSymbol] = useState('');
   const [qty, setQty] = useState('');
@@ -23,7 +25,7 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
     fetchSymbols,
     250,
     setError,
-    'Failed to load stock symbols.',
+    t('errors.failedLoadSymbols'),
   );
 
   useEffect(() => {
@@ -47,19 +49,19 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
     const avgCostNum = Number(avgCost);
 
     if (!symbol) {
-      setError('Please select a stock symbol.');
+      setError(t('errors.selectStockSymbol'));
       return;
     }
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      setError('Quantity must be greater than 0.');
+      setError(t('errors.quantityGreaterZero'));
       return;
     }
     if (!normalizeText(avgCost)) {
-      setError('Please enter avg cost per unit.');
+      setError(t('errors.enterAvgCost'));
       return;
     }
     if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
-      setError('Avg cost per unit must be 0 or greater.');
+      setError(t('errors.avgCostNonNegative'));
       return;
     }
 
@@ -73,7 +75,7 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || 'Failed to save position.');
+      setError(err?.message || t('errors.failedSavePosition'));
     } finally {
       setIsSaving(false);
     }
@@ -84,18 +86,18 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
   }
 
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Add stock position">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={t('modals.addStockPosition')}>
       <section className="modalCard">
         <header className="modalHeader">
-          <h2>Add Stock Position</h2>
-          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label="Close">
+          <h2>{t('modals.addStockPosition')}</h2>
+          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>
         </header>
 
         <div className="modalBody">
           <label className="modalLabel">
-            Asset
+            {t('modals.asset')}
             <input
               value={query}
               onChange={(event) => {
@@ -105,16 +107,16 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
                   setSelectedSymbol('');
                 }
               }}
-              placeholder="Type asset symbol (e.g. QQQ, TSLA, AAPL)"
+              placeholder={t('modals.placeholderStock')}
               className="modalInput"
             />
           </label>
 
           {!selected && (
             <div className="modalProductList">
-              {isLoadingSymbols && <p className="modalHint">Loading symbols...</p>}
+              {isLoadingSymbols && <p className="modalHint">{t('modals.loadingSymbols')}</p>}
               {!isLoadingSymbols && normalizeText(query) && symbols.length === 0 && (
-                <p className="modalHint">No matching US stock symbols. Try a different symbol or name.</p>
+                <p className="modalHint">{t('modals.noMatchingStock')}</p>
               )}
               {!isLoadingSymbols && normalizeText(query) && symbols.length > 0 && (
                 <ul>
@@ -142,7 +144,7 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
 
           <div className="modalGrid">
             <label className="modalLabel">
-              Quantity
+              {t('modals.quantity')}
               <input
                 type="number"
                 min="0"
@@ -155,7 +157,7 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
               />
             </label>
             <label className="modalLabel">
-              Avg cost per unit
+              {t('modals.avgCostPerUnit')}
               <input
                 type="number"
                 min="0"
@@ -174,14 +176,14 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
 
         <footer className="modalFooter">
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {t('modals.cancel')}
           </button>
           <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected || !normalizeText(avgCost) || !normalizeText(qty) || Number(qty) <= 0}>
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? t('modals.saving') : t('modals.save')}
           </button>
         </footer>
         <p className="modalDisclaimer">
-          List shows US-listed stock and ETF symbols.
+          {t('modals.disclaimerStock')}
         </p>
       </section>
     </div>

@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { SHOW_DEVELOPMENT_PAGE } from '../constants.js';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 
 /**
  * Collapsible sidebar navigation: branding, privacy toggle, main nav links, logout.
@@ -12,6 +13,8 @@ export default function SideNav({
   onHideValuesChange,
   onLogout,
 }) {
+  const { t } = useLanguage();
+
   return (
     <aside
       className={`sideNav${open ? '' : ' sideNav--collapsed'}`}
@@ -21,14 +24,14 @@ export default function SideNav({
         type="button"
         className="sideNavToggle"
         onClick={onToggle}
-        aria-label={open ? 'Hide navigation' : 'Show navigation'}
-        title={open ? 'Hide panel' : 'Show panel'}
+        aria-label={open ? t('nav.hideNav') : t('nav.showNav')}
+        title={open ? t('nav.hidePanel') : t('nav.showPanel')}
       >
         {open ? '◀' : '▶'}
       </button>
       {open && (
         <>
-          <p className="sideTitle">My Worth Track</p>
+          <p className="sideTitle">{t('app.brand')}</p>
           <p className="sideSubtitle">{user?.displayName || user?.email}</p>
           <label className="privacyToggle">
             <input
@@ -36,32 +39,32 @@ export default function SideNav({
               checked={hideValues}
               onChange={(e) => onHideValuesChange(e.target.checked)}
             />
-            <span>Privacy Mode (Hide Amounts)</span>
+            <span>{t('nav.privacyMode')}</span>
           </label>
           <nav>
             <NavLink
               to="/net-worth"
               className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
             >
-              Net Worth
+              {t('nav.netWorth')}
             </NavLink>
             <NavLink
               to="/portfolio"
               className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
             >
-              Portfolio Holdings
+              {t('nav.portfolioHoldings')}
             </NavLink>
             {SHOW_DEVELOPMENT_PAGE && (
               <NavLink
                 to="/development"
                 className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
               >
-                Development
+                {t('nav.development')}
               </NavLink>
             )}
           </nav>
           <button type="button" className="logoutBtn" onClick={onLogout}>
-            Log out
+            {t('nav.logOut')}
           </button>
         </>
       )}

@@ -4,12 +4,15 @@ import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import App from './App.jsx';
 import AppErrorBoundary from './components/AppErrorBoundary.jsx';
+import { LanguageProvider } from './contexts/LanguageContext.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppErrorBoundary>
       <BrowserRouter>
-        <App />
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
       </BrowserRouter>
     </AppErrorBoundary>
   </StrictMode>,

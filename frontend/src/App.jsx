@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import SideNav from './components/SideNav.jsx';
-import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
+import UserMenu from './components/UserMenu.jsx';
+import { useLanguage } from './contexts/LanguageContext.jsx';
 import { DashboardProvider } from './contexts/DashboardContext.jsx';
+import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
 import NetWorthPage from './pages/NetWorthPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import DevelopmentPage from './pages/DevelopmentPage.jsx';
@@ -11,6 +13,18 @@ import OnboardingPage from './pages/OnboardingPage.jsx';
 import { fetchJson, postJson } from './utils/api.js';
 import { resolveFrontendBuildVersion } from './utils/version.js';
 import './App.css';
+
+function LoadingScreen() {
+  const { t } = useLanguage();
+  return (
+    <main className="authScreen">
+      <section className="authCard">
+        <h1>{t('app.brand')}</h1>
+        <p>{t('app.checkingSession')}</p>
+      </section>
+    </main>
+  );
+}
 
 export default function App() {
   const [hideValues, setHideValues] = useState(() => {
@@ -61,12 +75,7 @@ export default function App() {
 
   if (session.isLoading) {
     return (
-      <main className="authScreen">
-        <section className="authCard">
-          <h1>My Worth Track</h1>
-          <p>Checking your session...</p>
-        </section>
-      </main>
+      <LoadingScreen />
     );
   }
 
@@ -91,7 +100,10 @@ export default function App() {
         />
 
         <main className="mainContent">
-          {session.error && <p className="error">{session.error}</p>}
+          <div className="topBar">
+            {session.error && <p className="error">{session.error}</p>}
+            <UserMenu user={session.user} onLogout={handleLogout} />
+          </div>
           <Routes>
             <Route path="/login" element={<Navigate to="/net-worth" replace />} />
             <Route path="/onboarding" element={<Navigate to="/net-worth" replace />} />

@@ -1,14 +1,16 @@
 import KpiIcon from '../KpiIcon.jsx';
 import { formatBaseCurrency, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function PerformanceKpis({ hideValues, summary, baseCurrency = 'USD' }) {
+  const { t } = useLanguage();
   const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
   return (
     <div className="kpiRow">
       <article className="miniKpi">
         <p>
           <KpiIcon type="latest" />
-          <span>Latest Net Worth Snapshot</span>
+          <span>{t('netWorth.latestSnapshot')}</span>
         </p>
         <h3>{formatMaybeHidden(hideValues, formatValue, summary.latest.netWorth)}</h3>
         <small>
@@ -20,7 +22,7 @@ export default function PerformanceKpis({ hideValues, summary, baseCurrency = 'U
       <article className="miniKpi">
         <p>
           <KpiIcon type="period" />
-          <span>Latest Period Return</span>
+          <span>{t('netWorth.latestPeriodReturn')}</span>
         </p>
         <h3 className={summary.latestPeriodChangePct >= 0 ? 'pos' : 'neg'}>{formatPercent(summary.latestPeriodChangePct)}</h3>
         <small>
@@ -32,7 +34,7 @@ export default function PerformanceKpis({ hideValues, summary, baseCurrency = 'U
       <article className="miniKpi">
         <p>
           <KpiIcon type="peak" />
-          <span>All-Time High Net Worth</span>
+          <span>{t('netWorth.athNetWorth')}</span>
         </p>
         <h3 className="pos">{formatMaybeHidden(hideValues, formatValue, summary.peak.netWorth)}</h3>
         <small>
@@ -44,7 +46,7 @@ export default function PerformanceKpis({ hideValues, summary, baseCurrency = 'U
       <article className="miniKpi">
         <p>
           <KpiIcon type="atl" />
-          <span>All-Time Low Net Worth</span>
+          <span>{t('netWorth.atlNetWorth')}</span>
         </p>
         <h3 className="neg">{formatMaybeHidden(hideValues, formatValue, summary.bottom.netWorth)}</h3>
         <small>

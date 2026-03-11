@@ -6,6 +6,7 @@ import {
   formatPercentUnsigned,
   formatQty,
 } from '../../utils/formatters.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function PortfolioPositionsTable({
   hideValues,
@@ -15,6 +16,7 @@ export default function PortfolioPositionsTable({
   onEditPosition,
   onDeletePosition,
 }) {
+  const { t } = useLanguage();
   const [showMobileDetails, setShowMobileDetails] = useState(true);
   const [showAddMenu, setShowAddMenu] = useState(false);
 
@@ -44,7 +46,7 @@ export default function PortfolioPositionsTable({
     <>
       <article className="tableCard portfolioPositionsCard">
         <div className="tableHeaderRow">
-          <h2>Positions</h2>
+          <h2>{t('portfolio.positions')}</h2>
           <div className="tableHeaderActions">
             {(onAddStock || onAddCrypto) && (
               <>
@@ -52,7 +54,7 @@ export default function PortfolioPositionsTable({
                   type="button"
                   className="headerIconBtn addMenuToggle"
                   onClick={() => setShowAddMenu((prev) => !prev)}
-                  aria-label="Add position"
+                  aria-label={t('portfolio.addPosition')}
                   aria-expanded={showAddMenu}
                 >
                   +
@@ -67,7 +69,7 @@ export default function PortfolioPositionsTable({
                           onAddStock();
                         }}
                       >
-                        Stock position
+                        {t('portfolio.stockPosition')}
                       </button>
                     )}
                     {onAddCrypto && (
@@ -78,7 +80,7 @@ export default function PortfolioPositionsTable({
                           onAddCrypto();
                         }}
                       >
-                        Crypto position
+                        {t('portfolio.cryptoPosition')}
                       </button>
                     )}
                   </div>
@@ -91,45 +93,45 @@ export default function PortfolioPositionsTable({
           <table className="positionsMobileCompact">
             <thead>
               <tr>
-                <th>Asset</th>
-                <th>Asset Class</th>
-                <th>Quantity</th>
-                <th>Avg Cost per Unit</th>
-                <th>Cost Basis</th>
-                <th>Market Price</th>
-                <th>Market Value</th>
-                <th>Portfolio Weight (%)</th>
-                <th>Unrealized Gain/Loss</th>
-                <th>Unrealized Return (%)</th>
-                {(onEditPosition || onDeletePosition) && <th className="positionActionsHeader">Actions</th>}
+                <th>{t('portfolio.asset')}</th>
+                <th>{t('portfolio.assetClass')}</th>
+                <th>{t('portfolio.quantity')}</th>
+                <th>{t('portfolio.avgCostPerUnit')}</th>
+                <th>{t('portfolio.costBasis')}</th>
+                <th>{t('portfolio.marketPrice')}</th>
+                <th>{t('portfolio.marketValue')}</th>
+                <th>{t('portfolio.portfolioWeight')}</th>
+                <th>{t('portfolio.unrealizedGainLoss')}</th>
+                <th>{t('portfolio.unrealizedReturn')}</th>
+                {(onEditPosition || onDeletePosition) && <th className="positionActionsHeader">{t('netWorth.actions')}</th>}
               </tr>
             </thead>
             <tbody>
               {rows.map((item) => (
                 <tr key={item.key}>
-                  <td data-label="Asset">{item.name}</td>
-                  <td data-label="Asset Class">{item.category}</td>
-                  <td data-label="Quantity">{formatMaybeHidden(hideValues, formatQty, item.qty)}</td>
-                  <td data-label="Avg Cost per Unit">{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</td>
-                  <td data-label="Cost Basis">{formatMaybeHidden(hideValues, formatMoney, item.totalPurchaseCost)}</td>
-                  <td data-label="Market Price">{formatMaybeHidden(hideValues, formatMoney, item.currentPrice)}</td>
-                  <td data-label="Market Value">{formatMaybeHidden(hideValues, formatMoney, item.currentValue)}</td>
-                  <td data-label="Portfolio Weight (%)">{formatPercentUnsigned(item.weightPct)}</td>
-                  <td data-label="Unrealized Gain/Loss" className={item.pnl >= 0 ? 'pos' : 'neg'}>
+                  <td data-label={t('portfolio.asset')}>{item.name}</td>
+                  <td data-label={t('portfolio.assetClass')}>{item.category}</td>
+                  <td data-label={t('portfolio.quantity')}>{formatMaybeHidden(hideValues, formatQty, item.qty)}</td>
+                  <td data-label={t('portfolio.avgCostPerUnit')}>{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</td>
+                  <td data-label={t('portfolio.costBasis')}>{formatMaybeHidden(hideValues, formatMoney, item.totalPurchaseCost)}</td>
+                  <td data-label={t('portfolio.marketPrice')}>{formatMaybeHidden(hideValues, formatMoney, item.currentPrice)}</td>
+                  <td data-label={t('portfolio.marketValue')}>{formatMaybeHidden(hideValues, formatMoney, item.currentValue)}</td>
+                  <td data-label={t('portfolio.portfolioWeight')}>{formatPercentUnsigned(item.weightPct)}</td>
+                  <td data-label={t('portfolio.unrealizedGainLoss')} className={item.pnl >= 0 ? 'pos' : 'neg'}>
                     {formatMaybeHidden(hideValues, formatMoney, item.pnl)}
                   </td>
-                  <td data-label="Unrealized Return (%)" className={item.pnl >= 0 ? 'pos' : 'neg'}>
+                  <td data-label={t('portfolio.unrealizedReturn')} className={item.pnl >= 0 ? 'pos' : 'neg'}>
                     {formatPercent(item.pnlPct)}
                   </td>
                   {(onEditPosition || onDeletePosition) && (
-                    <td data-label="Actions" className="positionActionsCell">
+                    <td data-label={t('netWorth.actions')} className="positionActionsCell">
                       {onEditPosition && (
                         <button
                           type="button"
                           className="headerIconBtn positionActionBtn"
                           onClick={() => onEditPosition(item)}
-                          aria-label={`Edit ${item.name}`}
-                          title="Edit"
+                          aria-label={`${t('portfolio.edit')} ${item.name}`}
+                          title={t('portfolio.edit')}
                         >
                           ✎
                         </button>
@@ -139,8 +141,8 @@ export default function PortfolioPositionsTable({
                           type="button"
                           className="headerIconBtn positionActionBtn positionActionBtnDanger"
                           onClick={() => onDeletePosition(item)}
-                          aria-label={`Delete ${item.name}`}
-                          title="Delete"
+                          aria-label={`${t('portfolio.delete')} ${item.name}`}
+                          title={t('portfolio.delete')}
                         >
                           ✕
                         </button>
@@ -156,7 +158,7 @@ export default function PortfolioPositionsTable({
 
       <article className="tableCard portfolioMobileDetailsCard">
         <div className="detailsHeaderRow">
-          <h2>Positions</h2>
+          <h2>{t('portfolio.positions')}</h2>
           <div className="detailsHeaderActions">
             {(onAddStock || onAddCrypto) && (
               <>
@@ -164,7 +166,7 @@ export default function PortfolioPositionsTable({
                   type="button"
                   className="headerIconBtn addMenuToggle"
                   onClick={() => setShowAddMenu((prev) => !prev)}
-                  aria-label="Add position"
+                  aria-label={t('portfolio.addPosition')}
                   aria-expanded={showAddMenu}
                 >
                   +
@@ -179,7 +181,7 @@ export default function PortfolioPositionsTable({
                           onAddStock();
                         }}
                       >
-                        Stock position
+                        {t('portfolio.stockPosition')}
                       </button>
                     )}
                     {onAddCrypto && (
@@ -190,7 +192,7 @@ export default function PortfolioPositionsTable({
                           onAddCrypto();
                         }}
                       >
-                        Crypto position
+                        {t('portfolio.cryptoPosition')}
                       </button>
                     )}
                   </div>

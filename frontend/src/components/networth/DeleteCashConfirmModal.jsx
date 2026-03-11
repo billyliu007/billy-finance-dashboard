@@ -1,21 +1,22 @@
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
+
 export default function DeleteCashConfirmModal({ open, cash, onClose, onConfirm, isDeleting }) {
+  const { t } = useLanguage();
   if (!open) return null;
 
-  const name = cash?.name ?? 'this entry';
+  const name = cash?.name ?? t('modals.thisEntry');
 
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Confirm remove cash">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={t('modals.removeCashDebt')}>
       <section className="modalCard">
         <header className="modalHeader">
-          <h2>Remove cash / debt</h2>
-          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label="Close">
+          <h2>{t('modals.removeCashDebt')}</h2>
+          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>
         </header>
         <div className="modalBody">
-          <p>
-            Remove &quot;{name}&quot;? This cannot be undone.
-          </p>
+          <p>{t('modals.removeCashConfirm', { name })}</p>
         </div>
         <footer className="modalFooter">
           <button
@@ -24,7 +25,7 @@ export default function DeleteCashConfirmModal({ open, cash, onClose, onConfirm,
             onClick={onClose}
             disabled={isDeleting}
           >
-            Cancel
+            {t('modals.cancel')}
           </button>
           <button
             type="button"
@@ -32,7 +33,7 @@ export default function DeleteCashConfirmModal({ open, cash, onClose, onConfirm,
             onClick={onConfirm}
             disabled={isDeleting}
           >
-            {isDeleting ? 'Removing...' : 'Remove'}
+            {isDeleting ? t('modals.removing') : t('modals.remove')}
           </button>
         </footer>
       </section>

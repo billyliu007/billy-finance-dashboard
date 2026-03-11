@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchJson, postJson } from '../../utils/api.js';
 import { normalizeText } from '../../utils/strings.js';
 import { useDebouncedSearch } from '../../hooks/useDebouncedSearch.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [qty, setQty] = useState('');
@@ -23,7 +25,7 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
     fetchProducts,
     250,
     setError,
-    'Failed to load Coinbase products.',
+    t('errors.failedLoadProducts'),
   );
 
   useEffect(() => {
@@ -47,19 +49,19 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
     const avgCostNum = Number(avgCost);
 
     if (!productId) {
-      setError('Please select a Coinbase product.');
+      setError(t('errors.selectCoinbaseProduct'));
       return;
     }
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      setError('Quantity must be greater than 0.');
+      setError(t('errors.quantityGreaterZero'));
       return;
     }
     if (!normalizeText(avgCost)) {
-      setError('Please enter avg cost per unit.');
+      setError(t('errors.enterAvgCost'));
       return;
     }
     if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
-      setError('Avg cost per unit must be 0 or greater.');
+      setError(t('errors.avgCostNonNegative'));
       return;
     }
 
@@ -73,7 +75,7 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || 'Failed to save position.');
+      setError(err?.message || t('errors.failedSavePosition'));
     } finally {
       setIsSaving(false);
     }
@@ -84,18 +86,18 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
   }
 
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Add crypto position">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={t('modals.addCryptoPosition')}>
       <section className="modalCard">
         <header className="modalHeader">
-          <h2>Add Crypto Position</h2>
-          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label="Close">
+          <h2>{t('modals.addCryptoPosition')}</h2>
+          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>
         </header>
 
         <div className="modalBody">
           <label className="modalLabel">
-            Asset
+            {t('modals.asset')}
             <input
               value={query}
               onChange={(event) => {
@@ -105,16 +107,16 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
                   setSelectedProductId('');
                 }
               }}
-              placeholder="Type asset name or symbol (e.g. BTC, ETH, BTC-USDT)"
+              placeholder={t('modals.placeholderCrypto')}
               className="modalInput"
             />
           </label>
 
           {!selected && (
             <div className="modalProductList">
-              {isLoadingProducts && <p className="modalHint">Loading products...</p>}
+              {isLoadingProducts && <p className="modalHint">{t('modals.loadingProducts')}</p>}
               {!isLoadingProducts && normalizeText(query) && products.length === 0 && (
-                <p className="modalHint">No matching Coinbase products. Try a different asset name or symbol.</p>
+                <p className="modalHint">{t('modals.noMatchingCrypto')}</p>
               )}
               {!isLoadingProducts && normalizeText(query) && products.length > 0 && (
                 <ul>
@@ -142,7 +144,7 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
 
           <div className="modalGrid">
             <label className="modalLabel">
-              Quantity
+              {t('modals.quantity')}
               <input
                 type="number"
                 min="0"
@@ -155,7 +157,7 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
               />
             </label>
             <label className="modalLabel">
-              Avg cost per unit
+              {t('modals.avgCostPerUnit')}
               <input
                 type="number"
                 min="0"
@@ -174,14 +176,14 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
 
         <footer className="modalFooter">
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {t('modals.cancel')}
           </button>
           <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected || !normalizeText(avgCost) || !normalizeText(qty) || Number(qty) <= 0}>
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? t('modals.saving') : t('modals.save')}
           </button>
         </footer>
         <p className="modalDisclaimer">
-          List shows Coinbase products in USDT and USDC pairs only.
+          {t('modals.disclaimerCrypto')}
         </p>
       </section>
     </div>

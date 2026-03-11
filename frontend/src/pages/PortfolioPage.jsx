@@ -7,9 +7,11 @@ import AddCryptoPositionModal from '../components/portfolio/AddCryptoPositionMod
 import AddStockPositionModal from '../components/portfolio/AddStockPositionModal.jsx';
 import EditCryptoPositionModal from '../components/portfolio/EditCryptoPositionModal.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { deleteJson } from '../utils/api.js';
 
 export default function PortfolioPage({ hideValues }) {
+  const { t } = useLanguage();
   const { portfolio: data, isLoading, error, refresh } = useDashboard();
   const [isAddCryptoOpen, setIsAddCryptoOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
@@ -29,13 +31,13 @@ export default function PortfolioPage({ hideValues }) {
   return (
     <section className="contentWrap">
       <header className="pageHeader">
-        <h1>Portfolio Holdings</h1>
+        <h1>{t('portfolio.title')}</h1>
       </header>
 
       <div className="dashboardPanel">
-        {isLoading && <p>Loading dashboard data...</p>}
+        {isLoading && <p>{t('app.loadingDashboard')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
-        {!isLoading && !error && data?.isEmpty && <p>No portfolio positions found yet.</p>}
+        {!isLoading && !error && data?.isEmpty && <p>{t('portfolio.noPositionsFound')}</p>}
 
         {!isLoading && !error && data && !data.isEmpty && (
           <>
@@ -53,12 +55,12 @@ export default function PortfolioPage({ hideValues }) {
               onAddStock={() => setIsAddStockOpen(true)}
               onEditPosition={(position) => setEditPosition(position)}
               onDeletePosition={async (position) => {
-                if (!window.confirm(`Are you sure you want to remove ${position.name}? This cannot be undone.`)) return;
+                if (!window.confirm(t('portfolio.removeConfirm', { name: position.name }))) return;
                 try {
                   await deleteJson(`/api/portfolio/positions/${encodeURIComponent(position.symbol)}`);
                   refresh?.();
                 } catch (err) {
-                  window.alert(err?.message || 'Failed to delete position.');
+                  window.alert(err?.message || t('errors.failedDeletePosition'));
                 }
               }}
             />

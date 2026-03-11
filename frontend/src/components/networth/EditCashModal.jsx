@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { putJson } from '../../utils/api.js';
 import useApiData from '../../hooks/useApiData.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function EditCashModal({ open, cash, onClose, onSaved, existingComponents = [] }) {
+  const { t } = useLanguage();
   const { data: currenciesData } = useApiData('/api/currencies', { refreshMs: 0 });
   const currencies = currenciesData?.currencies ?? [];
   const [name, setName] = useState('');
@@ -24,7 +26,7 @@ export default function EditCashModal({ open, cash, onClose, onSaved, existingCo
     const cur = String(currency || 'CNY').trim().toUpperCase();
     const bal = Number(balance);
     if (!Number.isFinite(bal)) {
-      setError('Please enter a valid balance (number).');
+      setError(t('errors.validBalance'));
       return;
     }
     const id = cash?.id;
@@ -38,7 +40,7 @@ export default function EditCashModal({ open, cash, onClose, onSaved, existingCo
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || 'Failed to update.');
+      setError(err?.message || t('errors.failedUpdate'));
     } finally {
       setIsSaving(false);
     }
@@ -47,27 +49,27 @@ export default function EditCashModal({ open, cash, onClose, onSaved, existingCo
   if (!open) return null;
 
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Edit cash">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={t('modals.editCashDebt')}>
       <section className="modalCard">
         <header className="modalHeader">
-          <h2>Edit Cash / Debt</h2>
-          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label="Close">
+          <h2>{t('modals.editCashDebt')}</h2>
+          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>
         </header>
         <div className="modalBody">
           <label className="modalLabel">
-            Name
+            {t('modals.name')}
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="modalInput"
-              placeholder="e.g. DBS Savings"
+              placeholder={t('modals.placeholderName')}
             />
           </label>
           <label className="modalLabel">
-            Currency
+            {t('modals.currency')}
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
@@ -81,21 +83,21 @@ export default function EditCashModal({ open, cash, onClose, onSaved, existingCo
             </select>
           </label>
           <label className="modalLabel">
-            Balance (negative = debt)
+            {t('modals.balanceNegativeDebt')}
             <input
               type="number"
               step="0.01"
               value={balance}
               onChange={(e) => setBalance(e.target.value)}
               className="modalInput"
-              placeholder="0"
+              placeholder={t('modals.placeholderBalance')}
             />
           </label>
           {error && <p className="error">{error}</p>}
         </div>
         <footer className="modalFooter">
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {t('modals.cancel')}
           </button>
           <button
             type="button"
@@ -103,7 +105,7 @@ export default function EditCashModal({ open, cash, onClose, onSaved, existingCo
             onClick={handleSave}
             disabled={isSaving || !Number.isFinite(Number(balance))}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? t('modals.saving') : t('modals.save')}
           </button>
         </footer>
       </section>

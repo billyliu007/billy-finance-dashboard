@@ -3,6 +3,7 @@ import KpiIcon from '../KpiIcon.jsx';
 import { formatBaseCurrency, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
 import useApiData from '../../hooks/useApiData.js';
 import { patchJson } from '../../utils/api.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 function renderKpiName(name) {
   const match = String(name).match(/^(.+?)\s+\((As in [A-Z]{3})\)$/);
@@ -26,6 +27,7 @@ export default function NetWorthSummaryCard({
   baseCurrency = 'USD',
   onBaseCurrencyChange,
 }) {
+  const { t } = useLanguage();
   const { data: currenciesData } = useApiData('/api/currencies', { refreshMs: 0 });
   const currencies = currenciesData?.currencies ?? [];
   const [isSavingPref, setIsSavingPref] = useState(false);
@@ -48,7 +50,7 @@ export default function NetWorthSummaryCard({
     <div className="kpiCard">
       <p className="kpiLabel">
         <KpiIcon type="networth" />
-        <span>Total Net Worth</span>
+        <span>{t('netWorth.totalNetWorth')}</span>
       </p>
       <div className="kpiValueRow">
         <p className={`kpiValue ${totalNetWorth >= 0 ? 'pos' : 'neg'}`}>
@@ -74,11 +76,11 @@ export default function NetWorthSummaryCard({
         <div className="kpiDeltaRow">
           <span className={`kpiDeltaItem ${netWorthBounds.pctToAth >= 0 ? 'pos' : 'neg'}`}>
             <KpiIcon type="ath" />
-            vs All-Time High: {formatPercent(netWorthBounds.pctToAth)}
+            {t('netWorth.vsAth')}: {formatPercent(netWorthBounds.pctToAth)}
           </span>
           <span className={`kpiDeltaItem ${netWorthBounds.pctToAtl >= 0 ? 'pos' : 'neg'}`}>
             <KpiIcon type="atl" />
-            vs All-Time Low: {formatPercent(netWorthBounds.pctToAtl)}
+            {t('netWorth.vsAtl')}: {formatPercent(netWorthBounds.pctToAtl)}
           </span>
         </div>
       )}
@@ -88,13 +90,13 @@ export default function NetWorthSummaryCard({
           <li key={component.key}>
             <span className="kpiName">{renderKpiName(component.name)}</span>
             <strong className={component.value >= 0 ? 'pos' : 'neg'}>
-              {component.found ? formatMaybeHidden(hideValues, formatValue, component.value) : 'Not found'}
+              {component.found ? formatMaybeHidden(hideValues, formatValue, component.value) : t('netWorth.notFound')}
             </strong>
           </li>
         ))}
       </ul>
 
-      {missingInputs.length > 0 && <p className="kpiSource">Missing inputs: {missingInputs.join(', ')}</p>}
+      {missingInputs.length > 0 && <p className="kpiSource">{t('netWorth.missingInputs')}: {missingInputs.join(', ')}</p>}
     </div>
   );
 }

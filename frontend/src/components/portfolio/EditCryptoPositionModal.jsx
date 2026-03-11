@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { patchJson } from '../../utils/api.js';
 import { normalizeText } from '../../utils/strings.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function EditCryptoPositionModal({ open, position, onClose, onSaved }) {
+  const { t } = useLanguage();
   const [qty, setQty] = useState('');
   const [avgCost, setAvgCost] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -22,19 +24,19 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
     const avgCostNum = Number(avgCost);
 
     if (!symbol) {
-      setError('Missing position.');
+      setError(t('errors.missingPosition'));
       return;
     }
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      setError('Quantity must be greater than 0.');
+      setError(t('errors.quantityGreaterZero'));
       return;
     }
     if (!normalizeText(avgCost)) {
-      setError('Please enter avg cost per unit.');
+      setError(t('errors.enterAvgCost'));
       return;
     }
     if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
-      setError('Avg cost per unit must be 0 or greater.');
+      setError(t('errors.avgCostNonNegative'));
       return;
     }
 
@@ -47,7 +49,7 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || 'Failed to update position.');
+      setError(err?.message || t('errors.failedUpdatePosition'));
     } finally {
       setIsSaving(false);
     }
@@ -60,18 +62,18 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
   const isCrypto = /crypto/i.test(String(position?.category || ''));
 
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Edit position">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={isCrypto ? t('modals.editCryptoPosition') : t('modals.editStockPosition')}>
       <section className="modalCard">
         <header className="modalHeader">
-          <h2>Edit {isCrypto ? 'Crypto' : 'Stock'} Position</h2>
-          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label="Close">
+          <h2>{isCrypto ? t('modals.editCryptoPosition') : t('modals.editStockPosition')}</h2>
+          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>
         </header>
 
         <div className="modalBody">
           <label className="modalLabel">
-            Asset
+            {t('modals.asset')}
             <input
               type="text"
               value={name}
@@ -83,7 +85,7 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
 
           <div className="modalGrid">
             <label className="modalLabel">
-              Quantity
+              {t('modals.quantity')}
               <input
                 type="number"
                 min="0"
@@ -94,7 +96,7 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
               />
             </label>
             <label className="modalLabel">
-              Avg cost per unit
+              {t('modals.avgCostPerUnit')}
               <input
                 type="number"
                 min="0"
@@ -111,7 +113,7 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
 
         <footer className="modalFooter">
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {t('modals.cancel')}
           </button>
           <button
             type="button"
@@ -119,7 +121,7 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
             onClick={handleSave}
             disabled={isSaving || !normalizeText(qty) || !normalizeText(avgCost) || Number(qty) <= 0}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? t('modals.saving') : t('modals.save')}
           </button>
         </footer>
       </section>

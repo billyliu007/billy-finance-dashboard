@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { API_BASE_URL } from '../constants.js';
 import { postJson } from '../utils/api.js';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 
 function resolveMessage(search) {
   const params = new URLSearchParams(search);
@@ -9,6 +10,7 @@ function resolveMessage(search) {
 }
 
 export default function LoginPage() {
+  const { t } = useLanguage();
   const [isLoggingInDemo, setIsLoggingInDemo] = useState(false);
   const [demoError, setDemoError] = useState('');
   const message = useMemo(() => resolveMessage(window.location.search), []);
@@ -31,17 +33,17 @@ export default function LoginPage() {
   return (
     <main className="authScreen">
       <section className="authCard">
-        <h1>My Worth Track</h1>
-        <p>Sign in to access your personal dashboard data.</p>
+        <h1>{t('login.title')}</h1>
+        <p>{t('login.signInDesc')}</p>
         <div className="authActions">
           <a href={authHref('google')} className="authBtn">
-            Continue with Google
+            {t('login.continueGoogle')}
           </a>
           <a href={authHref('apple')} className="authBtn secondary">
-            Continue with Apple
+            {t('login.continueApple')}
           </a>
           <a href={authHref('wechat')} className="authBtn secondary">
-            Continue with WeChat
+            {t('login.continueWechat')}
           </a>
           <button
             type="button"
@@ -49,14 +51,12 @@ export default function LoginPage() {
             onClick={handleDemoLogin}
             disabled={isLoggingInDemo}
           >
-            {isLoggingInDemo ? 'Starting demo...' : 'Login Demo Account'}
+            {isLoggingInDemo ? t('login.startingDemo') : t('login.loginDemo')}
           </button>
         </div>
         {message && <p className="error">{message}</p>}
         {demoError && <p className="error">{demoError}</p>}
-        <p className="authHint">
-          Demo account is shared by all users and will start with onboarding the first time it is used.
-        </p>
+        <p className="authHint">{t('login.demoHint')}</p>
       </section>
     </main>
   );

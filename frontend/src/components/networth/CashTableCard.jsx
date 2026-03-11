@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatBaseCurrency, formatCurrencyValue, formatFxRate, formatMaybeHidden } from '../../utils/formatters.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function CashTableCard({
   hideValues,
@@ -9,6 +10,7 @@ export default function CashTableCard({
   onEdit,
   onDelete,
 }) {
+  const { t } = useLanguage();
   const [showAddMenu, setShowAddMenu] = useState(false);
 
   useEffect(() => {
@@ -30,14 +32,14 @@ export default function CashTableCard({
   return (
     <article className="tableCard">
       <div className="tableHeaderRow">
-        <h2>Cash & Cash Debt</h2>
+        <h2>{t('netWorth.cashAndDebt')}</h2>
         <div className="tableHeaderActions">
           {onAdd && (
             <button
               type="button"
               className="headerIconBtn addMenuToggle"
               onClick={() => setShowAddMenu((prev) => !prev)}
-              aria-label="Add cash"
+              aria-label={t('netWorth.addCashDebt')}
               aria-expanded={showAddMenu}
             >
               +
@@ -46,7 +48,7 @@ export default function CashTableCard({
           {showAddMenu && onAdd && (
             <div className="addMenuPopover">
               <button type="button" onClick={() => { setShowAddMenu(false); onAdd(); }}>
-                Add cash / debt
+                {t('netWorth.addCashDebt')}
               </button>
             </div>
           )}
@@ -56,43 +58,43 @@ export default function CashTableCard({
         <table className="cashMobileCompact">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Name</th>
-              <th>Currency</th>
-              <th>Balance (Local)</th>
-              <th>FX Rate (to CNY)</th>
-              <th>Balance ({baseCurrency})</th>
-              {hasActions && <th className="positionActionsHeader">Actions</th>}
+              <th>{t('netWorth.type')}</th>
+              <th>{t('netWorth.name')}</th>
+              <th>{t('netWorth.currency')}</th>
+              <th>{t('netWorth.balanceLocal')}</th>
+              <th>{t('netWorth.fxRateToCny')}</th>
+              <th>{t('netWorth.balanceBase')} ({baseCurrency})</th>
+              {hasActions && <th className="positionActionsHeader">{t('netWorth.actions')}</th>}
             </tr>
           </thead>
           <tbody>
             {rows.map((item) => (
               <tr key={item.key}>
-                <td data-label="Type">{item.className}</td>
-                <td data-label="Name">{item.instrument}</td>
-                <td data-label="Currency">{item.currency}</td>
-                <td data-label="Balance (Local)" className={item.amountClass}>
+                <td data-label={t('netWorth.type')}>{item.className}</td>
+                <td data-label={t('netWorth.name')}>{item.instrument}</td>
+                <td data-label={t('netWorth.currency')}>{item.currency}</td>
+                <td data-label={t('netWorth.balanceLocal')} className={item.amountClass}>
                   {formatMaybeHidden(hideValues, (v) => formatCurrencyValue(v, item.currency), item.amountLocal)}
                 </td>
-                <td data-label="FX Rate (to CNY)">
+                <td data-label={t('netWorth.fxRateToCny')}>
                   {item.fxRate == null
-                    ? 'Rate missing'
+                    ? t('netWorth.rateMissing')
                     : formatMaybeHidden(hideValues, formatFxRate, item.fxRate)}
                 </td>
-                <td data-label={`Balance (${baseCurrency})`} className={item.amountCnyClass}>
+                <td data-label={`${t('netWorth.balanceBase')} (${baseCurrency})`} className={item.amountCnyClass}>
                   {item.amountCny == null
-                    ? 'Rate missing'
+                    ? t('netWorth.rateMissing')
                     : formatMaybeHidden(hideValues, (v) => formatBaseCurrency(v, baseCurrency), item.amountCny)}
                 </td>
                 {hasActions && (
-                  <td data-label="Actions" className="positionActionsCell">
+                  <td data-label={t('netWorth.actions')} className="positionActionsCell">
                     {onEdit && (
                       <button
                         type="button"
                         className="headerIconBtn positionActionBtn"
                         onClick={() => onEdit(item)}
-                        aria-label={`Edit ${item.instrument}`}
-                        title="Edit"
+                        aria-label={`${t('netWorth.edit')} ${item.instrument}`}
+                        title={t('netWorth.edit')}
                       >
                         ✎
                       </button>
@@ -102,8 +104,8 @@ export default function CashTableCard({
                         type="button"
                         className="headerIconBtn positionActionBtn positionActionBtnDanger"
                         onClick={() => onDelete(item)}
-                        aria-label={`Delete ${item.instrument}`}
-                        title="Delete"
+                        aria-label={`${t('netWorth.delete')} ${item.instrument}`}
+                        title={t('netWorth.delete')}
                       >
                         ✕
                       </button>

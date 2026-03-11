@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchJson, postJson } from '../utils/api.js';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 import AddCashModal from '../components/networth/AddCashModal.jsx';
 import AddCryptoPositionModal from '../components/portfolio/AddCryptoPositionModal.jsx';
 import AddStockPositionModal from '../components/portfolio/AddStockPositionModal.jsx';
 
 export default function OnboardingPage({ onCompleted }) {
+  const { t } = useLanguage();
   const [displayName, setDisplayName] = useState('');
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,7 +30,7 @@ export default function OnboardingPage({ onCompleted }) {
         const response = await fetchJson('/api/dashboard');
         if (isMounted) setData(response);
       } catch (err) {
-        if (isMounted) setError(err?.message || 'Failed to load data.');
+        if (isMounted) setError(err?.message || t('errors.failedLoadData'));
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -49,7 +51,7 @@ export default function OnboardingPage({ onCompleted }) {
       });
       onCompleted();
     } catch (err) {
-      setCompleteError(err?.message || 'Failed to complete setup.');
+      setCompleteError(err?.message || t('errors.failedCompleteSetup'));
     } finally {
       setIsCompleting(false);
     }
@@ -58,28 +60,28 @@ export default function OnboardingPage({ onCompleted }) {
   return (
     <main className="authScreen">
       <section className="authCard wide">
-        <h1>Set up your profile</h1>
-        <p>Add cash, stocks, and crypto like on Net Worth and Portfolio—or skip and add them later.</p>
+        <h1>{t('onboarding.title')}</h1>
+        <p>{t('onboarding.subtitle')}</p>
 
-        {isLoading && <p>Loading...</p>}
+        {isLoading && <p>{t('app.loading')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
 
         {!isLoading && !error && (
           <>
             <label className="onboardingLabel">
-              Display name (optional)
+              {t('onboarding.displayNameOptional')}
               <input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={30}
-                placeholder="My Worth Track User"
+                placeholder={t('onboarding.displayNamePlaceholder')}
               />
             </label>
 
             <div className="onboardingSection">
-              <h3>Cash / Debt</h3>
+              <h3>{t('onboarding.cashDebt')}</h3>
               {cashRows.length === 0 ? (
-                <p className="hint">No cash or debt yet.</p>
+                <p className="hint">{t('onboarding.noCashDebt')}</p>
               ) : (
                 <ul className="onboardingList">
                   {cashRows.map((row) => (
@@ -90,14 +92,14 @@ export default function OnboardingPage({ onCompleted }) {
                 </ul>
               )}
               <button type="button" className="onboardingAddBtn" onClick={() => setIsAddCashOpen(true)}>
-                Add cash / debt
+                {t('onboarding.addCashDebt')}
               </button>
             </div>
 
             <div className="onboardingSection">
-              <h3>Positions (stocks & crypto)</h3>
+              <h3>{t('onboarding.positions')}</h3>
               {positionRows.length === 0 ? (
-                <p className="hint">No positions yet.</p>
+                <p className="hint">{t('onboarding.noPositions')}</p>
               ) : (
                 <ul className="onboardingList">
                   {positionRows.map((row) => (
@@ -109,10 +111,10 @@ export default function OnboardingPage({ onCompleted }) {
               )}
               <div className="onboardingAddRow">
                 <button type="button" className="onboardingAddBtn" onClick={() => setIsAddCryptoOpen(true)}>
-                  Add crypto
+                  {t('onboarding.addCrypto')}
                 </button>
                 <button type="button" className="onboardingAddBtn" onClick={() => setIsAddStockOpen(true)}>
-                  Add stock
+                  {t('onboarding.addStock')}
                 </button>
               </div>
             </div>
@@ -124,7 +126,7 @@ export default function OnboardingPage({ onCompleted }) {
                 onClick={handleFinish}
                 disabled={isCompleting}
               >
-                {isCompleting ? 'Finishing...' : 'Go to dashboard'}
+                {isCompleting ? t('onboarding.finishing') : t('onboarding.goToDashboard')}
               </button>
             </div>
             {completeError && <p className="error">{completeError}</p>}

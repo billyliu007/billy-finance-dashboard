@@ -7,9 +7,11 @@ import DeleteCashConfirmModal from '../components/networth/DeleteCashConfirmModa
 import PerformanceCharts from '../components/networth/PerformanceCharts.jsx';
 import PerformanceKpis from '../components/networth/PerformanceKpis.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
+import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { putJson } from '../utils/api.js';
 
 function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
+  const { t } = useLanguage();
   const [isAddCashOpen, setIsAddCashOpen] = useState(false);
   const [editCash, setEditCash] = useState(null);
   const [cashToDelete, setCashToDelete] = useState(null);
@@ -39,7 +41,7 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
       setCashToDelete(null);
       refresh?.();
     } catch (err) {
-      window.alert(err?.message || 'Failed to delete.');
+      window.alert(err?.message || t('errors.failedDelete'));
     } finally {
       setIsDeleting(false);
     }
@@ -48,14 +50,14 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
   return (
     <section className="contentWrap">
       <header className="pageHeader">
-        <h1>Net Worth</h1>
+        <h1>{t('netWorth.title')}</h1>
       </header>
 
       <div className="dashboardPanel">
-        {isLoading && <p>Loading dashboard data...</p>}
+        {isLoading && <p>{t('app.loadingDashboard')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
         {!isLoading && !error && !overview?.hasData && cashComponents.length === 0 && (
-          <p className="hint">No cash/debt records yet. Add one below.</p>
+          <p className="hint">{t('netWorth.noRecords')}</p>
         )}
 
         {!isLoading && !error && (
@@ -106,12 +108,13 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
 }
 
 function PerformancePanel({ hideValues, performance, isLoading, error, baseCurrency = 'USD' }) {
+  const { t } = useLanguage();
   return (
     <section className="contentWrap">
       <div className="dashboardPanel">
-        {isLoading && <p>Loading dashboard data...</p>}
+        {isLoading && <p>{t('app.loadingDashboard')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
-        {!isLoading && !error && !performance?.hasData && <p>No net worth history is available yet.</p>}
+        {!isLoading && !error && !performance?.hasData && <p>{t('netWorth.noHistory')}</p>}
 
         {!isLoading && !error && performance?.hasData && (
           <>
