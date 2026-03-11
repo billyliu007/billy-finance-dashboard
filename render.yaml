@@ -22,14 +22,10 @@ services:
         value: "true"
 
       # App & auth
-      - key: DATA_SOURCE
-        value: db
       - key: FRONTEND_BASE_URL
         sync: false
       - key: AUTH_SESSION_TTL_MS
         value: "1209600000"
-      - key: MIGRATION_BIND_ENABLED
-        value: "true"
       - key: SNAPSHOT_CRON_TOKEN
         sync: false
 
@@ -97,8 +93,6 @@ services:
         sync: false
       - key: DATABASE_SSL
         value: "true"
-      - key: DATA_SOURCE
-        value: db
       - key: FINNHUB_API_KEY
         sync: false
       - key: FX_PROVIDER

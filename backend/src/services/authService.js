@@ -9,6 +9,7 @@ import {
   findSession,
   findUserByEmail,
   upsertIdentity,
+  createUser,
 } from '../repositories/userRepository.js';
 
 const SESSION_COOKIE_NAME = 'bf_session';
@@ -83,11 +84,26 @@ export function readSessionTokenFromCookie(headerValue) {
   return null;
 }
 
-async function createUserSession(userId) {
+export async function createUserSession(userId) {
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   await createSession(userId, token, expiresAt);
   return token;
+}
+
+const DEMO_EMAIL = 'demo@myworthtrack.local';
+
+export async function resolveOrCreateDemoUser() {
+  const existing = await findUserByEmail(DEMO_EMAIL);
+  if (existing) {
+    return existing;
+  }
+  const created = await createUser({
+    email: DEMO_EMAIL,
+    displayName: 'Demo User',
+    onboardingCompleted: false,
+  });
+  return created;
 }
 
 export async function resolveSessionFromRequest(req) {

@@ -35,6 +35,13 @@
   font-size: 1rem;
 }
 
+.authHint {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #9fb8d8;
+  text-align: center;
+}
+
 .authActions {
   display: grid;
   gap: 10px;

@@ -16,6 +16,8 @@ import {
   completeGoogleLogin,
   completeWechatLogin,
   resolveSessionFromRequest,
+  resolveOrCreateDemoUser,
+  createUserSession,
 } from './services/authService.js';
 import {
   listCashComponents,
@@ -173,6 +175,27 @@ export default function createApp() {
   app.post('/api/auth/logout', async (req, res) => {
     res.setHeader('Set-Cookie', clearSessionCookie());
     return res.status(200).json({ ok: true });
+  });
+
+  app.post('/api/auth/demo', async (_req, res) => {
+    try {
+      const demoUser = await resolveOrCreateDemoUser();
+      const sessionToken = await createUserSession(demoUser.id);
+      res.setHeader('Set-Cookie', buildSessionCookie(sessionToken));
+      return res.status(200).json({
+        authenticated: true,
+        user: {
+          id: demoUser.id,
+          email: demoUser.email,
+          displayName: demoUser.displayName,
+          publicId: demoUser.publicId,
+          onboardingCompleted: demoUser.onboardingCompleted,
+          baseCurrency: demoUser.baseCurrency || 'USD',
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
   });
 
   app.get('/api/onboarding/status', requireAuth, async (req, res) => {

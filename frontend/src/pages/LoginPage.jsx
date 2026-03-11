@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { API_BASE_URL } from '../constants.js';
+import { fetchJson } from '../utils/api.js';
 
 function resolveMessage(search) {
   const params = new URLSearchParams(search);
@@ -8,9 +9,25 @@ function resolveMessage(search) {
 }
 
 export default function LoginPage() {
+  const [isLoggingInDemo, setIsLoggingInDemo] = useState(false);
+  const [demoError, setDemoError] = useState('');
   const message = useMemo(() => resolveMessage(window.location.search), []);
   const apiBase = String(API_BASE_URL || '').replace(/\/$/, '');
   const authHref = (provider) => `${apiBase}/api/auth/${provider}/start`;
+
+  async function handleDemoLogin() {
+    try {
+      setIsLoggingInDemo(true);
+      setDemoError('');
+      await fetchJson('/api/auth/demo', {});
+      window.location.assign('/');
+    } catch (error) {
+      setDemoError(error?.message || 'Demo login failed.');
+    } finally {
+      setIsLoggingInDemo(false);
+    }
+  }
+
   return (
     <main className="authScreen">
       <section className="authCard">
@@ -26,8 +43,20 @@ export default function LoginPage() {
           <a href={authHref('wechat')} className="authBtn secondary">
             Continue with WeChat
           </a>
+          <button
+            type="button"
+            className="authBtn secondary"
+            onClick={handleDemoLogin}
+            disabled={isLoggingInDemo}
+          >
+            {isLoggingInDemo ? 'Starting demo...' : 'Login Demo Account'}
+          </button>
         </div>
         {message && <p className="error">{message}</p>}
+        {demoError && <p className="error">{demoError}</p>}
+        <p className="authHint">
+          Demo account is shared by all users and will start with onboarding the first time it is used.
+        </p>
       </section>
     </main>
   );
