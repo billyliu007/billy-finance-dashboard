@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { API_BASE_URL } from '../constants.js';
-import { fetchJson } from '../utils/api.js';
+import { postJson } from '../utils/api.js';
 
 function resolveMessage(search) {
   const params = new URLSearchParams(search);
@@ -19,7 +19,7 @@ export default function LoginPage() {
     try {
       setIsLoggingInDemo(true);
       setDemoError('');
-      await fetchJson('/api/auth/demo', {});
+      await postJson('/api/auth/demo', {});
       window.location.assign('/');
     } catch (error) {
       setDemoError(error?.message || 'Demo login failed.');
