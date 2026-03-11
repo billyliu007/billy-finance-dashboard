@@ -312,7 +312,7 @@ export function buildNetWorthPayload({
     if (b === 'usd_assets_in_cny') return 1;
     return a.localeCompare(b);
   });
-  const componentValues = orderedKeys.map((key) => {
+  const componentValuesAll = orderedKeys.map((key) => {
     const agg = aggregatedTotalsByKey[key] || { found: false, value: 0, reason: 'Missing data' };
     const valueInBase = agg.value != null && rateToBase > 0 ? agg.value / rateToBase : agg.value;
     return {
@@ -322,10 +322,14 @@ export function buildNetWorthPayload({
       value: valueInBase,
     };
   });
-  const missingInputs = componentValues
+  const missingInputs = componentValuesAll
     .filter((item) => !item.found)
     .map((item) => `${item.name}: ${item.reason || 'Missing data'}`);
-  const totalNetWorth = componentValues.reduce((sum, component) => sum + (component.value ?? 0), 0);
+  const totalNetWorth = componentValuesAll.reduce((sum, component) => sum + (component.value ?? 0), 0);
+  // Exclude zero-value components from breakdown so it matches the cash table (which hides 0-balance rows)
+  const componentValues = componentValuesAll.filter(
+    (c) => c.value == null || !Number.isFinite(c.value) || Math.abs(c.value) >= 1e-9
+  );
 
   const cashflowData = parseCashflowRows(history, base, fxRates);
   const monthEndSeries = buildMonthEndSeries(cashflowData);
