@@ -3,16 +3,9 @@ import { SHOW_DEVELOPMENT_PAGE } from '../constants.js';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 
 /**
- * Collapsible sidebar navigation: branding, privacy toggle, main nav links, logout.
+ * Collapsible sidebar navigation: branding and main nav links.
  */
-export default function SideNav({
-  open,
-  onToggle,
-  user,
-  hideValues,
-  onHideValuesChange,
-  onLogout,
-}) {
+export default function SideNav({ open, onToggle }) {
   const { t } = useLanguage();
 
   return (
@@ -31,16 +24,7 @@ export default function SideNav({
       </button>
       {open && (
         <>
-          <p className="sideTitle">{t('app.brand')}</p>
-          <p className="sideSubtitle">{user?.displayName || user?.email}</p>
-          <label className="privacyToggle">
-            <input
-              type="checkbox"
-              checked={hideValues}
-              onChange={(e) => onHideValuesChange(e.target.checked)}
-            />
-            <span>{t('nav.privacyMode')}</span>
-          </label>
+          <p className="sideTitle">My Worth Track</p>
           <nav>
             <NavLink
               to="/net-worth"
@@ -63,9 +47,6 @@ export default function SideNav({
               </NavLink>
             )}
           </nav>
-          <button type="button" className="logoutBtn" onClick={onLogout}>
-            {t('nav.logOut')}
-          </button>
         </>
       )}
     </aside>

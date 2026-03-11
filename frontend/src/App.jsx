@@ -19,7 +19,7 @@ function LoadingScreen() {
   return (
     <main className="authScreen">
       <section className="authCard">
-        <h1>{t('app.brand')}</h1>
+        <h1>My Worth Track</h1>
         <p>{t('app.checkingSession')}</p>
       </section>
     </main>
@@ -93,16 +93,17 @@ export default function App() {
         <SideNav
           open={sideNavOpen}
           onToggle={() => setSideNavOpen((prev) => !prev)}
-          user={session.user}
-          hideValues={hideValues}
-          onHideValuesChange={setHideValues}
-          onLogout={handleLogout}
         />
 
         <main className="mainContent">
           <div className="topBar">
-            {session.error && <p className="error">{session.error}</p>}
-            <UserMenu user={session.user} onLogout={handleLogout} />
+            {session.error && <p className="error topBarError">{session.error}</p>}
+            <UserMenu
+              user={session.user}
+              hideValues={hideValues}
+              onHideValuesChange={setHideValues}
+              onLogout={handleLogout}
+            />
           </div>
           <Routes>
             <Route path="/login" element={<Navigate to="/net-worth" replace />} />

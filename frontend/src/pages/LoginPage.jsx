@@ -10,7 +10,7 @@ function resolveMessage(search) {
 }
 
 export default function LoginPage() {
-  const { t } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const [isLoggingInDemo, setIsLoggingInDemo] = useState(false);
   const [demoError, setDemoError] = useState('');
   const message = useMemo(() => resolveMessage(window.location.search), []);
@@ -33,7 +33,26 @@ export default function LoginPage() {
   return (
     <main className="authScreen">
       <section className="authCard">
-        <h1>{t('login.title')}</h1>
+        <div className="authCardHeader">
+          <h1>My Worth Track</h1>
+          <div className="authLanguageSwitch" role="group" aria-label={t('userMenu.language')}>
+            <button
+              type="button"
+              className={`authLangBtn${language === 'en' ? ' active' : ''}`}
+              onClick={() => setLanguage('en')}
+            >
+              {t('userMenu.english')}
+            </button>
+            <span className="authLangSep">|</span>
+            <button
+              type="button"
+              className={`authLangBtn${language === 'zh' ? ' active' : ''}`}
+              onClick={() => setLanguage('zh')}
+            >
+              {t('userMenu.chinese')}
+            </button>
+          </div>
+        </div>
         <p>{t('login.signInDesc')}</p>
         <div className="authActions">
           <a href={authHref('google')} className="authBtn">

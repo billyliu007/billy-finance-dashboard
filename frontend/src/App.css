@@ -22,6 +22,55 @@
   width: min(920px, 100%);
 }
 
+.authCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.authCardHeader h1 {
+  margin: 0;
+  font-size: 1.65rem;
+  color: #f8fbff;
+  font-weight: 700;
+}
+
+.authLanguageSwitch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.authLangBtn {
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.authLangBtn:hover {
+  background: rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
+}
+
+.authLangBtn.active {
+  border-color: rgba(94, 234, 212, 0.5);
+  background: rgba(14, 116, 144, 0.25);
+  color: #ecfeff;
+}
+
+.authLangSep {
+  color: #64748b;
+  font-size: 0.85rem;
+  user-select: none;
+}
+
 .authCard h1 {
   margin: 0;
   font-size: 1.65rem;
@@ -340,13 +389,21 @@
 .topBar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
 }
 
+.topBarError {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
 .userMenu {
   position: relative;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .userMenuButton {
@@ -441,6 +498,27 @@
 .userMenuDivider {
   margin: 4px 0 2px;
   border-top: 1px solid rgba(30, 64, 175, 0.6);
+}
+
+.userMenuPrivacyItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 2px 0;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 9px;
+  border: 1px solid transparent;
+}
+
+.userMenuPrivacyItem:hover {
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.userMenuPrivacyItem input {
+  accent-color: var(--accent);
 }
 
 .contentWrap {

@@ -9,7 +9,7 @@ function getInitials(name, email) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export default function UserMenu({ user, onLogout }) {
+export default function UserMenu({ user, hideValues, onHideValuesChange, onLogout }) {
   const { language, setLanguage, t } = useLanguage();
   const [open, setOpen] = useState(false);
 
@@ -59,6 +59,19 @@ export default function UserMenu({ user, onLogout }) {
               {t('userMenu.chinese')}
             </button>
           </div>
+          {onHideValuesChange != null && (
+            <>
+              <div className="userMenuDivider" />
+              <label className="userMenuPrivacyItem">
+                <input
+                  type="checkbox"
+                  checked={hideValues}
+                  onChange={(e) => onHideValuesChange(e.target.checked)}
+                />
+                <span>{t('nav.privacyMode')}</span>
+              </label>
+            </>
+          )}
           <div className="userMenuDivider" />
           <button
             type="button"
