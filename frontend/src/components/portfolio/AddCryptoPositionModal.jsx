@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchJson, postJson } from '../../utils/api.js';
-import { normalizeText } from '../../utils/strings.js';
+import { normalizeText, sanitizeDecimalInput } from '../../utils/strings.js';
 import { useDebouncedSearch } from '../../hooks/useDebouncedSearch.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
@@ -41,6 +41,13 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
     () => products.find((item) => item.productId === selectedProductId) || null,
     [products, selectedProductId],
   );
+
+  function handleQuantityChange(e) {
+    setQty(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
+  }
+  function handleAvgCostChange(e) {
+    setAvgCost(sanitizeDecimalInput(e.target.value, { allowNegative: true }));
+  }
 
   async function handleSave() {
     setError('');
@@ -146,11 +153,11 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
             <label className="modalLabel">
               {t('modals.quantity')}
               <input
-                type="number"
-                min="0"
-                step="0.00000001"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={qty}
-                onChange={(event) => setQty(event.target.value)}
+                onChange={handleQuantityChange}
                 className="modalInput"
                 disabled={!selected}
                 aria-disabled={!selected}
@@ -159,11 +166,11 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
             <label className="modalLabel">
               {t('modals.avgCostPerUnit')}
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={avgCost}
-                onChange={(event) => setAvgCost(event.target.value)}
+                onChange={handleAvgCostChange}
                 className="modalInput"
                 disabled={!selected}
                 aria-disabled={!selected}

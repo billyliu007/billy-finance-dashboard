@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { patchJson } from '../../utils/api.js';
-import { normalizeText } from '../../utils/strings.js';
+import { normalizeText, sanitizeDecimalInput } from '../../utils/strings.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function EditCryptoPositionModal({ open, position, onClose, onSaved }) {
@@ -16,6 +16,13 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
     setQty(String(position.qty ?? ''));
     setAvgCost(String(position.purchasePrice ?? ''));
   }, [open, position]);
+
+  function handleQuantityChange(e) {
+    setQty(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
+  }
+  function handleAvgCostChange(e) {
+    setAvgCost(sanitizeDecimalInput(e.target.value, { allowNegative: true }));
+  }
 
   async function handleSave() {
     setError('');
@@ -87,22 +94,22 @@ export default function EditCryptoPositionModal({ open, position, onClose, onSav
             <label className="modalLabel">
               {t('modals.quantity')}
               <input
-                type="number"
-                min="0"
-                step="0.00000001"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={qty}
-                onChange={(e) => setQty(e.target.value)}
+                onChange={handleQuantityChange}
                 className="modalInput"
               />
             </label>
             <label className="modalLabel">
               {t('modals.avgCostPerUnit')}
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={avgCost}
-                onChange={(e) => setAvgCost(e.target.value)}
+                onChange={handleAvgCostChange}
                 className="modalInput"
               />
             </label>

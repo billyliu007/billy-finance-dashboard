@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchJson, postJson } from '../../utils/api.js';
-import { normalizeText } from '../../utils/strings.js';
+import { normalizeText, sanitizeDecimalInput } from '../../utils/strings.js';
 import { useDebouncedSearch } from '../../hooks/useDebouncedSearch.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
@@ -41,6 +41,21 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
     () => symbols.find((item) => item.symbol === selectedSymbol) || null,
     [symbols, selectedSymbol],
   );
+
+  const symbolsSorted = useMemo(() => {
+    const q = normalizeText(query).toUpperCase();
+    if (!q || symbols.length === 0) return symbols;
+    const exact = symbols.find((s) => s.symbol === q);
+    if (!exact) return symbols;
+    return [exact, ...symbols.filter((s) => s.symbol !== q)];
+  }, [symbols, query]);
+
+  function handleQuantityChange(e) {
+    setQty(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
+  }
+  function handleAvgCostChange(e) {
+    setAvgCost(sanitizeDecimalInput(e.target.value, { allowNegative: true }));
+  }
 
   async function handleSave() {
     setError('');
@@ -118,9 +133,9 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
               {!isLoadingSymbols && normalizeText(query) && symbols.length === 0 && (
                 <p className="modalHint">{t('modals.noMatchingStock')}</p>
               )}
-              {!isLoadingSymbols && normalizeText(query) && symbols.length > 0 && (
+              {!isLoadingSymbols && normalizeText(query) && symbolsSorted.length > 0 && (
                 <ul>
-                  {symbols.map((item) => (
+                  {symbolsSorted.map((item) => (
                     <li key={item.symbol}>
                       <button
                         type="button"
@@ -146,11 +161,11 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
             <label className="modalLabel">
               {t('modals.quantity')}
               <input
-                type="number"
-                min="0"
-                step="0.00000001"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={qty}
-                onChange={(event) => setQty(event.target.value)}
+                onChange={handleQuantityChange}
                 className="modalInput"
                 disabled={!selected}
                 aria-disabled={!selected}
@@ -159,11 +174,11 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
             <label className="modalLabel">
               {t('modals.avgCostPerUnit')}
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={avgCost}
-                onChange={(event) => setAvgCost(event.target.value)}
+                onChange={handleAvgCostChange}
                 className="modalInput"
                 disabled={!selected}
                 aria-disabled={!selected}
