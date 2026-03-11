@@ -8,7 +8,6 @@
     "start": "node src/server.js",
     "test": "node --test tests/*.test.js",
     "db:migrate": "node src/db/migrate.js",
-    "db:import-history": "node src/scripts/importNetWorthHistoryFromRaw.js",
     "db:sync-coinbase-products": "node src/scripts/syncCoinbaseProducts.js",
     "db:sync-us-stock-symbols": "node src/scripts/syncUsStockSymbols.js",
     "cron:daily-snapshot": "node src/scripts/runDailySnapshot.js"

@@ -207,7 +207,7 @@ function normalizeMonthKey(rawDate) {
     return '';
   }
 
-  // Supports ISO/date-time strings and plain date strings from sheets.
+  // Supports ISO/date-time strings and plain date strings.
   const parsed = new Date(value);
   if (!Number.isNaN(parsed.getTime())) {
     const year = parsed.getFullYear();
@@ -232,7 +232,7 @@ function buildMonthEndSeries(cashflowData) {
       return;
     }
 
-    // Keep the last point seen for the month (month-end in chronological sheet data).
+    // Keep the last point seen for the month (month-end in chronological data).
     latestByMonth.set(monthKey, { ...item, monthKey, order: index });
   });
 

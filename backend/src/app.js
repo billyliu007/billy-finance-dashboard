@@ -35,7 +35,6 @@ import { resolveDashboardPayload } from './services/dashboardService.js';
 import { runDailySnapshots } from './services/snapshotService.js';
 
 const BACKEND_VERSION = resolveBackendVersion();
-const DATA_SOURCE = String(process.env.DATA_SOURCE || 'db').trim().toLowerCase();
 
 function resolveBackendVersion() {
   try {
@@ -379,7 +378,7 @@ export default function createApp() {
       res.json({
         backendVersion: BACKEND_VERSION,
         storage: {
-          primary: DATA_SOURCE === 'hybrid' ? 'postgres+legacy' : 'postgres',
+          primary: 'postgres',
           userScoped: true,
         },
         auth: {

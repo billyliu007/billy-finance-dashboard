@@ -15,8 +15,6 @@ import {
   listPortfolioPositions,
 } from '../repositories/financeRepository.js';
 
-const DATA_SOURCE = String(process.env.DATA_SOURCE || 'db').trim().toLowerCase();
-
 /**
  * Load all data required for the dashboard and return net worth, portfolio, fx rates, and raw positions.
  * @param {string} userId
@@ -24,10 +22,6 @@ const DATA_SOURCE = String(process.env.DATA_SOURCE || 'db').trim().toLowerCase()
  * @returns {Promise<{ netWorth: object, portfolio: object, fxRates: object, positions: object[] }>}
  */
 export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
-  if (DATA_SOURCE !== 'db' && DATA_SOURCE !== 'hybrid') {
-    throw new Error(`Unsupported DATA_SOURCE value: ${DATA_SOURCE}. Expected db or hybrid.`);
-  }
-
   const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
 
   const [cashComponents, positions, history] = await Promise.all([
