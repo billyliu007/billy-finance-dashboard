@@ -72,6 +72,12 @@
   opacity: 0.95;
 }
 
+.authBtn.primary {
+  border-color: rgba(94, 234, 212, 0.45);
+  background: linear-gradient(120deg, rgba(14, 116, 144, 0.28), rgba(7, 89, 133, 0.2));
+  color: #ecfeff;
+}
+
 .onboardingForm {
   width: 100%;
   display: grid;
@@ -115,6 +121,72 @@
   font-weight: 600;
   padding: 10px 14px;
   cursor: pointer;
+}
+
+.onboardingLabel {
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.onboardingLabel input {
+  border: 1px solid rgba(226, 232, 240, 0.35);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.6);
+  color: #f8fafc;
+  font-size: 0.95rem;
+  padding: 10px;
+}
+
+.onboardingSection {
+  margin-top: 20px;
+}
+
+.onboardingSection h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #e2e8f0;
+}
+
+.onboardingList {
+  margin: 0 0 10px;
+  padding-left: 1.25rem;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.onboardingList li {
+  margin-bottom: 4px;
+}
+
+.onboardingAddBtn {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.onboardingAddBtn:hover {
+  background: rgba(71, 85, 105, 0.6);
+}
+
+.onboardingAddRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.onboardingActions {
+  margin-top: 24px;
+}
+
+.onboardingActions .authBtn {
+  cursor: pointer;
+  border: none;
 }
 
 .logoutBtn {

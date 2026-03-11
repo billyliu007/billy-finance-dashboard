@@ -236,6 +236,26 @@ export default function createApp() {
     }
   });
 
+  app.post('/api/onboarding/complete', requireAuth, async (req, res) => {
+    try {
+      const userId = req.auth.user.userId;
+      const rawName = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
+      const displayName = rawName || req.auth.user.displayName || null;
+      const updatedUser = await markOnboardingCompleted(userId, displayName);
+      return res.status(200).json({
+        ok: true,
+        user: {
+          email: updatedUser.email,
+          displayName: updatedUser.displayName,
+          publicId: updatedUser.publicId,
+          onboardingCompleted: updatedUser.onboardingCompleted,
+        },
+      });
+    } catch (error) {
+      return res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.get('/api/currencies', requireAuth, async (req, res) => {
     try {
       const currencies = await listCurrencies();
