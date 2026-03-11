@@ -23,9 +23,7 @@ export default function SideNav({ open, onToggle }) {
         {open ? '◀' : '▶'}
       </button>
       {open && (
-        <>
-          <p className="sideTitle">My Worth Track</p>
-          <nav>
+        <nav>
             <NavLink
               to="/net-worth"
               className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
@@ -47,7 +45,6 @@ export default function SideNav({ open, onToggle }) {
               </NavLink>
             )}
           </nav>
-        </>
       )}
     </aside>
   );

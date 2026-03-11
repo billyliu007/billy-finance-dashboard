@@ -89,23 +89,24 @@ export default function App() {
 
   return (
     <DashboardProvider>
-      <div className={`appShell${sideNavOpen ? '' : ' sideNavCollapsed'}`}>
-        <SideNav
-          open={sideNavOpen}
-          onToggle={() => setSideNavOpen((prev) => !prev)}
-        />
-
-        <main className="mainContent">
-          <div className="topBar">
-            {session.error && <p className="error topBarError">{session.error}</p>}
-            <UserMenu
-              user={session.user}
-              hideValues={hideValues}
-              onHideValuesChange={setHideValues}
-              onLogout={handleLogout}
-            />
-          </div>
-          <Routes>
+      <div className="appShell">
+        <header className="appHeader">
+          <span className="appHeaderBrand">My Worth Track</span>
+          <UserMenu
+            user={session.user}
+            hideValues={hideValues}
+            onHideValuesChange={setHideValues}
+            onLogout={handleLogout}
+          />
+        </header>
+        <div className={`appBody${sideNavOpen ? '' : ' sideNavCollapsed'}`}>
+          <SideNav
+            open={sideNavOpen}
+            onToggle={() => setSideNavOpen((prev) => !prev)}
+          />
+          <main className="mainContent">
+            {session.error && <p className="error">{session.error}</p>}
+            <Routes>
             <Route path="/login" element={<Navigate to="/net-worth" replace />} />
             <Route path="/onboarding" element={<Navigate to="/net-worth" replace />} />
             <Route path="/net-worth" element={<NetWorthPage hideValues={hideValues} />} />
@@ -115,8 +116,9 @@ export default function App() {
               <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />
             )}
             <Route path="*" element={<Navigate to="/net-worth" replace />} />
-          </Routes>
-        </main>
+            </Routes>
+          </main>
+        </div>
       </div>
     </DashboardProvider>
   );
