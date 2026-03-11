@@ -54,10 +54,6 @@ Set secrets in a **Render Environment Group** (e.g. `netpulse-secrets`) and atta
 | `APPLE_CLIENT_ID` | If using Apple | From Apple Developer. |
 | `APPLE_CLIENT_SECRET` | If using Apple | From Apple Developer. |
 | `APPLE_CALLBACK_URL` | If using Apple | `https://api.myworthtrack.com/api/auth/apple/callback`. |
-| **OAuth – WeChat** | | |
-| `WECHAT_APP_ID` | If using WeChat | From WeChat. |
-| `WECHAT_APP_SECRET` | If using WeChat | From WeChat. |
-| `WECHAT_CALLBACK_URL` | If using WeChat | `https://api.myworthtrack.com/api/auth/wechat/callback`. |
 | **Market data** | | |
 | `FINNHUB_API_KEY` | Yes (for stocks) | From Finnhub. |
 | `FX_PROVIDER` | No | `frankfurter` (default in blueprint). |
@@ -87,7 +83,6 @@ In each provider’s console, set the callback URL to your **backend** domain:
 
 - Google: `https://api.myworthtrack.com/api/auth/google/callback`
 - Apple: `https://api.myworthtrack.com/api/auth/apple/callback`
-- WeChat: `https://api.myworthtrack.com/api/auth/wechat/callback`
 
 ## 5. Custom domains (optional)
 
@@ -111,3 +106,35 @@ To keep app load fast and reliable in production:
 - **One FX request** – The backend fetches all FX rates (e.g. USD, EUR, SGD → CNY) in a single Frankfurter API call instead of one call per currency.
 - **Timeouts on external APIs** – Outbound requests to Frankfurter, Finnhub, and crypto providers (Coinbase, etc.) use a 10s timeout. If a provider is slow or down, the request fails that part instead of hanging the whole dashboard.
 - **Cold starts** – On Render’s free tier the backend can spin down when idle; the first request after that may be slow. Use a paid plan or a keep-alive ping to reduce cold starts.
+
+## 8. Enabling Apple login
+
+The login page shows an Apple button; it is **enabled** only when the backend has the required environment variables set. Configure the following.
+
+### Apple Sign In
+
+1. **Apple Developer account**  
+   Go to [developer.apple.com](https://developer.apple.com) → **Certificates, Identifiers & Profiles** → **Identifiers** → create an **App ID** (or use an existing one). Enable **Sign in with Apple**.
+
+2. **Services ID (for web)**  
+   Create an **Services ID** (e.g. `com.myworthtrack.web`). Enable **Sign in with Apple**, and add your backend callback URL:
+   - **Return URL:** `https://api.myworthtrack.com/api/auth/apple/callback`  
+   (Use your real backend URL; for local dev use `http://localhost:4000/api/auth/apple/callback`.)
+
+3. **Keys (client secret)**  
+   Create a **Key** under **Keys**, enable **Sign in with Apple**, and link it to your App ID. Download the `.p8` private key once (Apple does not show it again).  
+   The backend expects **one** of:
+   - **Option A:** Set `APPLE_CLIENT_SECRET` to a **JWT** you generate from that key (see [Apple’s docs](https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens)). This JWT expires (e.g. 6 months); regenerate and update the env var before expiry.  
+   - **Option B:** If you use a tool or script that outputs a long-lived JWT, put that JWT in `APPLE_CLIENT_SECRET`.
+
+4. **Backend env vars** (e.g. on Render, in your env group or backend service):
+
+   | Variable | Example / note |
+   |----------|-----------------|
+   | `APPLE_CLIENT_ID` | Your **Services ID** (e.g. `com.myworthtrack.web`). |
+   | `APPLE_CLIENT_SECRET` | The JWT client secret (from key above). |
+   | `APPLE_CALLBACK_URL` | `https://api.myworthtrack.com/api/auth/apple/callback` |
+
+5. **Redeploy** the backend so it picks up the new vars. The “Continue with Apple” button will then use Apple Sign In; if any of these are missing, the backend treats Apple as not configured.
+
+**Summary:** Services ID → Return URL in Apple; Key → JWT as `APPLE_CLIENT_SECRET`; set `APPLE_CLIENT_ID`, `APPLE_CALLBACK_URL`, and `APPLE_CLIENT_SECRET` on the backend. Replace `api.myworthtrack.com` with your real backend URL if different.

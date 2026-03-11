@@ -58,12 +58,6 @@ export default function LoginPage() {
           <a href={authHref('google')} className="authBtn">
             {t('login.continueGoogle')}
           </a>
-          <a href={authHref('apple')} className="authBtn secondary">
-            {t('login.continueApple')}
-          </a>
-          <a href={authHref('wechat')} className="authBtn secondary">
-            {t('login.continueWechat')}
-          </a>
           <button
             type="button"
             className="authBtn secondary"

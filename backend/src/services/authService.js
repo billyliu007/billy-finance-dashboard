@@ -165,17 +165,6 @@ export function buildAppleAuthUrl() {
   return `https://appleid.apple.com/auth/authorize?${params.toString()}`;
 }
 
-export function buildWechatAuthUrl() {
-  const appId = process.env.WECHAT_APP_ID;
-  const callbackUrl = process.env.WECHAT_CALLBACK_URL;
-  if (!appId || !callbackUrl) {
-    throw new Error('WeChat OAuth is not configured.');
-  }
-  const state = makeStateToken('wechat');
-  const encodedCallback = encodeURIComponent(callbackUrl);
-  return `https://open.weixin.qq.com/connect/qrconnect?appid=${encodeURIComponent(appId)}&redirect_uri=${encodedCallback}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`;
-}
-
 export async function completeGoogleLogin(code) {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
@@ -301,59 +290,6 @@ export async function completeAppleLogin(code) {
     providerUserId,
     providerEmail: email,
     profile: claims || {},
-  });
-  const sessionToken = await createUserSession(user.id);
-  return { userId: user.id, sessionToken };
-}
-
-export async function completeWechatLogin(code) {
-  const appId = process.env.WECHAT_APP_ID;
-  const appSecret = process.env.WECHAT_APP_SECRET;
-  if (!appId || !appSecret) {
-    throw new Error('WeChat OAuth is not configured.');
-  }
-  const tokenParams = new URLSearchParams({
-    appid: appId,
-    secret: appSecret,
-    code,
-    grant_type: 'authorization_code',
-  });
-  const tokenResponse = await fetch(`https://api.weixin.qq.com/sns/oauth2/access_token?${tokenParams.toString()}`);
-  if (!tokenResponse.ok) {
-    throw new Error('WeChat token exchange failed.');
-  }
-  const tokenBody = await tokenResponse.json();
-  const accessToken = String(tokenBody?.access_token || '');
-  const openId = String(tokenBody?.openid || '');
-  if (!accessToken || !openId) {
-    throw new Error('WeChat token response is missing access token or openid.');
-  }
-
-  const userInfoParams = new URLSearchParams({
-    access_token: accessToken,
-    openid: openId,
-    lang: 'en',
-  });
-  const profileResponse = await fetch(`https://api.weixin.qq.com/sns/userinfo?${userInfoParams.toString()}`);
-  if (!profileResponse.ok) {
-    throw new Error('WeChat profile fetch failed.');
-  }
-  const profile = await profileResponse.json();
-  const providerUserId = String(profile?.unionid || profile?.openid || '').trim();
-  if (!providerUserId) {
-    throw new Error('WeChat profile is missing user identifier.');
-  }
-  const pseudoEmail = `wechat_${providerUserId}@local`;
-  const user = await findOrCreateUserByGoogleEmail({
-    email: pseudoEmail,
-    displayName: profile?.nickname || null,
-  });
-  await upsertIdentity({
-    userId: user.id,
-    provider: 'wechat',
-    providerUserId,
-    providerEmail: null,
-    profile,
   });
   const sessionToken = await createUserSession(user.id);
   return { userId: user.id, sessionToken };

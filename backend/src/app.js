@@ -10,11 +10,9 @@ import {
   buildAppleAuthUrl,
   buildGoogleAuthUrl,
   buildSessionCookie,
-  buildWechatAuthUrl,
   clearSessionCookie,
   completeAppleLogin,
   completeGoogleLogin,
-  completeWechatLogin,
   resolveSessionFromRequest,
   resolveOrCreateDemoUser,
   createUserSession,
@@ -84,7 +82,6 @@ export default function createApp() {
       providers: [
         { key: 'google', enabled: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID) },
         { key: 'apple', enabled: Boolean(process.env.APPLE_CLIENT_ID) },
-        { key: 'wechat', enabled: Boolean(process.env.WECHAT_APP_ID) },
       ],
     });
   });
@@ -126,28 +123,6 @@ export default function createApp() {
         return redirectToFrontend(res, '/login', 'Apple authorization code missing.');
       }
       const login = await completeAppleLogin(code);
-      res.setHeader('Set-Cookie', buildSessionCookie(login.sessionToken));
-      return redirectToFrontend(res, '/');
-    } catch (error) {
-      return redirectToFrontend(res, '/login', getErrorMessage(error));
-    }
-  });
-
-  app.get('/api/auth/wechat/start', (_req, res) => {
-    try {
-      return res.redirect(buildWechatAuthUrl());
-    } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.get('/api/auth/wechat/callback', async (req, res) => {
-    try {
-      const code = String(req.query.code || '');
-      if (!code) {
-        return redirectToFrontend(res, '/login', 'WeChat authorization code missing.');
-      }
-      const login = await completeWechatLogin(code);
       res.setHeader('Set-Cookie', buildSessionCookie(login.sessionToken));
       return redirectToFrontend(res, '/');
     } catch (error) {
@@ -431,7 +406,6 @@ export default function createApp() {
           providers: {
             google: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID),
             apple: Boolean(process.env.APPLE_CLIENT_ID),
-            wechat: Boolean(process.env.WECHAT_APP_ID),
           },
           onboardingCompleted: req.auth.user.onboardingCompleted,
         },

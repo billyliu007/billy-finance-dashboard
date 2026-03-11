@@ -8,7 +8,6 @@ A personal finance dashboard with multi-user support (net worth, portfolio holdi
 - OAuth login providers:
   - Google
   - Apple
-  - WeChat
 - First-login onboarding (initial cash/debt/assets)
 - Live market data:
   - Stocks: Finnhub
@@ -43,7 +42,6 @@ Set required backend values in `backend/.env`:
 - OAuth credentials:
   - `GOOGLE_OAUTH_*`
   - `APPLE_*`
-  - `WECHAT_*`
 - market data keys/settings:
   - `FINNHUB_API_KEY`
   - `FX_PROVIDER`
@@ -77,7 +75,7 @@ npm run dev
 
 - `GET /api/health`
 - `GET /api/auth/session`, `POST /api/auth/logout`
-- `GET /api/auth/providers`, `GET /api/auth/{google,apple,wechat}/start`, `GET /api/auth/{google,apple,wechat}/callback`
+- `GET /api/auth/providers`, `GET /api/auth/{google,apple}/start`, `GET /api/auth/{google,apple}/callback`
 - `GET /api/dashboard/net-worth`, `GET /api/dashboard/portfolio`
 - `GET /api/market/coinbase-products`, `GET /api/market/us-stock-symbols`
 - `POST /api/portfolio/positions/crypto`, `POST /api/portfolio/positions/stock`

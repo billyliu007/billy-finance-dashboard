@@ -45,14 +45,6 @@ services:
       - key: APPLE_CALLBACK_URL
         sync: false
 
-      # OAuth – WeChat
-      - key: WECHAT_APP_ID
-        sync: false
-      - key: WECHAT_APP_SECRET
-        sync: false
-      - key: WECHAT_CALLBACK_URL
-        sync: false
-
       # Market data
       - key: FINNHUB_API_KEY
         sync: false
