@@ -128,6 +128,45 @@ function buildPrompt({ cashComponents, positions, language = 'en' }) {
   return lines.join('\n');
 }
 
+function isMobileDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const hasTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || (hasTouch && window.innerWidth < 1024);
+}
+
+const PROVIDER_WEB_URLS = {
+  chatgpt: 'https://chat.openai.com/',
+  gemini: 'https://gemini.google.com/app',
+  grok: 'https://x.com/i/grok',
+  deepseek: 'https://chat.deepseek.com/',
+};
+
+/** On mobile, try opening the native app first; fall back to web URL after a short delay if app doesn't open. */
+function openWithAppFallback(appUrl, webUrl) {
+  let fallbackTimer;
+  const clearFallback = () => {
+    if (fallbackTimer) window.clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+  };
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') clearFallback();
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  fallbackTimer = window.setTimeout(() => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    clearFallback();
+    window.open(webUrl, '_blank', 'noopener,noreferrer');
+  }, 2200);
+  try {
+    window.location.href = appUrl;
+  } catch {
+    clearFallback();
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.open(webUrl, '_blank', 'noopener,noreferrer');
+  }
+}
+
 export default function AiAnalysisFab() {
   const { netWorth, portfolio, isLoading } = useDashboard();
   const { language } = useLanguage();
@@ -165,19 +204,27 @@ export default function AiAnalysisFab() {
 
   async function handleCopyAndOpen(provider) {
     const target = provider || 'chatgpt';
-    const providerMap = {
-      chatgpt: 'https://chat.openai.com/',
-      gemini: 'https://gemini.google.com/app',
-      grok: 'https://x.com/i/grok',
-      deepseek: 'https://chat.deepseek.com/',
-    };
-    const href = providerMap[target] || providerMap.chatgpt;
+    const baseUrl = PROVIDER_WEB_URLS[target] || PROVIDER_WEB_URLS.chatgpt;
+    const isMobile = isMobileDevice();
+
+    let href = baseUrl;
+    if (target === 'chatgpt' && prompt) {
+      try {
+        href = `${PROVIDER_WEB_URLS.chatgpt}?q=${encodeURIComponent(prompt)}`;
+      } catch {
+        href = baseUrl;
+      }
+    }
 
     try {
       setIsCopying(true);
       await copyToClipboard(prompt);
       window.setTimeout(() => {
-        window.open(href, '_blank', 'noopener,noreferrer');
+        if (isMobile && target === 'gemini') {
+          openWithAppFallback('googleapp://robin', baseUrl);
+        } else {
+          window.open(href, '_blank', 'noopener,noreferrer');
+        }
       }, 350);
     } catch (err) {
       setToast(err?.message || (language === 'zh' ? '复制失败。' : 'Failed to copy.'));
