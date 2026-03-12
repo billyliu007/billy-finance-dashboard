@@ -17,7 +17,7 @@
     background-image:
       radial-gradient(120% 120% at 50% 0%, rgba(56, 189, 248, 0.08), transparent 50%),
       linear-gradient(180deg, rgba(2, 6, 23, 0.45), rgba(8, 20, 38, 0.4)),
-      url(/login-bg-desktop.png);
+      url(/login-bg-desktop.webp);
   }
 }
 
@@ -26,7 +26,7 @@
     background-image:
       radial-gradient(120% 120% at 50% 0%, rgba(56, 189, 248, 0.08), transparent 50%),
       linear-gradient(180deg, rgba(2, 6, 23, 0.45), rgba(8, 20, 38, 0.4)),
-      url(/login-bg-mobile.png);
+      url(/login-bg-mobile.webp);
   }
 }
 
