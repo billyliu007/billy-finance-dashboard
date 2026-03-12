@@ -1476,6 +1476,10 @@ tbody tr:hover td {
     height: 320px;
   }
 
+  .chartArea.compact {
+    height: 320px;
+  }
+
   .kpiNameSuffix {
     display: block;
   }
