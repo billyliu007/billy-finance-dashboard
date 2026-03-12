@@ -1,26 +1,24 @@
 # Gemini “open app” on mobile – logic
 
-On **mobile only**, we try the app scheme first, then fall back to the Universal Link. On desktop we open the web URL only.
+We **do not use any custom URL scheme** for Gemini. Tapping Gemini always opens **`https://gemini.google.com/app`** in a new tab. That avoids the “Invalid URL” alert.
 
 ---
 
 ## Current behavior
 
-**Mobile (Gemini):**
+**All devices (including Gemini):**
 
 1. Copy the prompt to the clipboard.
-2. Try **`googleapp://robin`** via `window.location.href = appUrl` (opens Gemini in the **Google app** if installed).
-3. Start a **1.5 s** fallback timer. If `document.visibilityState === 'hidden'`, cancel (app opened).
-4. If the timer fires, open **`https://gemini.google.com/app`** in a new tab (Universal Link; standalone Gemini app may show “Open in app” at top).
+2. Open **`https://gemini.google.com/app`** in a new tab via `window.open(href, '_blank', ...)`.
 
-**Desktop / other providers:** Copy then `window.open(href, '_blank', ...)`.
+No `googleapp://robin` or other scheme is used.
 
 ---
 
-## Why it can’t always go “direct” to the app
+## Why we don’t use a scheme
 
-- **Google app:** `googleapp://robin` goes straight to the Gemini tab. If that scheme isn’t registered (e.g. user only has the **standalone Gemini app**), Safari may show “Invalid URL”; after 1.5 s we open the web URL.
-- **Standalone Gemini app:** It mainly uses **Universal Links** (`https://gemini.google.com/app`). The OS often opens that URL in the **browser first**; the page then shows “Open in Gemini app” at the top. There is no well‑documented custom scheme for the standalone app, so we can’t jump straight into it from the web without that banner step.
+- **`googleapp://robin`** is for the **Google (Search) app**. If the user only has the **standalone Gemini app**, that scheme is not registered and Safari shows **“Invalid URL”**.
+- The **standalone Gemini app** uses **Universal Links** for `https://gemini.google.com/app`. Opening that URL in the browser shows the page with “Open in Gemini app” at the top; the user taps that to open the app. There is no public custom scheme for the standalone app.
 
 ---
 
@@ -28,6 +26,5 @@ On **mobile only**, we try the app scheme first, then fall back to the Universal
 
 | What | File |
 |------|------|
-| Mobile check, `openGeminiWithAppFallback` | `frontend/src/components/AiAnalysisFab.jsx` |
-| Scheme: `googleapp://robin`; fallback 1500 ms; then `window.open(webUrl)` | same |
-| FAB stacking (z-index 9999, isolation, pointer-events) | `frontend/src/App.css` `.aiFabWrap` |
+| Gemini web URL, open action | `frontend/src/components/AiAnalysisFab.jsx` – same as other providers (copy then `window.open(href)`) |
+| FAB stacking (z-index 9999, isolation) | `frontend/src/App.css` `.aiFabWrap` |
