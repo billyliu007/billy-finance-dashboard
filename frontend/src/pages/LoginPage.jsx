@@ -34,7 +34,7 @@ export default function LoginPage() {
     <main className="authScreen">
       <section className="authCard">
         <div className="authCardHeader">
-          <h1>My Worth Track</h1>
+          <h1 className="authTitle">My Worth Track</h1>
           <div className="authLanguageSwitch" role="group" aria-label={t('userMenu.language')}>
             <button
               type="button"
@@ -53,19 +53,47 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
-        <p>{t('login.signInDesc')}</p>
-        <div className="authActions">
-          <a href={authHref('google')} className="authBtn">
-            {t('login.continueGoogle')}
-          </a>
-          <button
-            type="button"
-            className="authBtn secondary"
-            onClick={handleDemoLogin}
-            disabled={isLoggingInDemo}
-          >
-            {isLoggingInDemo ? t('login.startingDemo') : t('login.loginDemo')}
-          </button>
+        <p className="authIntro">{t('login.signInDesc')}</p>
+
+        <div className="authSections">
+          <section className="authSection">
+            <p className="authSectionTitle">
+              {language === 'zh' ? '使用账号登录' : 'Sign in with your account'}
+            </p>
+            <div className="authActions authActionsOAuth">
+              <a href={authHref('google')} className="authBtn authBtnProvider authBtnGoogle">
+                <span className="authBtnIcon" aria-hidden="true">
+                  <img
+                    src="https://www.gstatic.com/images/branding/product/1x/gsa_64dp.png"
+                    alt=""
+                  />
+                </span>
+                <span className="authBtnLabel">{t('login.continueGoogle')}</span>
+              </a>
+              <a href={authHref('apple')} className="authBtn authBtnProvider authBtnApple authAppleHidden" aria-hidden="true">
+                <span className="authBtnIcon authBtnAppleIcon" aria-hidden="true">
+                  <span className="authAppleGlyph"></span>
+                </span>
+                <span className="authBtnLabel">{t('login.continueApple')}</span>
+              </a>
+            </div>
+          </section>
+
+          <section className="authSection authSectionDemo">
+            <p className="authSectionTitle">
+              {language === 'zh' ? '或试用演示账号' : 'Or explore the live demo'}
+            </p>
+            <div className="authActions authActionsDemo">
+              <button
+                type="button"
+                className="authBtn secondary"
+                onClick={handleDemoLogin}
+                disabled={isLoggingInDemo}
+              >
+                {isLoggingInDemo ? t('login.startingDemo') : t('login.loginDemo')}
+              </button>
+            </div>
+          </section>
         </div>
         {message && <p className="error">{message}</p>}
         {demoError && <p className="error">{demoError}</p>}
