@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import SideNav from './components/SideNav.jsx';
 import UserMenu from './components/UserMenu.jsx';
+import AiAnalysisFab from './components/AiAnalysisFab.jsx';
 import { useLanguage } from './contexts/LanguageContext.jsx';
 import { DashboardProvider } from './contexts/DashboardContext.jsx';
 import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
@@ -119,6 +120,7 @@ export default function App() {
             </Routes>
           </main>
         </div>
+        <AiAnalysisFab />
       </div>
     </DashboardProvider>
   );
