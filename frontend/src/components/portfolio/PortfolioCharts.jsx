@@ -18,6 +18,14 @@ import { useMemo, useState } from 'react';
 import { HOLDING_COLORS } from '../../constants.js';
 import { formatMaybeHidden, formatMoney, formatPercent } from '../../utils/formatters.js';
 
+function HoldingAxisTick({ y, payload }) {
+  return (
+    <text x={0} y={y} dy={5} fill="#cbd5e1" fontSize={12} textAnchor="start">
+      {payload.value}
+    </text>
+  );
+}
+
 function PnlTooltip({ active, payload, hideValues }) {
   if (!active || !payload || payload.length === 0) {
     return null;
@@ -121,66 +129,12 @@ function PnlBarLabel({ x, y, width, height, index, data, hideValues }) {
   const pnl = Number(point?.pnl) || 0;
   const pnlPct = Number(point?.pnlPct) || 0;
   const labelText = `${formatMaybeHidden(hideValues, formatMoney, pnl)} (${hideValues ? 'Hidden' : formatPercent(pnlPct)})`;
-  const labelInsidePadding = 8;
-  const isTinyBar = width < 70;
-  const labelX = isTinyBar
-    ? pnl >= 0
-      ? x + width + 8
-      : x - 8
-    : pnl >= 0
-      ? x + width - labelInsidePadding
-      : x + labelInsidePadding;
-  const textAnchor = isTinyBar
-    ? pnl >= 0
-      ? 'start'
-      : 'end'
-    : pnl >= 0
-      ? 'end'
-      : 'start';
-  const fill = isTinyBar ? '#e2e8f0' : '#0b1220';
-
-  return (
-    <text
-      x={labelX}
-      y={y + height / 2}
-      dy={4}
-      fill={fill}
-      fontSize={11}
-      fontWeight={600}
-      textAnchor={textAnchor}
-      style={{ paintOrder: 'stroke', stroke: 'rgba(15,23,42,0.55)', strokeWidth: 3 }}
-    >
-      {labelText}
-    </text>
-  );
-}
-
-function HoldingNameOnBarLabel({ x, y, width, height, index, data }) {
-  if (![x, y, width, height].every((value) => Number.isFinite(value))) {
-    return null;
-  }
-  const point = Number.isInteger(index) ? data[index] : null;
-  const name = String(point?.name || '').trim();
-  if (!name) return null;
-  if (width < 55) return null;
-
-  const pnl = Number(point?.pnl) || 0;
-  const padding = 8;
-  const labelX = pnl >= 0 ? x + padding : x + width - padding;
+  const labelX = pnl >= 0 ? x + width + 8 : x - 8;
   const textAnchor = pnl >= 0 ? 'start' : 'end';
 
   return (
-    <text
-      x={labelX}
-      y={y + height / 2}
-      dy={4}
-      fill="#0b1220"
-      fontSize={11}
-      fontWeight={700}
-      textAnchor={textAnchor}
-      style={{ paintOrder: 'stroke', stroke: 'rgba(15,23,42,0.55)', strokeWidth: 3 }}
-    >
-      {name}
+    <text x={labelX} y={y + height / 2} dy={4} fill="#e2e8f0" fontSize={11} textAnchor={textAnchor}>
+      {labelText}
     </text>
   );
 }
@@ -258,9 +212,9 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
               <YAxis
                 type="category"
                 dataKey="name"
-                width={10}
+                width={74}
                 interval={0}
-                tick={false}
+                tick={<HoldingAxisTick />}
                 tickLine={false}
               />
               <Tooltip
@@ -277,13 +231,6 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
               />
               <ReferenceLine x={0} stroke="#64748b" />
               <Bar dataKey="pnl" radius={[4, 4, 4, 4]} activeBar={<ActivePnlBar />}>
-                <LabelList content={(props) => (
-                  <HoldingNameOnBarLabel
-                    {...props}
-                    data={chartData}
-                  />
-                )}
-                />
                 <LabelList content={(props) => (
                   <PnlBarLabel
                     {...props}
