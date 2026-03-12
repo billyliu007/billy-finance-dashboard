@@ -26,6 +26,24 @@ function HoldingAxisTick({ y, payload }) {
   );
 }
 
+function AllocationPieLabel({ x, y, name, percent }) {
+  if (![x, y].every((v) => Number.isFinite(v))) return null;
+  const pct = `${((percent || 0) * 100).toFixed(1)}%`;
+  const labelName = String(name || '').trim();
+  if (!labelName) return null;
+
+  return (
+    <text x={x} y={y} fill="#e2e8f0" fontSize={11} textAnchor="middle">
+      <tspan x={x} dy={-2} fontWeight={700}>
+        {labelName}
+      </tspan>
+      <tspan x={x} dy={13} fill="#cbd5e1" fontWeight={600}>
+        {pct}
+      </tspan>
+    </text>
+  );
+}
+
 function PnlTooltip({ active, payload, hideValues }) {
   if (!active || !payload || payload.length === 0) {
     return null;
@@ -128,13 +146,19 @@ function PnlBarLabel({ x, y, width, height, index, data, hideValues }) {
   const point = Number.isInteger(index) ? data[index] : null;
   const pnl = Number(point?.pnl) || 0;
   const pnlPct = Number(point?.pnlPct) || 0;
-  const labelText = `${formatMaybeHidden(hideValues, formatMoney, pnl)} (${hideValues ? 'Hidden' : formatPercent(pnlPct)})`;
+  const line1 = formatMaybeHidden(hideValues, formatMoney, pnl);
+  const line2 = hideValues ? 'Hidden' : formatPercent(pnlPct);
   const labelX = pnl >= 0 ? x + width + 8 : x - 8;
   const textAnchor = pnl >= 0 ? 'start' : 'end';
 
   return (
-    <text x={labelX} y={y + height / 2} dy={4} fill="#e2e8f0" fontSize={11} textAnchor={textAnchor}>
-      {labelText}
+    <text x={labelX} y={y + height / 2} dy={-1} fill="#e2e8f0" fontSize={11} textAnchor={textAnchor}>
+      <tspan x={labelX} dy={0} fontWeight={700}>
+        {line1}
+      </tspan>
+      <tspan x={labelX} dy={13} fill="#cbd5e1" fontWeight={600}>
+        {line2}
+      </tspan>
     </text>
   );
 }
@@ -171,7 +195,7 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 onMouseEnter={(_, index) => setActivePieIndex(index)}
                 onMouseLeave={() => setActivePieIndex(-1)}
                 labelLine={false}
-                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(1)}%`}
+                label={(props) => <AllocationPieLabel {...props} />}
               >
                 {pieCells.map((cell) => (
                   <Cell
