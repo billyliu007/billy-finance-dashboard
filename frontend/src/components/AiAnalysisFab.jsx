@@ -133,6 +133,7 @@ export default function AiAnalysisFab() {
   const { language } = useLanguage();
   const [toast, setToast] = useState('');
   const [isCopying, setIsCopying] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const prompt = useMemo(() => {
     const cashComponents = netWorth?.overview?.cashComponents ?? [];
@@ -140,12 +141,27 @@ export default function AiAnalysisFab() {
     return buildPrompt({ cashComponents, positions, language });
   }, [netWorth, portfolio, language]);
 
-  async function handleClick() {
+  async function handleCopyAndOpen(provider) {
+    const target = provider || 'chatgpt';
+    const providerMap = {
+      chatgpt: 'https://chat.openai.com/',
+      gemini: 'https://gemini.google.com/app',
+      grok: 'https://x.com/i/grok',
+      deepseek: 'https://chat.deepseek.com/',
+    };
+    const href = providerMap[target] || providerMap.chatgpt;
+
     try {
       setIsCopying(true);
       await copyToClipboard(prompt);
-      setToast(language === 'zh' ? '已复制 AI 提示词到剪贴板。' : 'AI prompt copied to clipboard.');
+      setToast(
+        language === 'zh'
+          ? '已复制提示词到剪贴板，请在新打开的 AI 聊天窗口中粘贴。'
+          : 'Prompt copied to clipboard. Paste it into the new AI chat window.',
+      );
       window.setTimeout(() => setToast(''), 2200);
+      window.open(href, '_blank', 'noopener,noreferrer');
+      setIsModalOpen(false);
     } catch (err) {
       setToast(err?.message || (language === 'zh' ? '复制失败。' : 'Failed to copy.'));
       window.setTimeout(() => setToast(''), 2600);
@@ -157,13 +173,98 @@ export default function AiAnalysisFab() {
   return (
     <div className="aiFabWrap" aria-live="polite">
       {toast && <div className="aiFabToast">{toast}</div>}
+      {isModalOpen && (
+        <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={language === 'zh' ? '选择 AI 助手' : 'Choose AI assistant'}>
+          <section className="modalCard aiModalCard">
+            <header className="modalHeader">
+              <h2>{language === 'zh' ? '选择 AI 助手' : 'Choose AI assistant'}</h2>
+              <button
+                type="button"
+                className="modalCloseBtn"
+                onClick={() => setIsModalOpen(false)}
+                aria-label={language === 'zh' ? '关闭' : 'Close'}
+              >
+                ✕
+              </button>
+            </header>
+            <div className="modalBody aiProviderGrid">
+              <button
+                type="button"
+                className="aiProviderBtn"
+                onClick={() => handleCopyAndOpen('chatgpt')}
+                disabled={isCopying}
+              >
+                <span className="aiProviderIcon chatgpt">GPT</span>
+                <span className="aiProviderMeta">
+                  <span className="aiProviderName">ChatGPT</span>
+                  <span className="aiProviderDesc">
+                    {language === 'zh' ? 'OpenAI 聊天助手' : 'OpenAI chat assistant'}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="aiProviderBtn"
+                onClick={() => handleCopyAndOpen('gemini')}
+                disabled={isCopying}
+              >
+                <span className="aiProviderIcon gemini">G</span>
+                <span className="aiProviderMeta">
+                  <span className="aiProviderName">Gemini</span>
+                  <span className="aiProviderDesc">
+                    {language === 'zh' ? 'Google Gemini 聊天' : 'Google Gemini chat'}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="aiProviderBtn"
+                onClick={() => handleCopyAndOpen('grok')}
+                disabled={isCopying}
+              >
+                <span className="aiProviderIcon grok">GX</span>
+                <span className="aiProviderMeta">
+                  <span className="aiProviderName">Grok</span>
+                  <span className="aiProviderDesc">
+                    {language === 'zh' ? 'X (Twitter) Grok 助手' : 'Grok on X (Twitter)'}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="aiProviderBtn"
+                onClick={() => handleCopyAndOpen('deepseek')}
+                disabled={isCopying}
+              >
+                <span className="aiProviderIcon deepseek">DS</span>
+                <span className="aiProviderMeta">
+                  <span className="aiProviderName">DeepSeek</span>
+                  <span className="aiProviderDesc">
+                    {language === 'zh' ? 'DeepSeek 投资分析' : 'DeepSeek investment analysis'}
+                  </span>
+                </span>
+              </button>
+            </div>
+            <footer className="modalFooter">
+              <button
+                type="button"
+                className="modalBtn secondary"
+                onClick={() => setIsModalOpen(false)}
+                disabled={isCopying}
+              >
+                {language === 'zh' ? '取消' : 'Cancel'}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
       <button
         type="button"
         className="aiFab"
-        onClick={handleClick}
+        onClick={() => setIsModalOpen(true)}
         disabled={isLoading || isCopying}
-        aria-label="Copy AI analysis prompt"
-        title="Copy AI analysis prompt"
+        aria-label={language === 'zh' ? '打开 AI 分析选项' : 'Open AI analysis options'}
+        title={language === 'zh' ? '打开 AI 分析选项' : 'Open AI analysis options'}
       >
         <span className="aiFabIcon" aria-hidden="true">✦</span>
         <span className="aiFabText">AI</span>
