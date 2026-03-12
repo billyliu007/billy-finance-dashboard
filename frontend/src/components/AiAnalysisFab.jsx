@@ -135,6 +135,39 @@ const PROVIDER_WEB_URLS = {
   deepseek: 'https://chat.deepseek.com/',
 };
 
+function isMobileDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const hasTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || (hasTouch && window.innerWidth < 1024);
+}
+
+/** Try app scheme first (works for Google app); fall back to web after 1.5s so OS can open Gemini app via Universal Link if scheme fails. */
+function openGeminiWithAppFallback(webUrl) {
+  const appUrl = 'googleapp://robin';
+  let fallbackTimer;
+  const clearFallback = () => {
+    if (fallbackTimer) window.clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+  };
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') clearFallback();
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  fallbackTimer = window.setTimeout(() => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    clearFallback();
+    window.open(webUrl, '_blank', 'noopener,noreferrer');
+  }, 1500);
+  try {
+    window.location.href = appUrl;
+  } catch {
+    clearFallback();
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.open(webUrl, '_blank', 'noopener,noreferrer');
+  }
+}
+
 export default function AiAnalysisFab() {
   const { netWorth, portfolio, isLoading } = useDashboard();
   const { language } = useLanguage();
@@ -183,12 +216,17 @@ export default function AiAnalysisFab() {
       }
     }
 
+    const isMobile = isMobileDevice();
     try {
       setIsCopying(true);
       await copyToClipboard(prompt);
-      window.setTimeout(() => {
-        window.open(href, '_blank', 'noopener,noreferrer');
-      }, 350);
+      if (isMobile && target === 'gemini') {
+        openGeminiWithAppFallback(baseUrl);
+      } else {
+        window.setTimeout(() => {
+          window.open(href, '_blank', 'noopener,noreferrer');
+        }, 350);
+      }
     } catch (err) {
       setToast(err?.message || (language === 'zh' ? '复制失败。' : 'Failed to copy.'));
       window.setTimeout(() => setToast(''), 2600);

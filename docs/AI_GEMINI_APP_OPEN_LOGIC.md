@@ -1,45 +1,33 @@
-# Gemini “open app” on mobile – logic (Universal Link priority)
+# Gemini “open app” on mobile – logic
 
-We use **Option 2: Prioritize the Universal Link** so the OS can open the Gemini app via Universal Links (iOS) / App Links (Android) and we avoid the "Invalid URL" alert from custom schemes.
+On **mobile only**, we try the app scheme first, then fall back to the Universal Link. On desktop we open the web URL only.
 
 ---
 
 ## Current behavior
 
-When the user taps **Gemini** in the AI analysis modal (any device):
+**Mobile (Gemini):**
 
-1. **Copy** the prompt to the clipboard.
-2. **Open** `https://gemini.google.com/app` in a new tab via `window.open(href, '_blank', 'noopener,noreferrer')`.
+1. Copy the prompt to the clipboard.
+2. Try **`googleapp://robin`** via `window.location.href = appUrl` (opens Gemini in the **Google app** if installed).
+3. Start a **1.5 s** fallback timer. If `document.visibilityState === 'hidden'`, cancel (app opened).
+4. If the timer fires, open **`https://gemini.google.com/app`** in a new tab (Universal Link; standalone Gemini app may show “Open in app” at top).
 
-No custom URI scheme is used. The same flow runs on desktop and mobile.
+**Desktop / other providers:** Copy then `window.open(href, '_blank', ...)`.
 
 ---
 
-## Why this approach
+## Why it can’t always go “direct” to the app
 
-- **Universal Link (HTTPS)** is the recommended way for the standalone Gemini app on iOS. Custom schemes like `googleapp://robin` are tied to the **Google (Search) app**; if the user has only the **standalone Gemini app**, that scheme is not registered and Safari shows "Invalid URL."
-- Letting the OS handle `https://gemini.google.com/app` means:
-  - If the Gemini app is installed and claims that URL, the system can open the app or show "Open in App."
-  - If not, the URL opens in the browser. No system alert, no fallback timer.
+- **Google app:** `googleapp://robin` goes straight to the Gemini tab. If that scheme isn’t registered (e.g. user only has the **standalone Gemini app**), Safari may show “Invalid URL”; after 1.5 s we open the web URL.
+- **Standalone Gemini app:** It mainly uses **Universal Links** (`https://gemini.google.com/app`). The OS often opens that URL in the **browser first**; the page then shows “Open in Gemini app” at the top. There is no well‑documented custom scheme for the standalone app, so we can’t jump straight into it from the web without that banner step.
 
 ---
 
 ## Code location
 
-| What | File | Notes |
-|------|------|--------|
-| Gemini web URL | `frontend/src/components/AiAnalysisFab.jsx` | `PROVIDER_WEB_URLS.gemini` = `'https://gemini.google.com/app'` |
-| Open action | same file | `handleCopyAndOpen()` → copy then `window.open(href, '_blank', ...)` for all providers (including Gemini) |
-
-There is no separate mobile path or app-scheme attempt for Gemini.
-
----
-
-## Optional: custom scheme as secondary (not implemented)
-
-If we ever need to try a scheme again (e.g. for the Google app’s Gemini tab), a safer pattern than hidden `<a>` + `.click()` is:
-
-1. Use **Universal Link first** (current behavior).
-2. Optionally, try scheme with **`window.location.href = appUrl`** and a **shorter fallback (1500–2000 ms)** plus `document.hidden` check before opening the web URL, to avoid long “hang” and reduce "Invalid URL" where the scheme isn’t registered.
-
-Right now we rely only on the Universal Link and do not use any custom scheme.
+| What | File |
+|------|------|
+| Mobile check, `openGeminiWithAppFallback` | `frontend/src/components/AiAnalysisFab.jsx` |
+| Scheme: `googleapp://robin`; fallback 1500 ms; then `window.open(webUrl)` | same |
+| FAB stacking (z-index 9999, isolation, pointer-events) | `frontend/src/App.css` `.aiFabWrap` |
