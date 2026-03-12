@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 
@@ -134,12 +134,34 @@ export default function AiAnalysisFab() {
   const [toast, setToast] = useState('');
   const [isCopying, setIsCopying] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showInlineHint, setShowInlineHint] = useState(false);
 
   const prompt = useMemo(() => {
     const cashComponents = netWorth?.overview?.cashComponents ?? [];
     const positions = portfolio?.tableRows ?? [];
     return buildPrompt({ cashComponents, positions, language });
   }, [netWorth, portfolio, language]);
+
+  function closeModal() {
+    setIsModalOpen(false);
+  }
+
+  useEffect(() => {
+    // One-time inline hint next to the AI button:
+    // appear after ~15s, stay for ~6s, then disappear permanently.
+    let hideHintTimeoutId;
+    const showTimeoutId = window.setTimeout(() => {
+      setShowInlineHint(true);
+      hideHintTimeoutId = window.setTimeout(() => {
+        setShowInlineHint(false);
+      }, 6000);
+    }, 15000);
+
+    return () => {
+      window.clearTimeout(showTimeoutId);
+      if (hideHintTimeoutId) window.clearTimeout(hideHintTimeoutId);
+    };
+  }, []);
 
   async function handleCopyAndOpen(provider) {
     const target = provider || 'chatgpt';
@@ -154,14 +176,9 @@ export default function AiAnalysisFab() {
     try {
       setIsCopying(true);
       await copyToClipboard(prompt);
-      setToast(
-        language === 'zh'
-          ? '已复制提示词到剪贴板，请在新打开的 AI 聊天窗口中粘贴。'
-          : 'Prompt copied to clipboard. Paste it into the new AI chat window.',
-      );
-      window.setTimeout(() => setToast(''), 2200);
-      window.open(href, '_blank', 'noopener,noreferrer');
-      setIsModalOpen(false);
+      window.setTimeout(() => {
+        window.open(href, '_blank', 'noopener,noreferrer');
+      }, 350);
     } catch (err) {
       setToast(err?.message || (language === 'zh' ? '复制失败。' : 'Failed to copy.'));
       window.setTimeout(() => setToast(''), 2600);
@@ -170,89 +187,125 @@ export default function AiAnalysisFab() {
     }
   }
 
+  async function handleCopyAgain() {
+    try {
+      setIsCopying(true);
+      await copyToClipboard(prompt);
+      setToast(language === 'zh' ? '已再次复制到剪贴板' : 'Copied again to clipboard');
+      window.setTimeout(() => setToast(''), 2000);
+    } catch (err) {
+      setToast(err?.message || (language === 'zh' ? '复制失败。' : 'Failed to copy.'));
+      window.setTimeout(() => setToast(''), 2600);
+    } finally {
+      setIsCopying(false);
+    }
+  }
+
+  const copyHint = language === 'zh'
+    ? '下方为将发送给 AI 的提示词，其中包含你的净资产、现金、债务和持仓明细。选择任一 AI 即可复制并打开其页面。在新标签页中粘贴：电脑端用 Ctrl+V 或 Cmd+V；手机端在输入框长按并选择「粘贴」。'
+    : 'The prompt below includes your net worth, cash balances, debts, and position details so the AI can analyze your portfolio. Choose an AI to copy and open its chat. In the new tab, paste the prompt: on desktop use Ctrl+V or Cmd+V; on mobile, long-press in the input and tap Paste.';
+
   return (
     <div className="aiFabWrap" aria-live="polite">
       {toast && <div className="aiFabToast">{toast}</div>}
       {isModalOpen && (
-        <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={language === 'zh' ? '选择 AI 助手' : 'Choose AI assistant'}>
+        <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={language === 'zh' ? 'AI 分析' : 'AI analysis'}>
           <section className="modalCard aiModalCard">
             <header className="modalHeader">
-              <h2>{language === 'zh' ? '选择 AI 助手' : 'Choose AI assistant'}</h2>
+              <h2>{language === 'zh' ? '粘贴到 AI 开始分析' : 'Paste in AI to start analysis'}</h2>
               <button
                 type="button"
                 className="modalCloseBtn"
-                onClick={() => setIsModalOpen(false)}
+                onClick={closeModal}
                 aria-label={language === 'zh' ? '关闭' : 'Close'}
               >
                 ✕
               </button>
             </header>
-            <div className="modalBody aiProviderGrid">
-              <button
-                type="button"
-                className="aiProviderBtn"
-                onClick={() => handleCopyAndOpen('chatgpt')}
-                disabled={isCopying}
-              >
-                <span className="aiProviderIcon chatgpt">GPT</span>
-                <span className="aiProviderMeta">
-                  <span className="aiProviderName">ChatGPT</span>
-                  <span className="aiProviderDesc">
-                    {language === 'zh' ? 'OpenAI 聊天助手' : 'OpenAI chat assistant'}
+            <div className="modalBody">
+              <p className="aiPromptHint">{copyHint}</p>
+              <div className="aiPromptBoxWrap">
+                <pre className="aiPromptBox" role="document">{prompt}</pre>
+              </div>
+              <p className="aiProviderLabel">{language === 'zh' ? '选择 AI 助手' : 'Choose AI assistant'}</p>
+              <div className="aiProviderGrid">
+                <button
+                  type="button"
+                  className="aiProviderBtn"
+                  onClick={() => handleCopyAndOpen('chatgpt')}
+                  disabled={isCopying}
+                >
+                  <span className="aiProviderIcon chatgpt">
+                    <img src="https://www.google.com/s2/favicons?domain=chat.openai.com&sz=64" alt="" width={34} height={34} />
                   </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className="aiProviderBtn"
-                onClick={() => handleCopyAndOpen('gemini')}
-                disabled={isCopying}
-              >
-                <span className="aiProviderIcon gemini">G</span>
-                <span className="aiProviderMeta">
-                  <span className="aiProviderName">Gemini</span>
-                  <span className="aiProviderDesc">
-                    {language === 'zh' ? 'Google Gemini 聊天' : 'Google Gemini chat'}
+                  <span className="aiProviderMeta">
+                    <span className="aiProviderName">ChatGPT</span>
+                    <span className="aiProviderDesc">
+                      {language === 'zh' ? 'OpenAI 聊天助手' : 'OpenAI chat assistant'}
+                    </span>
                   </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className="aiProviderBtn"
-                onClick={() => handleCopyAndOpen('grok')}
-                disabled={isCopying}
-              >
-                <span className="aiProviderIcon grok">GX</span>
-                <span className="aiProviderMeta">
-                  <span className="aiProviderName">Grok</span>
-                  <span className="aiProviderDesc">
-                    {language === 'zh' ? 'X (Twitter) Grok 助手' : 'Grok on X (Twitter)'}
+                </button>
+                <button
+                  type="button"
+                  className="aiProviderBtn"
+                  onClick={() => handleCopyAndOpen('gemini')}
+                  disabled={isCopying}
+                >
+                  <span className="aiProviderIcon gemini">
+                    <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" alt="" width={34} height={34} />
                   </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className="aiProviderBtn"
-                onClick={() => handleCopyAndOpen('deepseek')}
-                disabled={isCopying}
-              >
-                <span className="aiProviderIcon deepseek">DS</span>
-                <span className="aiProviderMeta">
-                  <span className="aiProviderName">DeepSeek</span>
-                  <span className="aiProviderDesc">
-                    {language === 'zh' ? 'DeepSeek 投资分析' : 'DeepSeek investment analysis'}
+                  <span className="aiProviderMeta">
+                    <span className="aiProviderName">Gemini</span>
+                    <span className="aiProviderDesc">
+                      {language === 'zh' ? 'Google Gemini 聊天' : 'Google Gemini chat'}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  className="aiProviderBtn"
+                  onClick={() => handleCopyAndOpen('grok')}
+                  disabled={isCopying}
+                >
+                  <span className="aiProviderIcon grok">
+                    <img src="https://www.google.com/s2/favicons?domain=x.com&sz=64" alt="" width={34} height={34} />
+                  </span>
+                  <span className="aiProviderMeta">
+                    <span className="aiProviderName">Grok</span>
+                    <span className="aiProviderDesc">
+                      {language === 'zh' ? 'X (Twitter) Grok 助手' : 'Grok on X (Twitter)'}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="aiProviderBtn"
+                  onClick={() => handleCopyAndOpen('deepseek')}
+                  disabled={isCopying}
+                >
+                  <span className="aiProviderIcon deepseek">
+                    <img src="https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=64" alt="" width={34} height={34} />
+                  </span>
+                  <span className="aiProviderMeta">
+                    <span className="aiProviderName">DeepSeek</span>
+                    <span className="aiProviderDesc">
+                      {language === 'zh' ? 'DeepSeek 投资分析' : 'DeepSeek investment analysis'}
+                    </span>
+                  </span>
+                </button>
+              </div>
             </div>
             <footer className="modalFooter">
               <button
                 type="button"
                 className="modalBtn secondary"
-                onClick={() => setIsModalOpen(false)}
+                onClick={handleCopyAgain}
                 disabled={isCopying}
               >
-                {language === 'zh' ? '取消' : 'Cancel'}
+                {language === 'zh' ? '再次复制' : 'Copy again'}
+              </button>
+              <button type="button" className="modalBtn" onClick={closeModal}>
+                {language === 'zh' ? '关闭' : 'Close'}
               </button>
             </footer>
           </section>
@@ -260,7 +313,7 @@ export default function AiAnalysisFab() {
       )}
       <button
         type="button"
-        className="aiFab"
+        className={`aiFab${showInlineHint && !isModalOpen ? ' aiFab--hintVisible' : ''}`}
         onClick={() => setIsModalOpen(true)}
         disabled={isLoading || isCopying}
         aria-label={language === 'zh' ? '打开 AI 分析选项' : 'Open AI analysis options'}
@@ -268,6 +321,13 @@ export default function AiAnalysisFab() {
       >
         <span className="aiFabIcon" aria-hidden="true">✦</span>
         <span className="aiFabText">AI</span>
+        {showInlineHint && !isModalOpen && (
+          <span className="aiFabInlineHint">
+            {language === 'zh'
+              ? '用 AI 快速评估你的整个投资组合'
+              : 'Use AI to quickly evaluate your full portfolio'}
+          </span>
+        )}
       </button>
     </div>
   );
