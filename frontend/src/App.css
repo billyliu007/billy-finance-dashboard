@@ -918,6 +918,16 @@ h1 {
   border-radius: 8px;
 }
 
+.positionExpandHeader,
+.positionExpandCell {
+  text-align: center;
+  width: 44px;
+}
+
+.positionExpandCell {
+  vertical-align: middle;
+}
+
 .positionAssetName {
   vertical-align: middle;
 }
@@ -1880,7 +1890,7 @@ tbody tr:hover td {
     margin-right: 0;
   }
 
-  /* 11 cols: asset, currency, qty, avgCost, costBasis, marketPrice, marketValue, weight, unrealizedGain, unrealizedReturn, actions */
+  /* 12 cols: asset, currency, qty, avgCost, costBasis, marketPrice, marketValue, weight, unrealizedGain, unrealizedReturn, expand, actions */
   .positionsMobileCompact th:nth-child(2),
   .positionsMobileCompact td:nth-child(2),
   .positionsMobileCompact th:nth-child(3),
@@ -1896,7 +1906,9 @@ tbody tr:hover td {
   .positionsMobileCompact th:nth-child(9),
   .positionsMobileCompact td:nth-child(9),
   .positionsMobileCompact th:nth-child(10),
-  .positionsMobileCompact td:nth-child(10) {
+  .positionsMobileCompact td:nth-child(10),
+  .positionsMobileCompact th:nth-child(11),
+  .positionsMobileCompact td:nth-child(11) {
     display: none;
   }
 
@@ -1922,8 +1934,8 @@ tbody tr:hover td {
     width: 30%;
   }
 
-  .positionsMobileCompact th:nth-child(11),
-  .positionsMobileCompact td:nth-child(11) {
+  .positionsMobileCompact th:nth-child(12),
+  .positionsMobileCompact td:nth-child(12) {
     width: 28%;
   }
 

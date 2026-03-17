@@ -182,16 +182,19 @@ export default function PortfolioPositionsTable({
         {formatPercent(item.pnlPct)}
       </td>
       {(onEditPosition || onDeletePosition) && (
-        <td data-label={t('netWorth.actions')} className="positionActionsCell">
-          <button
-            type="button"
-            className="headerIconBtn positionActionBtn positionExpandBtn"
-            onClick={() => toggleExpanded(item)}
-            aria-label="Toggle transactions"
-            title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide transactions' : 'Show transactions'}
-          >
-            {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
-          </button>
+        <>
+          <td data-label="Expand" className="positionExpandCell">
+            <button
+              type="button"
+              className="headerIconBtn positionExpandBtn"
+              onClick={() => toggleExpanded(item)}
+              aria-label="Toggle transactions"
+              title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide transactions' : 'Show transactions'}
+            >
+              {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
+            </button>
+          </td>
+          <td data-label={t('netWorth.actions')} className="positionActionsCell">
           <button
             type="button"
             className="headerIconBtn positionActionBtn"
@@ -223,12 +226,13 @@ export default function PortfolioPositionsTable({
               ✕
             </button>
           )}
-        </td>
+          </td>
+        </>
       )}
       </tr>
       {expanded.has(String(item.symbol || item.key).toUpperCase()) && (
         <tr className="positionTxRow">
-          <td colSpan={(onEditPosition || onDeletePosition) ? 11 : 10}>
+          <td colSpan={(onEditPosition || onDeletePosition) ? 12 : 10}>
             <div className="positionTxPanel">
               <div className="positionTxPanelHeader">
                 <strong>Transactions</strong>
@@ -311,6 +315,7 @@ export default function PortfolioPositionsTable({
                       <th>{t('portfolio.portfolioWeight')}</th>
                       <th>{t('portfolio.unrealizedGainLoss')}</th>
                       <th>{t('portfolio.unrealizedReturn')}</th>
+                      {(onEditPosition || onDeletePosition) && <th className="positionExpandHeader" aria-label="Expand" />}
                       {(onEditPosition || onDeletePosition) && <th className="positionActionsHeader">{t('netWorth.actions')}</th>}
                     </tr>
                   </thead>
