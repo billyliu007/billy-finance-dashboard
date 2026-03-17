@@ -162,6 +162,170 @@ export default function PortfolioPositionsTable({
     setRecordModalOpen(true);
   }
 
+  const renderExpandedPanel = (item) => (
+    <div className="positionTxPanel positionTxPanel--mobile">
+      <section className="positionTxSection">
+        <div className="positionTxSectionHeader">
+          <strong>Existing Holding</strong>
+        </div>
+        <div className="tableWrap">
+          <table className="positionTxTable positionHoldingTable">
+            <thead>
+              <tr>
+                <th aria-hidden="true" className="positionTxSpacerCol" />
+                <th>Quantity</th>
+                <th>Avg Cost Per Unit</th>
+                <th>Cost Basis</th>
+                <th>Market Value</th>
+                <th>Unrealized Gain/Loss</th>
+                <th>Unrealized Return (%)</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {(() => {
+                  const baseQty = Number(item.baseQty ?? 0);
+                  const baseAvg = Number(item.baseAvgCost ?? 0);
+                  const baseCost = Number(item.baseCost ?? baseQty * baseAvg) || 0;
+                  const price = Number(item.currentPrice ?? 0);
+                  const marketValue = baseQty * price;
+                  const pnl = marketValue - baseCost;
+                  const pnlPct = baseCost === 0 ? 0 : (pnl / baseCost) * 100;
+                  return (
+                    <>
+                      <td aria-hidden="true" className="positionTxSpacerCol" />
+                      <td>{formatMaybeHidden(hideValues, formatQty, baseQty)}</td>
+                      <td>{formatMaybeHidden(hideValues, formatMoney, baseAvg)}</td>
+                      <td>{formatMaybeHidden(hideValues, formatMoney, baseCost)}</td>
+                      <td>{formatPrice(item, marketValue)}</td>
+                      <td className={pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, pnl)}</td>
+                      <td className={pnl >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(pnlPct)}</td>
+                      <td>
+                        <div className="positionInlineActions">
+                          {onEditPosition && (
+                            <button
+                              type="button"
+                              className="headerIconBtn positionActionBtn"
+                              onClick={() =>
+                                onEditPosition({
+                                  ...item,
+                                  qty: Number(item.baseQty ?? 0),
+                                  purchasePrice: Number(item.baseAvgCost ?? 0),
+                                })
+                              }
+                              aria-label={`${t('portfolio.edit')} ${item.name}`}
+                              title={t('portfolio.edit')}
+                            >
+                              ✎
+                            </button>
+                          )}
+                          {onDeletePosition && (
+                            <button
+                              type="button"
+                              className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                              onClick={() => onDeletePosition(item)}
+                              aria-label={`${t('portfolio.delete')} ${item.name}`}
+                              title={t('portfolio.delete')}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </>
+                  );
+                })()}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="positionTxSection">
+        <div className="positionTxSectionHeader">
+          <strong>Purchases</strong>
+          <button
+            type="button"
+            className="headerIconBtn positionActionBtn"
+            onClick={() => openRecordPurchase(item)}
+            aria-label="Add New Transaction"
+            title="Add New Transaction"
+          >
+            +
+          </button>
+        </div>
+        {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+        {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+          <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
+        )}
+        {!txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+          <div className="tableWrap">
+            <table className="positionTxTable positionTxTransactionsTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Quantity</th>
+                  <th>Avg Cost Per Unit</th>
+                  <th>Cost Basis</th>
+                  <th>Market Value</th>
+                  <th>Unrealized Gain/Loss</th>
+                  <th>Unrealized Return (%)</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ color: '#94a3b8' }}>
+                      No transactions yet.
+                    </td>
+                  </tr>
+                ) : (
+                  (txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).map((tx) => (
+                    <tr key={tx.id}>
+                      <td>{tx.txDate}</td>
+                      <td>{formatMaybeHidden(hideValues, formatQty, tx.qty)}</td>
+                      <td>{formatMaybeHidden(hideValues, formatMoney, tx.avgCostPerUnit)}</td>
+                      {(() => {
+                        const qty = Number(tx.qty) || 0;
+                        const avgCost = Number(tx.avgCostPerUnit) || 0;
+                        const cost = qty * avgCost;
+                        const price = Number(item.currentPrice ?? 0);
+                        const marketValue = qty * price;
+                        const pnl = marketValue - cost;
+                        const pnlPct = cost === 0 ? 0 : (pnl / cost) * 100;
+                        return (
+                          <>
+                            <td>{formatMaybeHidden(hideValues, formatMoney, cost)}</td>
+                            <td>{formatPrice(item, marketValue)}</td>
+                            <td className={pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, pnl)}</td>
+                            <td className={pnl >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(pnlPct)}</td>
+                          </>
+                        );
+                      })()}
+                      <td>
+                        <button
+                          type="button"
+                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                          onClick={() => handleDeleteTx(item.symbol || item.key, tx.id)}
+                          aria-label="Delete transaction"
+                          title="Delete"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+
   const renderPositionRow = (item) => (
     <>
       <tr key={item.key}>
@@ -490,6 +654,15 @@ export default function PortfolioPositionsTable({
                             {item.currency || 'USD'} · Mkt {formatPrice(item, item.currentPrice)}
                           </span>
                         </div>
+                        <button
+                          type="button"
+                          className="headerIconBtn positionExpandBtn"
+                          onClick={() => toggleExpanded(item)}
+                          aria-label="Toggle purchases"
+                          title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide purchases' : 'Show purchases'}
+                        >
+                          {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
+                        </button>
                         <div className={`positionPnlDock ${item.pnl >= 0 ? 'pos' : 'neg'}`}>
                           <strong>{formatMaybeHidden(hideValues, formatMoney, item.pnl)}</strong>
                           <span>{formatMaybeHidden(hideValues, formatPercent, item.pnlPct)}</span>
@@ -547,6 +720,11 @@ export default function PortfolioPositionsTable({
                           )}
                         </div>
                       </dl>
+                      {expanded.has(String(item.symbol || item.key).toUpperCase()) && (
+                        <div className="positionCardExpandedWrap">
+                          {renderExpandedPanel(item)}
+                        </div>
+                      )}
                     </section>
                   ))}
                 </div>

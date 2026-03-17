@@ -956,6 +956,16 @@ h1 {
   border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
+.positionCardExpandedWrap {
+  margin-top: 10px;
+}
+
+.positionTxPanel--mobile {
+  border-top: none;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
 .positionTxSection {
   margin-bottom: 12px;
 }
