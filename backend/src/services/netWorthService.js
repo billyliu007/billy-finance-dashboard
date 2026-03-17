@@ -31,27 +31,29 @@ function buildDetailRows(cashComponents, fxRates) {
     const balance = Number(item.balance ?? item.amount ?? 0);
     const signedValue = Number.isFinite(balance) ? balance : 0;
     const type = signedValue < 0 ? 'liability' : 'asset';
-    const currency = normalizeCurrencyCode(item.currency || 'CNY');
-    const rateToCny = fxRates[currency];
+    const currencyDisplay = String(item.currency || 'CNY').trim().toUpperCase() || 'CNY';
+    const currencyNormalized = normalizeCurrencyCode(currencyDisplay);
+    const rateToCny = fxRates[currencyNormalized];
     const usdToCny = fxRates.USD;
     const rateToUsd =
-      currency === 'USD'
+      currencyNormalized === 'USD'
         ? 1
-        : currency === 'CNY'
+        : currencyNormalized === 'CNY'
           ? Number.isFinite(usdToCny) && usdToCny > 0
             ? 1 / usdToCny
             : null
           : Number.isFinite(rateToCny) && rateToCny > 0 && Number.isFinite(usdToCny) && usdToCny > 0
             ? rateToCny / usdToCny
             : null;
-    const key = item.id ?? `cash_${currency}_${String(item.name || '').replace(/\s+/g, '_')}`;
+    const key = item.id ?? `cash_${currencyDisplay}_${String(item.name || '').replace(/\s+/g, '_')}`;
 
     return {
       key,
       name: item.name || 'Cash',
       type,
       category: 'Cash',
-      currency,
+      currency: currencyDisplay,
+      currencyNormalized,
       value: signedValue,
       fxRate: Number.isFinite(rateToCny) ? rateToCny : null,
       cnyValue: Number.isFinite(rateToCny) ? signedValue * rateToCny : null,
@@ -76,14 +78,14 @@ function computeUsdPositionsTotal(positions, stockQuotes = {}, cryptoQuotes = {}
 }
 
 function aggregateComputedTotalsUsd(visibleDetailRows, usdPositionsTotal, fxRates) {
-  const currencies = new Set(visibleDetailRows.map((item) => item.currency));
+  const currencies = new Set(visibleDetailRows.map((item) => item.currencyNormalized));
   if (usdPositionsTotal > 0) currencies.add('USD');
   const usdToCny = fxRates.USD;
   const result = {};
 
   for (const currency of currencies) {
     const key = currencyToComponentKey(currency);
-    const rows = visibleDetailRows.filter((item) => item.currency === currency);
+    const rows = visibleDetailRows.filter((item) => item.currencyNormalized === currency);
 
     const hasUsdRate = Number.isFinite(usdToCny) && usdToCny > 0;
     const hasCurrencyRateToCny =
