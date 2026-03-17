@@ -32,7 +32,18 @@ function buildDetailRows(cashComponents, fxRates) {
     const signedValue = Number.isFinite(balance) ? balance : 0;
     const type = signedValue < 0 ? 'liability' : 'asset';
     const currency = normalizeCurrencyCode(item.currency || 'CNY');
-    const rate = fxRates[currency];
+    const rateToCny = fxRates[currency];
+    const usdToCny = fxRates.USD;
+    const rateToUsd =
+      currency === 'USD'
+        ? 1
+        : currency === 'CNY'
+          ? Number.isFinite(usdToCny) && usdToCny > 0
+            ? 1 / usdToCny
+            : null
+          : Number.isFinite(rateToCny) && rateToCny > 0 && Number.isFinite(usdToCny) && usdToCny > 0
+            ? rateToCny / usdToCny
+            : null;
     const key = item.id ?? `cash_${currency}_${String(item.name || '').replace(/\s+/g, '_')}`;
 
     return {
@@ -42,8 +53,9 @@ function buildDetailRows(cashComponents, fxRates) {
       category: 'Cash',
       currency,
       value: signedValue,
-      fxRate: Number.isFinite(rate) ? rate : null,
-      cnyValue: Number.isFinite(rate) ? signedValue * rate : null,
+      fxRate: Number.isFinite(rateToCny) ? rateToCny : null,
+      cnyValue: Number.isFinite(rateToCny) ? signedValue * rateToCny : null,
+      usdValue: Number.isFinite(rateToUsd) ? signedValue * rateToUsd : null,
       found: true,
     };
   });
@@ -63,36 +75,38 @@ function computeUsdPositionsTotal(positions, stockQuotes = {}, cryptoQuotes = {}
   }, 0);
 }
 
-function aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates) {
+function aggregateComputedTotalsUsd(visibleDetailRows, usdPositionsTotal, fxRates) {
   const currencies = new Set(visibleDetailRows.map((item) => item.currency));
   if (usdPositionsTotal > 0) currencies.add('USD');
-  const usdRate = fxRates.USD;
+  const usdToCny = fxRates.USD;
   const result = {};
+
   for (const currency of currencies) {
     const key = currencyToComponentKey(currency);
     const rows = visibleDetailRows.filter((item) => item.currency === currency);
-    if (currency === 'CNY') {
-      const value = rows.reduce((sum, item) => sum + item.value, 0);
-      result[key] = {
-        found: rows.length > 0,
-        value,
-        reason: rows.length === 0 ? 'No CNY cash rows' : null,
-      };
-    } else {
-      const cnySum = rows.reduce((sum, item) => sum + (item.cnyValue ?? 0), 0);
-      const hasRate = Number.isFinite(fxRates[currency]);
-      const positionsCny = currency === 'USD' && Number.isFinite(usdRate) ? usdPositionsTotal * usdRate : 0;
-      const value = (Number.isFinite(cnySum) ? cnySum : 0) + positionsCny;
-      const hasCashWithRate = rows.length > 0 && rows.every((item) => item.cnyValue != null);
-      const hasUsdPositions = currency === 'USD' && usdPositionsTotal > 0;
-      const found = hasCashWithRate || hasUsdPositions;
-      result[key] = {
-        found,
-        value,
-        reason: found ? null : !hasRate ? `Missing ${currency}/CNY rate` : `No ${currency} cash or positions`,
-      };
+
+    const hasUsdRate = Number.isFinite(usdToCny) && usdToCny > 0;
+    const hasCurrencyRateToCny =
+      currency === 'CNY' ? true : Number.isFinite(fxRates[currency]) && fxRates[currency] > 0;
+
+    const cashUsdSum = rows.reduce((sum, item) => sum + (item.usdValue ?? 0), 0);
+    const positionsUsd = currency === 'USD' ? usdPositionsTotal : 0;
+    const valueUsd = (Number.isFinite(cashUsdSum) ? cashUsdSum : 0) + positionsUsd;
+
+    const hasCashWithRate = rows.length > 0 && rows.every((item) => item.usdValue != null);
+    const hasPositions = currency === 'USD' && usdPositionsTotal > 0;
+    const found = hasCashWithRate || hasPositions;
+
+    let reason = null;
+    if (!found) {
+      if (!hasUsdRate) reason = 'Missing USD/CNY rate';
+      else if (!hasCurrencyRateToCny) reason = `Missing ${currency}/CNY rate`;
+      else reason = `No ${currency} cash or positions`;
     }
+
+    result[key] = { found, valueUsd, reason };
   }
+
   return result;
 }
 
@@ -282,13 +296,25 @@ export function buildNetWorthPayload({
       return acc;
     }, {}),
   };
-  const rateToBase = Number.isFinite(fxRates[base]) && fxRates[base] > 0 ? fxRates[base] : 1;
+  const usdToCny = fxRates.USD;
+  const baseToCny = fxRates[base];
+  const usdToBase =
+    base === 'USD'
+      ? 1
+      : base === 'CNY'
+        ? Number.isFinite(usdToCny) && usdToCny > 0
+          ? usdToCny
+          : null
+        : Number.isFinite(usdToCny) && usdToCny > 0 && Number.isFinite(baseToCny) && baseToCny > 0
+          ? usdToCny / baseToCny
+          : null;
+  const rateToBase = Number.isFinite(baseToCny) && baseToCny > 0 ? baseToCny : 1;
 
   const detailRows = buildDetailRows(cashComponents, fxRates);
   const visibleDetailRows = detailRows.filter((item) => item.found);
   const cashRows = mapCashDetailRowsToTableRows(visibleDetailRows, base, rateToBase);
   const usdPositionsTotal = computeUsdPositionsTotal(positions, stockQuotes, cryptoQuotes);
-  const aggregatedTotalsByKey = aggregateComputedTotals(visibleDetailRows, usdPositionsTotal, fxRates);
+  const aggregatedTotalsByKey = aggregateComputedTotalsUsd(visibleDetailRows, usdPositionsTotal, fxRates);
   const orderedKeys = Object.keys(aggregatedTotalsByKey).sort((a, b) => {
     if (a === 'cny_assets_total') return -1;
     if (b === 'cny_assets_total') return 1;
@@ -297,8 +323,11 @@ export function buildNetWorthPayload({
     return a.localeCompare(b);
   });
   const componentValuesAll = orderedKeys.map((key) => {
-    const agg = aggregatedTotalsByKey[key] || { found: false, value: 0, reason: 'Missing data' };
-    const valueInBase = agg.value != null && rateToBase > 0 ? agg.value / rateToBase : agg.value;
+    const agg = aggregatedTotalsByKey[key] || { found: false, valueUsd: 0, reason: 'Missing data' };
+    const valueInBase =
+      agg.valueUsd != null && Number.isFinite(usdToBase) && usdToBase > 0
+        ? agg.valueUsd * usdToBase
+        : null;
     return {
       key,
       name: componentKeyToDisplayName(key, base),
