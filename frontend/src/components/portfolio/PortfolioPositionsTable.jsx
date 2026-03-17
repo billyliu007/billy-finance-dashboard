@@ -166,16 +166,18 @@ export default function PortfolioPositionsTable({
     <>
       <tr key={item.key}>
         <td data-label={t('portfolio.asset')}>
-          <button
-            type="button"
-            className="headerIconBtn positionExpandBtn"
-            onClick={() => toggleExpanded(item)}
-            aria-label="Toggle transactions"
-            title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide transactions' : 'Show transactions'}
-          >
-            {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
-          </button>
-          <span className="positionAssetName">{item.name}</span>
+          <div className="positionAssetCell">
+            <button
+              type="button"
+              className="headerIconBtn positionExpandBtn"
+              onClick={() => toggleExpanded(item)}
+              aria-label="Toggle transactions"
+              title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide transactions' : 'Show transactions'}
+            >
+              {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
+            </button>
+            <span className="positionAssetName">{item.name}</span>
+          </div>
         </td>
       <td data-label={t('portfolio.currency')}>{item.currency || 'USD'}</td>
       <td data-label={t('portfolio.quantity')}>{formatMaybeHidden(hideValues, formatQty, item.qty)}</td>
@@ -192,26 +194,6 @@ export default function PortfolioPositionsTable({
       </td>
       {(onEditPosition || onDeletePosition) && (
         <td data-label={t('netWorth.actions')} className="positionActionsCell">
-          <button
-            type="button"
-            className="headerIconBtn positionActionBtn"
-            onClick={() => openRecordPurchase(item)}
-            aria-label="Record purchase"
-            title="Record purchase"
-          >
-            +
-          </button>
-          {onEditPosition && (
-            <button
-              type="button"
-              className="headerIconBtn positionActionBtn"
-              onClick={() => onEditPosition(item)}
-              aria-label={`${t('portfolio.edit')} ${item.name}`}
-              title={t('portfolio.edit')}
-            >
-              ✎
-            </button>
-          )}
           {onDeletePosition && (
             <button
               type="button"
@@ -230,58 +212,165 @@ export default function PortfolioPositionsTable({
         <tr className="positionTxRow">
           <td colSpan={(onEditPosition || onDeletePosition) ? 11 : 10}>
             <div className="positionTxPanel">
-              <div className="positionTxPanelHeader">
-                <strong>Transactions</strong>
-                <button type="button" className="modalBtn" onClick={() => openRecordPurchase(item)}>
-                  Record purchase
-                </button>
-              </div>
+              <section className="positionTxSection">
+                <div className="positionTxSectionHeader">
+                  <strong>Existing Holding</strong>
+                </div>
+                <div className="tableWrap">
+                  <table className="positionTxTable positionHoldingTable">
+                    <thead>
+                      <tr>
+                        <th aria-hidden="true" className="positionTxSpacerCol" />
+                        <th>Quantity</th>
+                        <th>Avg Cost Per Unit</th>
+                        <th>Cost Basis</th>
+                        <th>Market Value</th>
+                        <th>Unrealized Gain/Loss</th>
+                        <th>Unrealized Return (%)</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {(() => {
+                          const baseQty = Number(item.baseQty ?? 0);
+                          const baseAvg = Number(item.baseAvgCost ?? 0);
+                          const baseCost = Number(item.baseCost ?? baseQty * baseAvg) || 0;
+                          const price = Number(item.currentPrice ?? 0);
+                          const marketValue = baseQty * price;
+                          const pnl = marketValue - baseCost;
+                          const pnlPct = baseCost === 0 ? 0 : (pnl / baseCost) * 100;
+                          return (
+                            <>
+                              <td aria-hidden="true" className="positionTxSpacerCol" />
+                              <td>{formatMaybeHidden(hideValues, formatQty, baseQty)}</td>
+                              <td>{formatMaybeHidden(hideValues, formatMoney, baseAvg)}</td>
+                              <td>{formatMaybeHidden(hideValues, formatMoney, baseCost)}</td>
+                              <td>{formatPrice(item, marketValue)}</td>
+                              <td className={pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, pnl)}</td>
+                              <td className={pnl >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(pnlPct)}</td>
+                              <td>
+                                <div className="positionInlineActions">
+                                {onEditPosition && (
+                                  <button
+                                    type="button"
+                                    className="headerIconBtn positionActionBtn"
+                                    onClick={() =>
+                                      onEditPosition({
+                                        ...item,
+                                        qty: Number(item.baseQty ?? 0),
+                                        purchasePrice: Number(item.baseAvgCost ?? 0),
+                                      })
+                                    }
+                                    aria-label={`${t('portfolio.edit')} ${item.name}`}
+                                    title={t('portfolio.edit')}
+                                  >
+                                    ✎
+                                  </button>
+                                )}
+                                {onDeletePosition && (
+                                  <button
+                                    type="button"
+                                    className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                    onClick={() => onDeletePosition(item)}
+                                    aria-label={`${t('portfolio.delete')} ${item.name}`}
+                                    title={t('portfolio.delete')}
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                                </div>
+                              </td>
+                            </>
+                          );
+                        })()}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="positionTxSection">
+                <div className="positionTxSectionHeader">
+                  <strong>Purchases</strong>
+                  <button
+                    type="button"
+                    className="headerIconBtn positionActionBtn"
+                    onClick={() => openRecordPurchase(item)}
+                    aria-label="Add New Transaction"
+                    title="Add New Transaction"
+                  >
+                    +
+                  </button>
+                </div>
               {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
               {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
                 <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
               )}
               {!txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
-                <table className="positionTxTable">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Qty</th>
-                      <th>Avg Cost</th>
-                      <th>Cost</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).length === 0 ? (
+                <div className="tableWrap">
+                  <table className="positionTxTable positionTxTransactionsTable">
+                    <thead>
                       <tr>
-                        <td colSpan={5} style={{ color: '#94a3b8' }}>
-                          No transactions yet.
-                        </td>
+                        <th>Date</th>
+                        <th>Quantity</th>
+                        <th>Avg Cost Per Unit</th>
+                        <th>Cost Basis</th>
+                        <th>Market Value</th>
+                        <th>Unrealized Gain/Loss</th>
+                        <th>Unrealized Return (%)</th>
+                        <th>Actions</th>
                       </tr>
-                    ) : (
-                      (txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).map((tx) => (
-                        <tr key={tx.id}>
-                          <td>{tx.txDate}</td>
-                          <td>{formatMaybeHidden(hideValues, formatQty, tx.qty)}</td>
-                          <td>{formatMaybeHidden(hideValues, formatMoney, tx.avgCostPerUnit)}</td>
-                          <td>{formatMaybeHidden(hideValues, formatMoney, (Number(tx.qty) || 0) * (Number(tx.avgCostPerUnit) || 0))}</td>
-                          <td>
-                            <button
-                              type="button"
-                              className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                              onClick={() => handleDeleteTx(item.symbol || item.key, tx.id)}
-                              aria-label="Delete transaction"
-                              title="Delete"
-                            >
-                              ✕
-                            </button>
+                    </thead>
+                    <tbody>
+                      {(txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).length === 0 ? (
+                        <tr>
+                          <td colSpan={8} style={{ color: '#94a3b8' }}>
+                            No transactions yet.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        (txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).map((tx) => (
+                          <tr key={tx.id}>
+                            <td>{tx.txDate}</td>
+                            <td>{formatMaybeHidden(hideValues, formatQty, tx.qty)}</td>
+                            <td>{formatMaybeHidden(hideValues, formatMoney, tx.avgCostPerUnit)}</td>
+                            {(() => {
+                              const qty = Number(tx.qty) || 0;
+                              const avgCost = Number(tx.avgCostPerUnit) || 0;
+                              const cost = qty * avgCost;
+                              const price = Number(item.currentPrice ?? 0);
+                              const marketValue = qty * price;
+                              const pnl = marketValue - cost;
+                              const pnlPct = cost === 0 ? 0 : (pnl / cost) * 100;
+                              return (
+                                <>
+                                  <td>{formatMaybeHidden(hideValues, formatMoney, cost)}</td>
+                                  <td>{formatPrice(item, marketValue)}</td>
+                                  <td className={pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, pnl)}</td>
+                                  <td className={pnl >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(pnlPct)}</td>
+                                </>
+                              );
+                            })()}
+                            <td>
+                              <button
+                                type="button"
+                                className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                onClick={() => handleDeleteTx(item.symbol || item.key, tx.id)}
+                                aria-label="Delete transaction"
+                                title="Delete"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               )}
+              </section>
             </div>
           </td>
         </tr>

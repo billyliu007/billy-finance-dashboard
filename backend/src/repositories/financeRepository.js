@@ -631,14 +631,32 @@ export async function deletePosition(userId, symbol) {
     throw new Error('User id and symbol are required.');
   }
 
-  const result = await query(
-    `DELETE FROM portfolio_positions
-     WHERE user_id = $1 AND symbol = $2
-     RETURNING symbol`,
-    [resolvedUserId, normalizedSymbol],
-  );
-  if (result.rowCount === 0) {
-    throw new Error(`Position not found for ${normalizedSymbol}.`);
-  }
-  return { symbol: normalizedSymbol };
+  return withDbClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const deletedTx = await client.query(
+        `DELETE FROM portfolio_position_transactions
+         WHERE user_id = $1 AND upper(symbol) = $2
+         RETURNING id`,
+        [resolvedUserId, normalizedSymbol],
+      );
+
+      const deletedPos = await client.query(
+        `DELETE FROM portfolio_positions
+         WHERE user_id = $1 AND symbol = $2
+         RETURNING symbol`,
+        [resolvedUserId, normalizedSymbol],
+      );
+
+      if (deletedPos.rowCount === 0) {
+        throw new Error(`Position not found for ${normalizedSymbol}.`);
+      }
+
+      await client.query('COMMIT');
+      return { symbol: normalizedSymbol, deletedTransactions: deletedTx.rowCount };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
 }

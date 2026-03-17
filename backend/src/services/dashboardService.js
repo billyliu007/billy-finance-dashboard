@@ -46,6 +46,14 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
     const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
     return {
       ...p,
+      baseQty,
+      baseAvgCost: baseAvg,
+      baseCost,
+      txQty: Number(tx.txQty) || 0,
+      txCost: Number(tx.txCost) || 0,
+      totalQty,
+      totalCost,
+      totalAvgCost: avgCost,
       qty: totalQty,
       purchasePrice: avgCost,
     };

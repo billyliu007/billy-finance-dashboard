@@ -29,6 +29,15 @@ function normalizePositionsWithConfig(positions, configuredAssetMap) {
           : 'USD';
     return {
       ...configured,
+      // Preserve any precomputed fields from dashboardService (base holding + tx rollups).
+      baseQty: position?.baseQty != null ? Number(position.baseQty) : undefined,
+      baseAvgCost: position?.baseAvgCost != null ? Number(position.baseAvgCost) : undefined,
+      baseCost: position?.baseCost != null ? Number(position.baseCost) : undefined,
+      txQty: position?.txQty != null ? Number(position.txQty) : undefined,
+      txCost: position?.txCost != null ? Number(position.txCost) : undefined,
+      totalQty: position?.totalQty != null ? Number(position.totalQty) : undefined,
+      totalCost: position?.totalCost != null ? Number(position.totalCost) : undefined,
+      totalAvgCost: position?.totalAvgCost != null ? Number(position.totalAvgCost) : undefined,
       symbol,
       name: position?.name || configured?.name || symbol,
       category,

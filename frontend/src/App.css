@@ -898,13 +898,25 @@ h1 {
 }
 
 .positionActionsHeader {
-  width: 1%;
+  width: 128px;
   white-space: nowrap;
 }
 
 .positionActionsCell {
   white-space: nowrap;
   vertical-align: middle;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.positionActionsCell .headerIconBtn {
+  margin: 0;
+}
+
+.positionTxSectionHeader .headerIconBtn {
+  margin: 0;
 }
 
 .positionExpandBtn {
@@ -919,8 +931,18 @@ h1 {
   border-radius: 8px;
 }
 
+.positionAssetCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.positionAssetCell .positionExpandBtn {
+  margin-right: 0;
+}
+
 .positionAssetName {
-  vertical-align: middle;
+  display: inline-block;
 }
 
 .positionTxRow td {
@@ -934,7 +956,15 @@ h1 {
   border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-.positionTxPanelHeader {
+.positionTxSection {
+  margin-bottom: 12px;
+}
+
+.positionTxSection:last-child {
+  margin-bottom: 0;
+}
+
+.positionTxSectionHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -942,10 +972,52 @@ h1 {
   margin-bottom: 10px;
 }
 
+.positionTxHeaderBtn {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: rgba(15, 24, 43, 0.65);
+  color: #e2e8f0;
+  font-weight: 650;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.positionTxHeaderBtn:hover {
+  border-color: rgba(94, 234, 212, 0.7);
+  background: rgba(15, 24, 43, 0.85);
+}
+
+.positionTxPanel th {
+  position: static;
+}
+
+.positionTxSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.positionTxSummaryGrid span {
+  display: block;
+  font-size: 0.72rem;
+  color: #9fb8d8;
+  margin-bottom: 2px;
+}
+
+.positionTxSummaryGrid strong {
+  display: block;
+  font-size: 0.92rem;
+  color: #f8fbff;
+  font-variant-numeric: tabular-nums;
+}
+
 .positionTxTable {
   width: 100%;
   min-width: 0;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .positionTxTable th,
@@ -955,13 +1027,46 @@ h1 {
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-.positionActionBtn {
-  margin-right: 6px;
+.positionTxSpacerCol {
+  width: 110px;
 }
 
-.positionActionBtn:last-child {
+.positionTxTransactionsTable th:nth-child(1),
+.positionTxTransactionsTable td:nth-child(1) {
+  width: 110px;
+}
+
+.positionTxTransactionsTable th:last-child,
+.positionTxTransactionsTable td:last-child {
+  width: 128px;
+  text-align: right;
+}
+
+.positionTxTransactionsTable td:last-child .headerIconBtn {
+  margin-left: auto;
+}
+
+.positionHoldingTable th:last-child,
+.positionHoldingTable td:last-child {
+  width: 128px;
+  text-align: right;
+}
+
+.positionHoldingTable td:last-child .positionInlineActions {
+  justify-content: flex-end;
+}
+
+.positionInlineActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.positionActionBtn {
   margin-right: 0;
 }
+
+.positionActionBtn:last-child { margin-right: 0; }
 
 .positionActionBtnDanger {
   border-color: rgba(248, 113, 113, 0.5);
