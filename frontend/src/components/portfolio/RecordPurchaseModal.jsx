@@ -37,15 +37,20 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
   const displayName = position?.name || symbol;
   const positionCurrency = String(position?.currency || 'USD').toUpperCase();
   const normalizedPosCurrency = normalizeCashCurrency(positionCurrency);
+  const isCrypto = /crypto/i.test(String(position?.category || ''));
 
   const eligibleCash = useMemo(() => {
     const list = Array.isArray(cashComponents) ? cashComponents : [];
-    // Allow maximum flexibility for USD-like holdings: show USD/USDT/USDC cash even if the position is USDC or USDT.
+    // For crypto deductions, only allow USDT/USDC cash (not USD), but allow either stablecoin regardless of the pair.
+    if (isCrypto) {
+      return list.filter((c) => ['USDT', 'USDC'].includes(String(c?.currency || '').toUpperCase()));
+    }
+    // For non-crypto, match by currency (USDT/USDC normalize to USD).
     if (normalizedPosCurrency === 'USD') {
-      return list.filter((c) => ['USD', 'USDT', 'USDC'].includes(String(c?.currency || '').toUpperCase()));
+      return list.filter((c) => normalizeCashCurrency(c?.currency) === 'USD');
     }
     return list.filter((c) => normalizeCashCurrency(c?.currency) === normalizedPosCurrency);
-  }, [cashComponents, normalizedPosCurrency]);
+  }, [cashComponents, isCrypto, normalizedPosCurrency]);
 
   const estimatedCost = useMemo(() => {
     const q = Number(qty);
@@ -186,7 +191,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
                 ))}
               </select>
               <p className="hintText" style={{ marginTop: 6 }}>
-                USD / USDT / USDC cash can be used interchangeably for deduction (1:1).
+                Crypto deductions are limited to USDT/USDC cash items for consistency; either stablecoin can be used (1:1).
               </p>
             </label>
           )}

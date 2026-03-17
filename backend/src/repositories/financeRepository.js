@@ -158,6 +158,18 @@ export async function createPositionTransaction({
   await withDbClient(async (client) => {
     await client.query('BEGIN');
     try {
+      const positionRow = await client.query(
+        `SELECT category
+         FROM portfolio_positions
+         WHERE user_id = $1 AND symbol = $2`,
+        [resolvedUserId, sym],
+      );
+      if (positionRow.rowCount === 0) {
+        throw new Error('Position not found.');
+      }
+      const positionCategory = String(positionRow.rows[0].category || '');
+      const isCrypto = /crypto/i.test(positionCategory);
+
       const inserted = await client.query(
         `INSERT INTO portfolio_position_transactions (user_id, symbol, tx_date, qty, avg_cost_per_unit, notes)
          VALUES ($1, $2, $3::date, $4, $5, $6)
@@ -177,9 +189,16 @@ export async function createPositionTransaction({
           throw new Error('Selected cash item not found.');
         }
         const curr = String(cashRow.rows[0].currency || '').toUpperCase();
-        // Allow maximum flexibility: treat USD/USDT/USDC as interchangeable for deduction (1:1).
-        if (curr !== 'USD' && curr !== 'USDT' && curr !== 'USDC') {
-          throw new Error('Selected cash item must be USD, USDT, or USDC.');
+        if (isCrypto) {
+          // For crypto transactions: only allow stablecoin cash buckets, not USD.
+          if (curr !== 'USDT' && curr !== 'USDC') {
+            throw new Error('For crypto purchases, the cash deduction item must be USDT or USDC.');
+          }
+        } else {
+          // For non-crypto purchases: allow only USD cash (stocks are USD).
+          if (curr !== 'USD') {
+            throw new Error('For non-crypto purchases, the cash deduction item must be USD.');
+          }
         }
         await client.query(
           `UPDATE cash
