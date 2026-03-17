@@ -1,5 +1,6 @@
 import PORTFOLIO_CONFIG from '../config/portfolioConfig.js';
 import { isCryptoAsset, isStockAsset } from '../lib/assetUtils.js';
+import { resolvePositionPrice } from '../lib/priceResolution.js';
 
 function isNonPositiveOrInvalidQuantity(value) {
   const num = Number(value);
@@ -7,27 +8,11 @@ function isNonPositiveOrInvalidQuantity(value) {
 }
 
 function resolveCurrentPrice(asset, stockQuotes, cryptoQuotes) {
-  const symbol = String(asset?.symbol || asset?.name || '').trim().toUpperCase();
-  const livePrice = isStockAsset(asset)
-    ? Number(stockQuotes?.[symbol]?.price)
-    : isCryptoAsset(asset)
-      ? Number(cryptoQuotes?.[symbol]?.price)
-      : NaN;
-  if (!Number.isFinite(livePrice) || livePrice <= 0) {
-    return {
-      currentPrice: null,
-      priceSource: 'unavailable',
-      priceTimestamp: null,
-    };
-  }
+  const { price, source, timestamp } = resolvePositionPrice(asset, stockQuotes, cryptoQuotes);
   return {
-    currentPrice: livePrice,
-    priceSource: isStockAsset(asset)
-      ? String(stockQuotes?.[symbol]?.source || 'finnhub')
-      : String(cryptoQuotes?.[symbol]?.source || 'crypto-live'),
-    priceTimestamp: isStockAsset(asset)
-      ? Number(stockQuotes?.[symbol]?.timestamp) || null
-      : Number(cryptoQuotes?.[symbol]?.timestamp) || null,
+    currentPrice: price,
+    priceSource: source ?? 'unavailable',
+    priceTimestamp: timestamp ?? null,
   };
 }
 

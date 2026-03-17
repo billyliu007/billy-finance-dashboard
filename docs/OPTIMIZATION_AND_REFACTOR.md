@@ -136,3 +136,13 @@ No extra indexes are required for current query patterns. If you add queries tha
 | DB         | No change needed for current usage          | –                   | –        |
 
 Recommended order if you do them: (1) N+1 fix, (4) error middleware, (2) shared price resolution, then (3) repository split when you next work in that code.
+
+---
+
+## Implemented (post-tag `pre-refactor-optimization`)
+
+- **N+1 fix:** `findCoinbaseQuoteCurrenciesByIds` added; `replacePortfolioPositions` batches Coinbase product lookup.
+- **Error middleware:** Central `app.use((err, _req, res, _next) => ...)`; routes use `next(error)` and `error.statusCode` (400/404/409/500).
+- **Shared price resolution:** `lib/priceResolution.js` exports `resolvePositionPrice(asset, stockQuotes, cryptoQuotes)`; `portfolioService` and `netWorthService` use it.
+
+**Revert if needed:** `git reset --hard pre-refactor-optimization` (discards refactor commit(s)) or `git revert <commit>` to undo the refactor while keeping history.

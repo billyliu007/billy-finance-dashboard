@@ -3,7 +3,7 @@ import {
   normalizeCurrencyCode,
   percentFromReference,
 } from '../lib/number.js';
-import { isCryptoAsset, isStockAsset } from '../lib/assetUtils.js';
+import { resolvePositionPrice } from '../lib/priceResolution.js';
 
 function currencyToComponentKey(currency) {
   return currency === 'CNY' ? 'cny_assets_total' : `${currency.toLowerCase()}_assets_in_cny`;
@@ -49,29 +49,13 @@ function buildDetailRows(cashComponents, fxRates) {
   });
 }
 
-function resolvePositionCurrentPrice(asset, stockQuotes, cryptoQuotes) {
-  if (!isStockAsset(asset) && !isCryptoAsset(asset)) {
-    return Number(asset?.purchasePrice || 0);
-  }
-
-  const symbol = String(asset?.symbol || asset?.name || '').trim().toUpperCase();
-  const livePrice = isStockAsset(asset)
-    ? Number(stockQuotes?.[symbol]?.price)
-    : Number(cryptoQuotes?.[symbol]?.price);
-  if (!Number.isFinite(livePrice) || livePrice <= 0) {
-    return null;
-  }
-
-  return livePrice;
-}
-
 function computeUsdPositionsTotal(positions, stockQuotes = {}, cryptoQuotes = {}) {
   return (positions || []).reduce((sum, asset) => {
     const qty = Number(asset?.qty || 0);
     if (!Number.isFinite(qty) || qty <= 0) {
       return sum;
     }
-    const currentPrice = resolvePositionCurrentPrice(asset, stockQuotes, cryptoQuotes);
+    const { price: currentPrice } = resolvePositionPrice(asset, stockQuotes, cryptoQuotes);
     if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
       return sum;
     }

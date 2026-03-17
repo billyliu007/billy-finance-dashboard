@@ -86,11 +86,12 @@ export default function createApp() {
     });
   });
 
-  app.get('/api/auth/google/start', (_req, res) => {
+  app.get('/api/auth/google/start', (_req, res, next) => {
     try {
       return res.redirect(buildGoogleAuthUrl());
     } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+      error.statusCode = 400;
+      next(error);
     }
   });
 
@@ -108,11 +109,12 @@ export default function createApp() {
     }
   });
 
-  app.get('/api/auth/apple/start', (_req, res) => {
+  app.get('/api/auth/apple/start', (_req, res, next) => {
     try {
       return res.redirect(buildAppleAuthUrl());
     } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+      error.statusCode = 400;
+      next(error);
     }
   });
 
@@ -152,7 +154,7 @@ export default function createApp() {
     return res.status(200).json({ ok: true });
   });
 
-  app.post('/api/auth/demo', async (_req, res) => {
+  app.post('/api/auth/demo', async (_req, res, next) => {
     try {
       const demoUser = await resolveOrCreateDemoUser();
       const sessionToken = await createUserSession(demoUser.id);
@@ -169,7 +171,8 @@ export default function createApp() {
         },
       });
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
@@ -190,7 +193,7 @@ export default function createApp() {
     });
   });
 
-  app.post('/api/onboarding/initialize', requireAuth, async (req, res) => {
+  app.post('/api/onboarding/initialize', requireAuth, async (req, res, next) => {
     try {
       const userId = req.auth.user.userId;
       const parsed = parseOnboardingPayload(req.body || {});
@@ -207,11 +210,12 @@ export default function createApp() {
         },
       });
     } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+      error.statusCode = 400;
+      next(error);
     }
   });
 
-  app.post('/api/onboarding/complete', requireAuth, async (req, res) => {
+  app.post('/api/onboarding/complete', requireAuth, async (req, res, next) => {
     try {
       const userId = req.auth.user.userId;
       const rawName = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
@@ -227,42 +231,46 @@ export default function createApp() {
         },
       });
     } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+      error.statusCode = 400;
+      next(error);
     }
   });
 
-  app.get('/api/currencies', requireAuth, async (req, res) => {
+  app.get('/api/currencies', requireAuth, async (req, res, next) => {
     try {
       const currencies = await listCurrencies();
       return res.json({ currencies });
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
-  app.get('/api/market/coinbase-products', requireAuth, async (req, res) => {
+  app.get('/api/market/coinbase-products', requireAuth, async (req, res, next) => {
     try {
       const queryText = String(req.query.q || '').trim();
       const limit = Number(req.query.limit || 200);
       const products = await listCoinbaseProducts({ queryText, limit });
       return res.json({ products });
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
-  app.get('/api/market/us-stock-symbols', requireAuth, async (req, res) => {
+  app.get('/api/market/us-stock-symbols', requireAuth, async (req, res, next) => {
     try {
       const queryText = String(req.query.q || '').trim();
       const limit = Number(req.query.limit || 50);
       const symbols = await listUsStockSymbols({ queryText, limit });
       return res.json({ symbols });
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
-  app.post('/api/portfolio/positions/crypto', requireAuth, async (req, res) => {
+  app.post('/api/portfolio/positions/crypto', requireAuth, async (req, res, next) => {
     try {
       const productId = String(req.body?.productId || '').trim();
       const qty = Number(req.body?.qty);
@@ -275,13 +283,12 @@ export default function createApp() {
       });
       return res.status(201).json({ ok: true, ...result });
     } catch (error) {
-      const message = getErrorMessage(error);
-      const status = /already exists/i.test(message) ? 409 : 400;
-      return res.status(status).json({ message });
+      error.statusCode = /already exists/i.test(getErrorMessage(error)) ? 409 : 400;
+      next(error);
     }
   });
 
-  app.post('/api/portfolio/positions/stock', requireAuth, async (req, res) => {
+  app.post('/api/portfolio/positions/stock', requireAuth, async (req, res, next) => {
     try {
       const symbol = String(req.body?.symbol || '').trim().toUpperCase();
       const qty = Number(req.body?.qty);
@@ -294,13 +301,12 @@ export default function createApp() {
       });
       return res.status(201).json({ ok: true, ...result });
     } catch (error) {
-      const message = getErrorMessage(error);
-      const status = /already exists/i.test(message) ? 409 : 400;
-      return res.status(status).json({ message });
+      error.statusCode = /already exists/i.test(getErrorMessage(error)) ? 409 : 400;
+      next(error);
     }
   });
 
-  app.patch('/api/portfolio/positions/:symbol', requireAuth, async (req, res) => {
+  app.patch('/api/portfolio/positions/:symbol', requireAuth, async (req, res, next) => {
     try {
       const symbol = String(req.params?.symbol || '').trim().toUpperCase();
       const qty = Number(req.body?.qty);
@@ -313,51 +319,56 @@ export default function createApp() {
       });
       return res.status(200).json({ ok: true, ...result });
     } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+      error.statusCode = /not found/i.test(getErrorMessage(error)) ? 404 : 400;
+      next(error);
     }
   });
 
-  app.delete('/api/portfolio/positions/:symbol', requireAuth, async (req, res) => {
+  app.delete('/api/portfolio/positions/:symbol', requireAuth, async (req, res, next) => {
     try {
       const symbol = String(req.params?.symbol || '').trim().toUpperCase();
       const result = await deletePosition(req.auth.user.userId, symbol);
       return res.status(200).json({ ok: true, ...result });
     } catch (error) {
-      return res.status(404).json({ message: getErrorMessage(error) });
+      error.statusCode = 404;
+      next(error);
     }
   });
 
-  app.get('/api/dashboard', requireAuth, async (req, res) => {
+  app.get('/api/dashboard', requireAuth, async (req, res, next) => {
     try {
       const baseCurrency = req.auth.user.baseCurrency || 'USD';
       const payload = await resolveDashboardPayload(req.auth.user.userId, baseCurrency);
       return res.json({ netWorth: payload.netWorth, portfolio: payload.portfolio });
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
-  app.get('/api/dashboard/net-worth', requireAuth, async (req, res) => {
+  app.get('/api/dashboard/net-worth', requireAuth, async (req, res, next) => {
     try {
       const baseCurrency = req.auth.user.baseCurrency || 'USD';
       const payload = await resolveDashboardPayload(req.auth.user.userId, baseCurrency);
       return res.json(payload.netWorth);
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
-  app.get('/api/dashboard/portfolio', requireAuth, async (req, res) => {
+  app.get('/api/dashboard/portfolio', requireAuth, async (req, res, next) => {
     try {
       const baseCurrency = req.auth.user.baseCurrency || 'USD';
       const payload = await resolveDashboardPayload(req.auth.user.userId, baseCurrency);
       return res.json(payload.portfolio);
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
-  app.patch('/api/user/preferences', requireAuth, async (req, res) => {
+  app.patch('/api/user/preferences', requireAuth, async (req, res, next) => {
     try {
       const baseCurrency = req.body?.baseCurrency;
       if (baseCurrency === undefined || baseCurrency === null) {
@@ -366,11 +377,12 @@ export default function createApp() {
       const code = await updateUserBaseCurrency(req.auth.user.userId, baseCurrency);
       return res.status(200).json({ ok: true, baseCurrency: code });
     } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+      error.statusCode = 400;
+      next(error);
     }
   });
 
-  app.put('/api/cash', requireAuth, async (req, res) => {
+  app.put('/api/cash', requireAuth, async (req, res, next) => {
     try {
       const list = Array.isArray(req.body?.cashComponents) ? req.body.cashComponents : [];
       const normalized = list.map((item, index) => {
@@ -388,11 +400,12 @@ export default function createApp() {
       await replaceCashComponents(req.auth.user.userId, normalized);
       return res.status(200).json({ ok: true });
     } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+      error.statusCode = 400;
+      next(error);
     }
   });
 
-  app.get('/api/dev/status', requireAuth, async (req, res) => {
+  app.get('/api/dev/status', requireAuth, async (req, res, next) => {
     try {
       const positions = await listPortfolioPositions(req.auth.user.userId);
       const providerDiagnostics = await buildProviderDiagnosticsForPositions(positions);
@@ -412,11 +425,12 @@ export default function createApp() {
         providerDiagnostics,
       });
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
   });
 
-  app.post('/api/internal/snapshot/daily', async (req, res) => {
+  app.post('/api/internal/snapshot/daily', async (req, res, next) => {
     const token = String(req.headers['x-cron-token'] || '');
     const expectedToken = String(process.env.SNAPSHOT_CRON_TOKEN || '');
     if (!expectedToken || token !== expectedToken) {
@@ -426,8 +440,14 @@ export default function createApp() {
       const results = await runDailySnapshots();
       return res.status(200).json({ ok: true, results });
     } catch (error) {
-      return res.status(500).json({ message: getErrorMessage(error) });
+      error.statusCode = 500;
+      next(error);
     }
+  });
+
+  app.use((err, _req, res, _next) => {
+    const status = err.statusCode ?? 500;
+    res.status(status).json({ message: getErrorMessage(err) });
   });
 
   return app;

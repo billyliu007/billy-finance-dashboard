@@ -85,6 +85,15 @@ export async function listPortfolioPositions(userId) {
 }
 
 export async function replacePortfolioPositions(userId, positions) {
+  const cryptoInstrumentIds = [
+    ...new Set(
+      (positions || [])
+        .filter((item) => /crypto/i.test(String(item.category || '')) && item.marketInstrumentId)
+        .map((item) => String(item.marketInstrumentId).trim().toUpperCase()),
+    ),
+  ];
+  const quoteCurrencyByProductId = await findCoinbaseQuoteCurrenciesByIds(cryptoInstrumentIds);
+
   await withDbClient(async (client) => {
     await client.query('BEGIN');
     try {
@@ -96,8 +105,8 @@ export async function replacePortfolioPositions(userId, positions) {
           if (cat === 'US Stock Assets' || /stock/i.test(cat)) {
             currency = 'USD';
           } else if (/crypto/i.test(cat) && item.marketInstrumentId) {
-            const product = await findCoinbaseProduct(item.marketInstrumentId);
-            currency = product?.quoteCurrency || 'USD';
+            const productId = String(item.marketInstrumentId).trim().toUpperCase();
+            currency = quoteCurrencyByProductId.get(productId) || 'USD';
           } else {
             currency = 'USD';
           }
@@ -267,6 +276,26 @@ export async function findCoinbaseProduct(productId) {
     [id],
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Fetch multiple Coinbase products by ids; returns Map(productId -> quoteCurrency).
+ * Use for batch lookup to avoid N+1 (e.g. in replacePortfolioPositions).
+ * @param {string[]} productIds
+ * @returns {Promise<Map<string, string>>}
+ */
+export async function findCoinbaseQuoteCurrenciesByIds(productIds) {
+  const ids = [...new Set((productIds || []).map((id) => String(id || '').trim().toUpperCase()).filter(Boolean))];
+  if (ids.length === 0) {
+    return new Map();
+  }
+  const result = await query(
+    `SELECT product_id, quote_currency
+     FROM coinbase_products
+     WHERE product_id = ANY($1::text[])`,
+    [ids],
+  );
+  return new Map(result.rows.map((r) => [r.product_id, r.quote_currency]));
 }
 
 /**
