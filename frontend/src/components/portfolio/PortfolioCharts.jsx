@@ -128,13 +128,15 @@ function PnlBarLabel({ x, y, width, height, index, data, hideValues }) {
   const point = Number.isInteger(index) ? data[index] : null;
   const pnl = Number(point?.pnl) || 0;
   const pnlPct = Number(point?.pnlPct) || 0;
-  const labelText = `${formatMaybeHidden(hideValues, formatMoney, pnl)} (${hideValues ? 'Hidden' : formatPercent(pnlPct)})`;
+  const moneyText = formatMaybeHidden(hideValues, formatMoney, pnl);
+  const pctText = hideValues ? 'Hidden' : formatPercent(pnlPct);
   const labelX = pnl >= 0 ? x + width + 8 : x - 8;
   const textAnchor = pnl >= 0 ? 'start' : 'end';
 
   return (
-    <text x={labelX} y={y + height / 2} dy={4} fill="#e2e8f0" fontSize={11} textAnchor={textAnchor}>
-      {labelText}
+    <text x={labelX} y={y + height / 2} dy={-2} fill="#e2e8f0" fontSize={11} textAnchor={textAnchor}>
+      <tspan x={labelX} dy="0">{moneyText}</tspan>
+      <tspan x={labelX} dy="12">{pctText}</tspan>
     </text>
   );
 }
