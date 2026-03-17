@@ -3,6 +3,9 @@ import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 export default function PortfolioKpis({ hideValues, totals, totalPnlPct }) {
   const { t } = useLanguage();
+  const realizedPnl = Number(totals.realizedPnl) || 0;
+  const realizedCost = Number(totals.realizedCost) || 0;
+  const realizedPct = realizedCost === 0 ? 0 : (realizedPnl / realizedCost) * 100;
   return (
     <div className="kpiRow">
       <article className="miniKpi">
@@ -12,9 +15,10 @@ export default function PortfolioKpis({ hideValues, totals, totalPnlPct }) {
       </article>
       <article className="miniKpi">
         <p>{t('portfolio.totalRealizedPl')}</p>
-        <h3 className={(Number(totals.realizedPnl) || 0) >= 0 ? 'pos' : 'neg'}>
-          {formatMaybeHidden(hideValues, formatMoney, Number(totals.realizedPnl) || 0)}
+        <h3 className={realizedPnl >= 0 ? 'pos' : 'neg'}>
+          {formatMaybeHidden(hideValues, formatMoney, realizedPnl)}
         </h3>
+        <small className={realizedPnl >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(realizedPct)}</small>
       </article>
       <article className="miniKpi">
         <p>{t('portfolio.totalMarketValue')}</p>

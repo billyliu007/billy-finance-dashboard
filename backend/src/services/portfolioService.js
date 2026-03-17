@@ -82,9 +82,10 @@ function aggregateTotals(visiblePositions) {
       acc.value += position.currentValue;
       acc.pnl += position.pnl;
       acc.realizedPnl += Number(position?.realizedPnl) || 0;
+      acc.realizedCost += Number(position?.sellCost) || 0;
       return acc;
     },
-    { cost: 0, value: 0, pnl: 0, realizedPnl: 0 },
+    { cost: 0, value: 0, pnl: 0, realizedPnl: 0, realizedCost: 0 },
   );
 }
 
