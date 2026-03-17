@@ -10,7 +10,7 @@ import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { putJson } from '../utils/api.js';
 
-function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
+function OverviewPanel({ hideValues, overview, isLoading, error, refresh, mutate }) {
   const { t } = useLanguage();
   const [isAddCashOpen, setIsAddCashOpen] = useState(false);
   const [editCash, setEditCash] = useState(null);
@@ -37,9 +37,29 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
       const nextList = cashComponents
         .filter((c) => c.id !== cashToDelete.id)
         .map((c) => ({ name: c.name, currency: c.currency, balance: c.balance }));
+      mutate?.((prev) => {
+        const targetId = cashToDelete?.id;
+        if (!prev?.netWorth?.overview || !targetId) return prev;
+        const ov = prev.netWorth.overview;
+        const nextComponents = Array.isArray(ov.cashComponents) ? ov.cashComponents.filter((c) => c.id !== targetId) : ov.cashComponents;
+        const nextRows = Array.isArray(ov.cashRows)
+          ? ov.cashRows.filter((r) => String(r?.id ?? r?.key?.replace(/^cash_/, '')) !== String(targetId))
+          : ov.cashRows;
+        return {
+          ...prev,
+          netWorth: {
+            ...prev.netWorth,
+            overview: {
+              ...ov,
+              cashComponents: nextComponents,
+              cashRows: nextRows,
+            },
+          },
+        };
+      });
       await putJson('/api/cash', { cashComponents: nextList });
       setCashToDelete(null);
-      refresh?.();
+      refresh?.({ mode: 'silent' });
     } catch (err) {
       window.alert(err?.message || t('errors.failedDelete'));
     } finally {
@@ -85,14 +105,14 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh }) {
         <AddCashModal
           open={isAddCashOpen}
           onClose={() => setIsAddCashOpen(false)}
-          onSaved={() => { refresh?.(); setIsAddCashOpen(false); }}
+          onSaved={() => { refresh?.({ mode: 'silent' }); setIsAddCashOpen(false); }}
           existingComponents={cashComponents}
         />
         <EditCashModal
           open={Boolean(editCash)}
           cash={editCash ?? undefined}
           onClose={() => setEditCash(null)}
-          onSaved={() => { refresh?.(); setEditCash(null); }}
+          onSaved={() => { refresh?.({ mode: 'silent' }); setEditCash(null); }}
           existingComponents={cashComponents}
         />
         <DeleteCashConfirmModal
@@ -134,13 +154,13 @@ function PerformancePanel({ hideValues, performance, isLoading, error, baseCurre
 }
 
 export default function NetWorthPage({ hideValues }) {
-  const { netWorth, isLoading, error, refresh } = useDashboard();
+  const { netWorth, isLoading, error, refresh, mutate } = useDashboard();
   const overview = netWorth?.overview;
   const performance = netWorth?.performance;
 
   return (
     <>
-      <OverviewPanel hideValues={hideValues} overview={overview} isLoading={isLoading} error={error} refresh={refresh} />
+      <OverviewPanel hideValues={hideValues} overview={overview} isLoading={isLoading} error={error} refresh={refresh} mutate={mutate} />
       <PerformancePanel hideValues={hideValues} performance={performance} isLoading={isLoading} error={error} baseCurrency={overview?.baseCurrency ?? 'USD'} />
     </>
   );

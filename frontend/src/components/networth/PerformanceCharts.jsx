@@ -58,8 +58,14 @@ function MarkerLabel({ viewBox, value, color, side = 'top', offsetY = 0 }) {
     y = viewBox.y + 10 + offsetY;
   }
 
-  x = Math.max(4, x);
-  y = Math.max(4, y);
+  const padding = 4;
+  const minX = padding;
+  const minY = padding;
+  const maxX = (viewBox.x ?? 0) + (viewBox.width ?? 0) - boxWidth - padding;
+  const maxY = (viewBox.y ?? 0) + (viewBox.height ?? 0) - boxHeight - padding;
+
+  x = Math.min(Math.max(minX, x), Number.isFinite(maxX) ? maxX : x);
+  y = Math.min(Math.max(minY, y), Number.isFinite(maxY) ? maxY : y);
 
   return (
     <g>

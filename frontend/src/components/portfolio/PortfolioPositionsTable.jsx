@@ -9,6 +9,7 @@ import {
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 import { deleteJson, fetchJson } from '../../utils/api.js';
 import RecordPurchaseModal from './RecordPurchaseModal.jsx';
+import RecordSaleModal from './RecordSaleModal.jsx';
 
 export default function PortfolioPositionsTable({
   hideValues,
@@ -28,8 +29,9 @@ export default function PortfolioPositionsTable({
   const [txLoadingBySymbol, setTxLoadingBySymbol] = useState(() => new Map());
   const [txErrorBySymbol, setTxErrorBySymbol] = useState(() => new Map());
   const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [recordPosition, setRecordPosition] = useState(null);
-  const [deleteTxConfirm, setDeleteTxConfirm] = useState(null); // { symbol, txId } | null
+  const [deleteTxConfirm, setDeleteTxConfirm] = useState(null); // { symbol, txId, txType } | null
 
   useEffect(() => {
     if (!showAddMenu) return;
@@ -144,11 +146,12 @@ export default function PortfolioPositionsTable({
     }
   }
 
-  function requestDeleteTx(symbol, txId) {
+  function requestDeleteTx(symbol, txId, txType) {
     const sym = String(symbol || '').trim().toUpperCase();
     const id = String(txId || '').trim();
     if (!sym || !id) return;
-    setDeleteTxConfirm({ symbol: sym, txId: id });
+    const kind = String(txType || '').trim().toUpperCase() || 'BUY';
+    setDeleteTxConfirm({ symbol: sym, txId: id, txType: kind });
   }
 
   async function handleDeleteTxConfirmed(symbol, txId) {
@@ -158,9 +161,9 @@ export default function PortfolioPositionsTable({
     try {
       await deleteJson(`/api/portfolio/transactions/${encodeURIComponent(id)}`);
       await loadTransactionsFor(sym);
-      onRefresh?.();
+      onRefresh?.({ mode: 'silent' });
     } catch (err) {
-      window.alert(err?.message || 'Failed to delete transaction.');
+      window.alert(err?.message || 'Failed to delete purchase.');
     }
   }
 
@@ -169,9 +172,31 @@ export default function PortfolioPositionsTable({
     setRecordModalOpen(true);
   }
 
+  function openRecordSale(item) {
+    setRecordPosition(item);
+    setSaleModalOpen(true);
+  }
+
+  function getTxType(tx) {
+    const raw = String(tx?.type || '').trim().toUpperCase();
+    return raw === 'SELL' ? 'SELL' : 'BUY';
+  }
+
+  function splitTxForItem(item) {
+    const sym = String(item.symbol || item.key).toUpperCase();
+    const list = txBySymbol.get(sym) || [];
+    const buys = [];
+    const sells = [];
+    for (const tx of list) {
+      if (getTxType(tx) === 'SELL') sells.push(tx);
+      else buys.push(tx);
+    }
+    return { buys, sells };
+  }
+
   const renderExpandedPanel = (item) => (
     <div className="positionTxPanel positionTxPanel--mobile">
-      <section className="positionTxSection">
+      <section className="positionTxSection positionTxSection--base">
         <div className="positionTxSectionHeader">
           <strong>Initial Holding</strong>
         </div>
@@ -248,7 +273,7 @@ export default function PortfolioPositionsTable({
         })()}
       </section>
 
-      <section className="positionTxSection">
+      <section className="positionTxSection positionTxSection--purchases">
         <div className="positionTxSectionHeader">
           <strong>Purchases</strong>
           <button
@@ -267,10 +292,12 @@ export default function PortfolioPositionsTable({
         )}
         {!txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
           <div className="positionTxCards">
-            {(txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).length === 0 ? (
+            {(() => {
+              const { buys } = splitTxForItem(item);
+              return buys.length === 0 ? (
               <p className="positionTxEmpty">No purchases yet.</p>
-            ) : (
-              (txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).map((tx) => {
+              ) : (
+              buys.map((tx) => {
                 const qty = Number(tx.qty) || 0;
                 const avgCost = Number(tx.avgCostPerUnit) || 0;
                 const cost = qty * avgCost;
@@ -285,7 +312,7 @@ export default function PortfolioPositionsTable({
                       <button
                         type="button"
                         className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                        onClick={() => requestDeleteTx(item.symbol || item.key, tx.id)}
+                        onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
                         aria-label="Delete purchase"
                         title="Delete"
                       >
@@ -321,7 +348,89 @@ export default function PortfolioPositionsTable({
                   </div>
                 );
               })
-            )}
+              );
+            })()}
+          </div>
+        )}
+      </section>
+
+      <section className="positionTxSection positionTxSection--sold">
+        <div className="positionTxSectionHeader">
+          <strong>Sold</strong>
+          <button
+            type="button"
+            className="headerIconBtn positionActionBtn"
+            onClick={() => openRecordSale(item)}
+            aria-label="Add Sale"
+            title="Add Sale"
+          >
+            +
+          </button>
+        </div>
+        {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+        {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+          <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
+        )}
+        {!txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+          <div className="positionTxCards">
+            {(() => {
+              const { sells } = splitTxForItem(item);
+              return sells.length === 0 ? (
+                <p className="positionTxEmpty">No sales yet.</p>
+              ) : (
+                sells.map((tx) => {
+                  const qty = Number(tx.qty) || 0;
+                  const sellPrice = Number(tx.avgCostPerUnit) || 0;
+                  const proceeds = qty * sellPrice;
+                  const basisPerUnit = Number(tx.costBasisPerUnit) || 0;
+                  const costSold = qty * basisPerUnit;
+                  const realized = proceeds - costSold;
+                  const realizedPct = costSold === 0 ? 0 : (realized / costSold) * 100;
+                  return (
+                    <div key={tx.id} className="positionTxCard">
+                      <div className="positionTxCardTitleRow">
+                        <strong>{tx.txDate}</strong>
+                        <button
+                          type="button"
+                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                          onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
+                          aria-label="Delete sale"
+                          title="Delete"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="positionTxCardGrid">
+                        <div>
+                          <span>Quantity</span>
+                          <strong>{formatMaybeHidden(hideValues, formatQty, qty)}</strong>
+                        </div>
+                        <div>
+                          <span>Sell Price Per Unit</span>
+                          <strong>{formatMaybeHidden(hideValues, formatMoney, sellPrice)}</strong>
+                        </div>
+                        <div>
+                          <span>Cost Per Unit</span>
+                          <strong>{formatMaybeHidden(hideValues, formatMoney, basisPerUnit)}</strong>
+                        </div>
+                        <div>
+                          <span>Sale Amount</span>
+                          <strong>{formatMaybeHidden(hideValues, formatMoney, proceeds)}</strong>
+                        </div>
+                        <div>
+                          <span>Realized P/L</span>
+                          <strong className={realized >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, realized)}</strong>
+                        </div>
+                        <div>
+                          <span>Realized Return (%)</span>
+                          <strong className={realized >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(realizedPct)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              );
+            })()}
           </div>
         )}
       </section>
@@ -337,8 +446,8 @@ export default function PortfolioPositionsTable({
               type="button"
               className="headerIconBtn positionExpandBtn"
               onClick={() => toggleExpanded(item)}
-              aria-label="Toggle transactions"
-              title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide transactions' : 'Show transactions'}
+              aria-label="Toggle purchases"
+              title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide purchases' : 'Show purchases'}
             >
               {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
             </button>
@@ -378,15 +487,15 @@ export default function PortfolioPositionsTable({
         <tr className="positionTxRow">
           <td colSpan={(onEditPosition || onDeletePosition) ? 11 : 10}>
             <div className="positionTxPanel">
-              <section className="positionTxSection">
+              <section className="positionTxSection positionTxSection--base">
                 <div className="positionTxSectionHeader">
-                  <strong>Existing Holding</strong>
+                  <strong>Initial Holding</strong>
                 </div>
                 <div className="tableWrap">
-                  <table className="positionTxTable positionHoldingTable">
+                  <table className="positionTxTable positionHoldingTable positionTxAlignedTable">
                     <thead>
                       <tr>
-                        <th aria-hidden="true" className="positionTxSpacerCol" />
+                        <th aria-hidden="true" className="positionTxColDate" />
                         <th>Quantity</th>
                         <th>Avg Cost Per Unit</th>
                         <th>Cost Basis</th>
@@ -408,7 +517,7 @@ export default function PortfolioPositionsTable({
                           const pnlPct = baseCost === 0 ? 0 : (pnl / baseCost) * 100;
                           return (
                             <>
-                              <td aria-hidden="true" className="positionTxSpacerCol" />
+                              <td aria-hidden="true" className="positionTxColDate" />
                               <td>{formatMaybeHidden(hideValues, formatQty, baseQty)}</td>
                               <td>{formatMaybeHidden(hideValues, formatMoney, baseAvg)}</td>
                               <td>{formatMaybeHidden(hideValues, formatMoney, baseCost)}</td>
@@ -456,7 +565,7 @@ export default function PortfolioPositionsTable({
                 </div>
               </section>
 
-              <section className="positionTxSection">
+              <section className="positionTxSection positionTxSection--purchases">
                 <div className="positionTxSectionHeader">
                   <strong>Purchases</strong>
                   <button
@@ -475,10 +584,10 @@ export default function PortfolioPositionsTable({
               )}
               {!txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
                 <div className="tableWrap">
-                  <table className="positionTxTable positionTxTransactionsTable">
+                  <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable">
                     <thead>
                       <tr>
-                        <th>Date</th>
+                        <th className="positionTxColDate">Date</th>
                         <th>Quantity</th>
                         <th>Avg Cost Per Unit</th>
                         <th>Cost Basis</th>
@@ -489,14 +598,16 @@ export default function PortfolioPositionsTable({
                       </tr>
                     </thead>
                     <tbody>
-                      {(txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).length === 0 ? (
+                      {(() => {
+                        const { buys } = splitTxForItem(item);
+                        return buys.length === 0 ? (
                         <tr>
-                          <td colSpan={8} style={{ color: '#94a3b8' }}>
-                            No transactions yet.
+                            <td colSpan={8} style={{ color: '#94a3b8' }}>
+                            No purchases yet.
                           </td>
                         </tr>
-                      ) : (
-                        (txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).map((tx) => (
+                        ) : (
+                        buys.map((tx) => (
                           <tr key={tx.id}>
                             <td>{tx.txDate}</td>
                             <td>{formatMaybeHidden(hideValues, formatQty, tx.qty)}</td>
@@ -522,8 +633,8 @@ export default function PortfolioPositionsTable({
                               <button
                                 type="button"
                                 className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                                onClick={() => requestDeleteTx(item.symbol || item.key, tx.id)}
-                                aria-label="Delete transaction"
+                                onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
+                                aria-label="Delete purchase"
                                 title="Delete"
                               >
                                 ✕
@@ -531,11 +642,97 @@ export default function PortfolioPositionsTable({
                             </td>
                           </tr>
                         ))
-                      )}
+                        );
+                      })()}
                     </tbody>
                   </table>
                 </div>
               )}
+              </section>
+
+              <section className="positionTxSection positionTxSection--sold">
+                <div className="positionTxSectionHeader">
+                  <strong>Sold</strong>
+                  <button
+                    type="button"
+                    className="headerIconBtn positionActionBtn"
+                    onClick={() => openRecordSale(item)}
+                    aria-label="Add Sale"
+                    title="Add Sale"
+                  >
+                    +
+                  </button>
+                </div>
+                {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+                {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+                  <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
+                )}
+                {!txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+                  <div className="tableWrap">
+                    <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable">
+                      <thead>
+                        <tr>
+                          <th className="positionTxColDate">Date</th>
+                          <th>Quantity</th>
+                          <th>Sell Price Per Unit</th>
+                          <th>Cost Per Unit</th>
+                          <th>Sale Amount</th>
+                          <th>Realized P/L</th>
+                          <th>Realized Return (%)</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const { sells } = splitTxForItem(item);
+                          return sells.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} style={{ color: '#94a3b8' }}>
+                                No sales yet.
+                              </td>
+                            </tr>
+                          ) : (
+                            sells.map((tx) => {
+                              const qty = Number(tx.qty) || 0;
+                              const sellPrice = Number(tx.avgCostPerUnit) || 0;
+                              const proceeds = qty * sellPrice;
+                              const basisPerUnit = Number(tx.costBasisPerUnit) || 0;
+                              const costSold = qty * basisPerUnit;
+                              const realized = proceeds - costSold;
+                              const realizedPct = costSold === 0 ? 0 : (realized / costSold) * 100;
+                              return (
+                                <tr key={tx.id}>
+                                  <td>{tx.txDate}</td>
+                                  <td>{formatMaybeHidden(hideValues, formatQty, qty)}</td>
+                                  <td>{formatMaybeHidden(hideValues, formatMoney, sellPrice)}</td>
+                                  <td>{formatMaybeHidden(hideValues, formatMoney, basisPerUnit)}</td>
+                                  <td>{formatMaybeHidden(hideValues, formatMoney, proceeds)}</td>
+                                  <td className={realized >= 0 ? 'pos' : 'neg'}>
+                                    {formatMaybeHidden(hideValues, formatMoney, realized)}
+                                  </td>
+                                  <td className={realized >= 0 ? 'pos' : 'neg'}>
+                                    {hideValues ? 'Hidden' : formatPercent(realizedPct)}
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                      onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
+                                      aria-label="Delete sale"
+                                      title="Delete"
+                                    >
+                                      ✕
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </section>
             </div>
           </td>
@@ -588,7 +785,20 @@ export default function PortfolioPositionsTable({
           if (recordPosition?.symbol) {
             await loadTransactionsFor(recordPosition.symbol);
           }
-          onRefresh?.();
+          onRefresh?.({ mode: 'silent' });
+        }}
+      />
+
+      <RecordSaleModal
+        open={saleModalOpen}
+        position={recordPosition}
+        cashComponents={cashComponents}
+        onClose={() => setSaleModalOpen(false)}
+        onSaved={async () => {
+          if (recordPosition?.symbol) {
+            await loadTransactionsFor(recordPosition.symbol);
+          }
+          onRefresh?.({ mode: 'silent' });
         }}
       />
 
@@ -596,7 +806,7 @@ export default function PortfolioPositionsTable({
         <div className="modalOverlay" role="presentation" onMouseDown={() => setDeleteTxConfirm(null)}>
           <div className="modalCard" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <div className="modalHeader">
-              <h2>Delete purchase?</h2>
+              <h2>{deleteTxConfirm?.txType === 'SELL' ? 'Delete sale?' : 'Delete purchase?'}</h2>
               <button type="button" className="modalCloseBtn" onClick={() => setDeleteTxConfirm(null)}>
                 Close
               </button>
@@ -729,30 +939,17 @@ export default function PortfolioPositionsTable({
                             <dt>Weight</dt>
                             <dd>{formatPercentUnsigned(item.weightPct)}</dd>
                           </div>
-                          {(onEditPosition || onDeletePosition) && (
+                          {onDeletePosition && (
                             <div className="positionCardActionIcons">
-                              {onEditPosition && (
-                                <button
-                                  type="button"
-                                  className="headerIconBtn positionActionBtn"
-                                  onClick={() => onEditPosition(item)}
-                                  aria-label={`Edit ${item.name}`}
-                                  title="Edit"
-                                >
-                                  ✎
-                                </button>
-                              )}
-                              {onDeletePosition && (
-                                <button
-                                  type="button"
-                                  className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                                  onClick={() => onDeletePosition(item)}
-                                  aria-label={`Delete ${item.name}`}
-                                  title="Delete"
-                                >
-                                  ✕
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                onClick={() => onDeletePosition(item)}
+                                aria-label={`Delete ${item.name}`}
+                                title="Delete"
+                              >
+                                ✕
+                              </button>
                             </div>
                           )}
                         </div>

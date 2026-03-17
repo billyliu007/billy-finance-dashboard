@@ -33,24 +33,38 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
   ]);
 
   const txAggBySymbol = new Map(
-    (txAggRows || []).map((r) => [String(r.symbol || '').toUpperCase(), { txQty: Number(r.txQty) || 0, txCost: Number(r.txCost) || 0 }]),
+    (txAggRows || []).map((r) => [
+      String(r.symbol || '').toUpperCase(),
+      {
+        buyQty: Number(r.buyQty) || 0,
+        buyCost: Number(r.buyCost) || 0,
+        sellQty: Number(r.sellQty) || 0,
+        sellCost: Number(r.sellCost) || 0,
+      },
+    ]),
   );
   const effectivePositions = (positions || []).map((p) => {
     const sym = String(p.symbol || '').toUpperCase();
-    const tx = txAggBySymbol.get(sym) || { txQty: 0, txCost: 0 };
+    const tx = txAggBySymbol.get(sym) || { buyQty: 0, buyCost: 0, sellQty: 0, sellCost: 0 };
     const baseQty = Number(p.qty) || 0;
     const baseAvg = Number(p.purchasePrice) || 0;
     const baseCost = baseQty * baseAvg;
-    const totalQty = baseQty + (Number(tx.txQty) || 0);
-    const totalCost = baseCost + (Number(tx.txCost) || 0);
+    const buyQty = Number(tx.buyQty) || 0;
+    const buyCost = Number(tx.buyCost) || 0;
+    const sellQty = Number(tx.sellQty) || 0;
+    const sellCost = Number(tx.sellCost) || 0;
+    const totalQty = baseQty + buyQty - sellQty;
+    const totalCost = baseCost + buyCost - sellCost;
     const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
     return {
       ...p,
       baseQty,
       baseAvgCost: baseAvg,
       baseCost,
-      txQty: Number(tx.txQty) || 0,
-      txCost: Number(tx.txCost) || 0,
+      buyQty,
+      buyCost,
+      sellQty,
+      sellCost,
       totalQty,
       totalCost,
       totalAvgCost: avgCost,

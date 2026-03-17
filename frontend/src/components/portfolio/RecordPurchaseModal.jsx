@@ -111,7 +111,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || 'Failed to save transaction.');
+      setError(err?.message || 'Failed to save purchase.');
     } finally {
       setIsSaving(false);
     }
@@ -120,10 +120,10 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
   if (!open) return null;
 
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Record purchase">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Add purchase">
       <section className="modalCard">
         <header className="modalHeader">
-          <h2>Record purchase</h2>
+          <h2>Add purchase</h2>
           <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>

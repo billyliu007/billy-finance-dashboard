@@ -57,9 +57,11 @@ CREATE TABLE IF NOT EXISTS portfolio_position_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   symbol TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'BUY' CHECK (type IN ('BUY', 'SELL')),
   tx_date DATE NOT NULL,
   qty NUMERIC(20, 8) NOT NULL,
   avg_cost_per_unit NUMERIC(20, 8) NOT NULL,
+  cost_basis_per_unit NUMERIC(20, 8),
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

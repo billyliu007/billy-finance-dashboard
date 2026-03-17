@@ -355,16 +355,22 @@ export default function createApp() {
       const txDate = String(req.body?.txDate || '').trim();
       const qty = Number(req.body?.qty);
       const avgCostPerUnit = Number(req.body?.avgCostPerUnit);
+      const type = req.body?.type ?? 'BUY';
+      const costBasisPerUnit = req.body?.costBasisPerUnit ?? null;
       const notes = req.body?.notes ?? null;
       const deductCashId = req.body?.deductCashId ?? null;
+      const creditCashId = req.body?.creditCashId ?? null;
       await createPositionTransaction({
         userId: req.auth.user.userId,
         symbol,
         txDate,
         qty,
         avgCostPerUnit,
+        type,
+        costBasisPerUnit,
         notes,
         deductCashId,
+        creditCashId,
       });
       return res.status(201).json({ ok: true });
     } catch (error) {

@@ -102,8 +102,10 @@ export async function listPortfolioPositions(userId) {
 export async function listPositionTransactionAggregates(userId) {
   const result = await query(
     `SELECT upper(symbol) AS symbol,
-            COALESCE(SUM(qty)::float8, 0) AS "txQty",
-            COALESCE(SUM(qty * avg_cost_per_unit)::float8, 0) AS "txCost"
+            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
+            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "sellQty",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "sellCost"
      FROM portfolio_position_transactions
      WHERE user_id = $1
      GROUP BY upper(symbol)`,
@@ -117,9 +119,11 @@ export async function listPositionTransactions(userId, symbol) {
   if (!sym) return [];
   const result = await query(
     `SELECT id,
+            upper(type) AS type,
             to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
             qty::float8 AS qty,
             avg_cost_per_unit::float8 AS "avgCostPerUnit",
+            cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
      FROM portfolio_position_transactions
@@ -136,22 +140,33 @@ export async function createPositionTransaction({
   txDate,
   qty,
   avgCostPerUnit,
+  type = 'BUY',
+  costBasisPerUnit = null,
   notes = null,
   deductCashId = null,
+  creditCashId = null,
 }) {
   const resolvedUserId = String(userId || '').trim();
   const sym = String(symbol || '').trim().toUpperCase();
   const date = String(txDate || '').trim();
   const q = Number(qty);
   const cost = Number(avgCostPerUnit);
+  const txType = String(type || 'BUY').trim().toUpperCase() || 'BUY';
+  const basisOverride = costBasisPerUnit == null ? null : Number(costBasisPerUnit);
   const memo = notes == null ? null : String(notes).trim() || null;
-  const cashId = deductCashId ? String(deductCashId).trim() : null;
+  const deductId = deductCashId ? String(deductCashId).trim() : null;
+  const creditId = creditCashId ? String(creditCashId).trim() : null;
 
   if (!resolvedUserId) throw new Error('Missing user id.');
   if (!sym) throw new Error('Symbol is required.');
   if (!date) throw new Error('Transaction date is required.');
   if (!Number.isFinite(q) || q <= 0) throw new Error('Quantity must be greater than 0.');
   if (!Number.isFinite(cost) || cost < 0) throw new Error('Average cost per unit must be 0 or greater.');
+  if (txType !== 'BUY' && txType !== 'SELL') throw new Error('Transaction type must be BUY or SELL.');
+  if (deductId && creditId) throw new Error('Choose either deductCashId or creditCashId, not both.');
+  if (txType === 'SELL' && basisOverride != null && (!Number.isFinite(basisOverride) || basisOverride < 0)) {
+    throw new Error('Cost basis per unit must be 0 or greater.');
+  }
 
   const total = q * cost;
 
@@ -159,7 +174,7 @@ export async function createPositionTransaction({
     await client.query('BEGIN');
     try {
       const positionRow = await client.query(
-        `SELECT category
+        `SELECT category, qty::float8 AS qty, purchase_price::float8 AS "purchasePrice"
          FROM portfolio_positions
          WHERE user_id = $1 AND symbol = $2`,
         [resolvedUserId, sym],
@@ -169,14 +184,56 @@ export async function createPositionTransaction({
       }
       const positionCategory = String(positionRow.rows[0].category || '');
       const isCrypto = /crypto/i.test(positionCategory);
+      const baseQty = Number(positionRow.rows[0].qty) || 0;
+      const baseAvg = Number(positionRow.rows[0].purchasePrice) || 0;
+      const baseCost = baseQty * baseAvg;
+
+      const agg = await client.query(
+        `SELECT
+            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
+            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "sellQty",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "sellCost"
+         FROM portfolio_position_transactions
+         WHERE user_id = $1 AND upper(symbol) = $2`,
+        [resolvedUserId, sym],
+      );
+      const buyQty = Number(agg.rows?.[0]?.buyQty) || 0;
+      const buyCost = Number(agg.rows?.[0]?.buyCost) || 0;
+      const sellQty = Number(agg.rows?.[0]?.sellQty) || 0;
+      const sellCost = Number(agg.rows?.[0]?.sellCost) || 0;
+
+      const currentQty = baseQty + buyQty - sellQty;
+      const currentCost = baseCost + buyCost - sellCost;
+      const currentAvgCost = currentQty > 0 ? currentCost / currentQty : 0;
+
+      if (txType === 'SELL') {
+        if (currentQty <= 0) throw new Error('No available quantity to sell.');
+        if (q > currentQty + 1e-12) throw new Error('Sell quantity exceeds current holding quantity.');
+      }
+
+      const sellBasisPerUnit = txType === 'SELL'
+        ? (basisOverride != null ? basisOverride : currentAvgCost)
+        : null;
 
       const inserted = await client.query(
-        `INSERT INTO portfolio_position_transactions (user_id, symbol, tx_date, qty, avg_cost_per_unit, notes)
-         VALUES ($1, $2, $3::date, $4, $5, $6)
+        `INSERT INTO portfolio_position_transactions (user_id, symbol, type, tx_date, qty, avg_cost_per_unit, cost_basis_per_unit, notes)
+         VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8)
          RETURNING id`,
-        [resolvedUserId, sym, date, q, cost, memo],
+        [
+          resolvedUserId,
+          sym,
+          txType,
+          date,
+          q,
+          cost,
+          sellBasisPerUnit,
+          memo,
+        ],
       );
 
+      const cashId = deductId || creditId;
+      const cashDelta = txType === 'BUY' ? -total : total;
       if (cashId) {
         const cashRow = await client.query(
           `SELECT id, upper(currency) AS currency, balance
@@ -192,19 +249,19 @@ export async function createPositionTransaction({
         if (isCrypto) {
           // For crypto transactions: only allow stablecoin cash buckets, not USD.
           if (curr !== 'USDT' && curr !== 'USDC') {
-            throw new Error('For crypto purchases, the cash deduction item must be USDT or USDC.');
+            throw new Error('For crypto transactions, the cash item must be USDT or USDC.');
           }
         } else {
-          // For non-crypto purchases: allow only USD cash (stocks are USD).
+          // For non-crypto transactions: allow only USD cash (stocks are USD).
           if (curr !== 'USD') {
-            throw new Error('For non-crypto purchases, the cash deduction item must be USD.');
+            throw new Error('For non-crypto transactions, the cash item must be USD.');
           }
         }
         await client.query(
           `UPDATE cash
-           SET balance = balance - $3, updated_at = NOW()
+           SET balance = balance + $3, updated_at = NOW()
            WHERE user_id = $1 AND id = $2`,
-          [resolvedUserId, cashId, total],
+          [resolvedUserId, cashId, cashDelta],
         );
       }
 

@@ -104,13 +104,62 @@ async function run() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
         symbol TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'BUY' CHECK (type IN ('BUY', 'SELL')),
         tx_date DATE NOT NULL,
         qty NUMERIC(20, 8) NOT NULL,
         avg_cost_per_unit NUMERIC(20, 8) NOT NULL,
+        cost_basis_per_unit NUMERIC(20, 8),
         notes TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_position_transactions
+      ADD COLUMN IF NOT EXISTS type TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_position_transactions
+      ADD COLUMN IF NOT EXISTS cost_basis_per_unit NUMERIC(20, 8);
+    `);
+    await client.query(`
+      UPDATE portfolio_position_transactions
+      SET type = 'BUY'
+      WHERE type IS NULL OR trim(type) = '';
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_position_transactions
+      ALTER COLUMN type SET NOT NULL;
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_position_transactions
+      ALTER COLUMN type SET DEFAULT 'BUY';
+    `);
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'portfolio_position_transactions_type_check'
+        ) THEN
+          ALTER TABLE portfolio_position_transactions
+          ADD CONSTRAINT portfolio_position_transactions_type_check CHECK (type IN ('BUY','SELL'));
+        END IF;
+      END$$;
+    `);
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'portfolio_position_transactions_sell_basis_check'
+        ) THEN
+          ALTER TABLE portfolio_position_transactions
+          ADD CONSTRAINT portfolio_position_transactions_sell_basis_check
+          CHECK (
+            (type = 'BUY' AND cost_basis_per_unit IS NULL)
+            OR (type = 'SELL' AND cost_basis_per_unit IS NOT NULL)
+          );
+        END IF;
+      END$$;
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol

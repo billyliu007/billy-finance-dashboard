@@ -94,7 +94,7 @@ function buildPrompt({ cashComponents, positions, language = 'en' }) {
   }
   lines.push('');
 
-  lines.push(isZh ? '## 持仓（按资产类别分组）' : '## Positions (grouped by asset class)');
+  lines.push(isZh ? '## 持仓（按资产类别分组）' : '## Holdings (grouped by asset class)');
   if (rows.length === 0) {
     lines.push(isZh ? '- （无）' : '- (none)');
   } else {
