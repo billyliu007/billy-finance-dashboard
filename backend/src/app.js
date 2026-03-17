@@ -27,6 +27,9 @@ import {
   updatePosition,
   deletePosition,
   listPortfolioPositions,
+  listPositionTransactions,
+  createPositionTransaction,
+  deletePositionTransaction,
   replaceCashComponents,
   replacePortfolioPositions,
 } from './repositories/financeRepository.js';
@@ -331,6 +334,52 @@ export default function createApp() {
       return res.status(200).json({ ok: true, ...result });
     } catch (error) {
       error.statusCode = 404;
+      next(error);
+    }
+  });
+
+  app.get('/api/portfolio/positions/:symbol/transactions', requireAuth, async (req, res, next) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const rows = await listPositionTransactions(req.auth.user.userId, symbol);
+      return res.json({ transactions: rows });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  });
+
+  app.post('/api/portfolio/positions/:symbol/transactions', requireAuth, async (req, res, next) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const txDate = String(req.body?.txDate || '').trim();
+      const qty = Number(req.body?.qty);
+      const avgCostPerUnit = Number(req.body?.avgCostPerUnit);
+      const notes = req.body?.notes ?? null;
+      const deductCashId = req.body?.deductCashId ?? null;
+      await createPositionTransaction({
+        userId: req.auth.user.userId,
+        symbol,
+        txDate,
+        qty,
+        avgCostPerUnit,
+        notes,
+        deductCashId,
+      });
+      return res.status(201).json({ ok: true });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  });
+
+  app.delete('/api/portfolio/transactions/:id', requireAuth, async (req, res, next) => {
+    try {
+      const transactionId = String(req.params?.id || '').trim();
+      const result = await deletePositionTransaction({ userId: req.auth.user.userId, transactionId });
+      return res.status(200).json(result);
+    } catch (error) {
+      error.statusCode = /not found/i.test(getErrorMessage(error)) ? 404 : 400;
       next(error);
     }
   });

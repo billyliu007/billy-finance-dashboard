@@ -12,7 +12,7 @@ import { deleteJson } from '../utils/api.js';
 
 export default function PortfolioPage({ hideValues }) {
   const { t } = useLanguage();
-  const { portfolio: data, isLoading, error, refresh } = useDashboard();
+  const { portfolio: data, netWorth, isLoading, error, refresh } = useDashboard();
   const [isAddCryptoOpen, setIsAddCryptoOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
   const [editPosition, setEditPosition] = useState(null);
@@ -51,6 +51,8 @@ export default function PortfolioPage({ hideValues }) {
             <PortfolioPositionsTable
               hideValues={hideValues}
               rows={rows}
+              cashComponents={netWorth?.overview?.cashComponents ?? []}
+              onRefresh={refresh}
               onAddCrypto={() => setIsAddCryptoOpen(true)}
               onAddStock={() => setIsAddStockOpen(true)}
               onEditPosition={(position) => setEditPosition(position)}

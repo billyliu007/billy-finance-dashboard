@@ -34,6 +34,21 @@ export async function listCashComponents(userId) {
   return result.rows;
 }
 
+export async function findCashById(userId, cashId) {
+  const id = String(cashId || '').trim();
+  if (!id) return null;
+  const result = await query(
+    `SELECT id,
+            upper(currency) AS currency,
+            name,
+            balance::float8 AS balance
+     FROM cash
+     WHERE user_id = $1 AND id = $2`,
+    [userId, id],
+  );
+  return result.rows[0] || null;
+}
+
 export async function replaceCashComponents(userId, components) {
   await withDbClient(async (client) => {
     await client.query('BEGIN');
@@ -82,6 +97,121 @@ export async function listPortfolioPositions(userId) {
     [userId],
   );
   return result.rows;
+}
+
+export async function listPositionTransactionAggregates(userId) {
+  const result = await query(
+    `SELECT upper(symbol) AS symbol,
+            COALESCE(SUM(qty)::float8, 0) AS "txQty",
+            COALESCE(SUM(qty * avg_cost_per_unit)::float8, 0) AS "txCost"
+     FROM portfolio_position_transactions
+     WHERE user_id = $1
+     GROUP BY upper(symbol)`,
+    [userId],
+  );
+  return result.rows;
+}
+
+export async function listPositionTransactions(userId, symbol) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!sym) return [];
+  const result = await query(
+    `SELECT id,
+            to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
+            qty::float8 AS qty,
+            avg_cost_per_unit::float8 AS "avgCostPerUnit",
+            notes,
+            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
+     FROM portfolio_position_transactions
+     WHERE user_id = $1 AND upper(symbol) = $2
+     ORDER BY tx_date DESC, created_at DESC`,
+    [userId, sym],
+  );
+  return result.rows;
+}
+
+export async function createPositionTransaction({
+  userId,
+  symbol,
+  txDate,
+  qty,
+  avgCostPerUnit,
+  notes = null,
+  deductCashId = null,
+}) {
+  const resolvedUserId = String(userId || '').trim();
+  const sym = String(symbol || '').trim().toUpperCase();
+  const date = String(txDate || '').trim();
+  const q = Number(qty);
+  const cost = Number(avgCostPerUnit);
+  const memo = notes == null ? null : String(notes).trim() || null;
+  const cashId = deductCashId ? String(deductCashId).trim() : null;
+
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  if (!sym) throw new Error('Symbol is required.');
+  if (!date) throw new Error('Transaction date is required.');
+  if (!Number.isFinite(q) || q <= 0) throw new Error('Quantity must be greater than 0.');
+  if (!Number.isFinite(cost) || cost < 0) throw new Error('Average cost per unit must be 0 or greater.');
+
+  const total = q * cost;
+
+  await withDbClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const inserted = await client.query(
+        `INSERT INTO portfolio_position_transactions (user_id, symbol, tx_date, qty, avg_cost_per_unit, notes)
+         VALUES ($1, $2, $3::date, $4, $5, $6)
+         RETURNING id`,
+        [resolvedUserId, sym, date, q, cost, memo],
+      );
+
+      if (cashId) {
+        const cashRow = await client.query(
+          `SELECT id, upper(currency) AS currency, balance
+           FROM cash
+           WHERE user_id = $1 AND id = $2
+           FOR UPDATE`,
+          [resolvedUserId, cashId],
+        );
+        if (cashRow.rowCount === 0) {
+          throw new Error('Selected cash item not found.');
+        }
+        const curr = String(cashRow.rows[0].currency || '').toUpperCase();
+        // Allow maximum flexibility: treat USD/USDT/USDC as interchangeable for deduction (1:1).
+        if (curr !== 'USD' && curr !== 'USDT' && curr !== 'USDC') {
+          throw new Error('Selected cash item must be USD, USDT, or USDC.');
+        }
+        await client.query(
+          `UPDATE cash
+           SET balance = balance - $3, updated_at = NOW()
+           WHERE user_id = $1 AND id = $2`,
+          [resolvedUserId, cashId, total],
+        );
+      }
+
+      await client.query('COMMIT');
+      return inserted.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+
+  return { ok: true };
+}
+
+export async function deletePositionTransaction({ userId, transactionId }) {
+  const resolvedUserId = String(userId || '').trim();
+  const id = String(transactionId || '').trim();
+  if (!resolvedUserId || !id) throw new Error('Missing user id or transaction id.');
+  const result = await query(
+    `DELETE FROM portfolio_position_transactions
+     WHERE user_id = $1 AND id = $2
+     RETURNING id`,
+    [resolvedUserId, id],
+  );
+  if (result.rowCount === 0) throw new Error('Transaction not found.');
+  return { ok: true };
 }
 
 export async function replacePortfolioPositions(userId, positions) {

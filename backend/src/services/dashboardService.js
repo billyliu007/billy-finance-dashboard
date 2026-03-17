@@ -13,6 +13,7 @@ import {
   listCashComponents,
   listNetWorthHistory,
   listPortfolioPositions,
+  listPositionTransactionAggregates,
 } from '../repositories/financeRepository.js';
 
 /**
@@ -24,11 +25,31 @@ import {
 export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
   const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
 
-  const [cashComponents, positions, history] = await Promise.all([
+  const [cashComponents, positions, history, txAggRows] = await Promise.all([
     listCashComponents(userId),
     listPortfolioPositions(userId),
     listNetWorthHistory(userId),
+    listPositionTransactionAggregates(userId),
   ]);
+
+  const txAggBySymbol = new Map(
+    (txAggRows || []).map((r) => [String(r.symbol || '').toUpperCase(), { txQty: Number(r.txQty) || 0, txCost: Number(r.txCost) || 0 }]),
+  );
+  const effectivePositions = (positions || []).map((p) => {
+    const sym = String(p.symbol || '').toUpperCase();
+    const tx = txAggBySymbol.get(sym) || { txQty: 0, txCost: 0 };
+    const baseQty = Number(p.qty) || 0;
+    const baseAvg = Number(p.purchasePrice) || 0;
+    const baseCost = baseQty * baseAvg;
+    const totalQty = baseQty + (Number(tx.txQty) || 0);
+    const totalCost = baseCost + (Number(tx.txCost) || 0);
+    const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
+    return {
+      ...p,
+      qty: totalQty,
+      purchasePrice: avgCost,
+    };
+  });
 
   const currenciesFromCash = [
     ...new Set((cashComponents || []).map((c) => String(c?.currency || '').toUpperCase()).filter(Boolean)),
@@ -38,14 +59,14 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
   }
 
   const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
-    getStockQuoteMapForPositions(positions),
-    getCryptoQuoteMapForPositions(positions),
+    getStockQuoteMapForPositions(effectivePositions),
+    getCryptoQuoteMapForPositions(effectivePositions),
     getLiveFxRates(currenciesFromCash),
   ]);
 
   const netWorth = buildNetWorthPayload({
     cashComponents,
-    positions,
+    positions: effectivePositions,
     history,
     stockQuotes,
     cryptoQuotes,
@@ -56,10 +77,10 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
   netWorth.overview.baseCurrency = base;
 
   const portfolio = buildPortfolioPayload({
-    positions,
+    positions: effectivePositions,
     stockQuotes,
     cryptoQuotes,
   });
 
-  return { netWorth, portfolio, fxRates, positions };
+  return { netWorth, portfolio, fxRates, positions: effectivePositions };
 }

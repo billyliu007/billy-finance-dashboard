@@ -36,7 +36,7 @@ export default function OnboardingPage({ onCompleted }) {
       }
     }
     load();
-  }, [reloadNonce]);
+  }, [reloadNonce, t]);
 
   const cashComponents = data?.netWorth?.overview?.cashComponents ?? [];
   const cashRows = data?.netWorth?.overview?.cashRows ?? [];

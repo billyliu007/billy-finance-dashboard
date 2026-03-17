@@ -53,6 +53,18 @@ CREATE TABLE IF NOT EXISTS portfolio_positions (
   UNIQUE (user_id, symbol)
 );
 
+CREATE TABLE IF NOT EXISTS portfolio_position_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  tx_date DATE NOT NULL,
+  qty NUMERIC(20, 8) NOT NULL,
+  avg_cost_per_unit NUMERIC(20, 8) NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS networth_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -99,6 +111,8 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
 CREATE INDEX IF NOT EXISTS idx_cash_user_id ON cash (user_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_positions_user_id ON portfolio_positions (user_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol ON portfolio_position_transactions (user_id, symbol);
+CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol_date ON portfolio_position_transactions (user_id, symbol, tx_date DESC);
 CREATE INDEX IF NOT EXISTS idx_networth_history_user_id_date ON networth_history (user_id, date_utc DESC);
 CREATE INDEX IF NOT EXISTS idx_coinbase_products_base_quote ON coinbase_products (base_currency, quote_currency);
 CREATE INDEX IF NOT EXISTS idx_us_stock_symbols_exchange ON us_stock_symbols (exchange);

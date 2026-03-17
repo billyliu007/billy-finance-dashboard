@@ -323,14 +323,18 @@ export function getStoredLanguage() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'zh' || stored === 'en') return stored;
-  } catch (_) {}
+  } catch {
+    // ignore
+  }
   return DEFAULT_LANGUAGE;
 }
 
 export function setStoredLanguage(lang) {
   try {
     localStorage.setItem(STORAGE_KEY, lang);
-  } catch (_) {}
+  } catch {
+    // ignore
+  }
 }
 
 /**

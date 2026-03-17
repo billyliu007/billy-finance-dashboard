@@ -1,0 +1,209 @@
+import { useEffect, useMemo, useState } from 'react';
+import { postJson } from '../../utils/api.js';
+import { sanitizeDecimalInput } from '../../utils/strings.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeCashCurrency(code) {
+  const c = String(code || '').trim().toUpperCase();
+  if (c === 'USDT' || c === 'USDC') return 'USD';
+  return c;
+}
+
+export default function RecordPurchaseModal({ open, position, cashComponents, onClose, onSaved }) {
+  const { t } = useLanguage();
+  const [txDate, setTxDate] = useState(todayIsoDate());
+  const [qty, setQty] = useState('');
+  const [avgCost, setAvgCost] = useState('');
+  const [deductEnabled, setDeductEnabled] = useState(false);
+  const [deductCashId, setDeductCashId] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setError('');
+    setTxDate(todayIsoDate());
+    setQty('');
+    setAvgCost('');
+    setDeductEnabled(false);
+    setDeductCashId('');
+  }, [open]);
+
+  const symbol = String(position?.symbol || '').toUpperCase();
+  const displayName = position?.name || symbol;
+  const positionCurrency = String(position?.currency || 'USD').toUpperCase();
+  const normalizedPosCurrency = normalizeCashCurrency(positionCurrency);
+
+  const eligibleCash = useMemo(() => {
+    const list = Array.isArray(cashComponents) ? cashComponents : [];
+    // Allow maximum flexibility for USD-like holdings: show USD/USDT/USDC cash even if the position is USDC or USDT.
+    if (normalizedPosCurrency === 'USD') {
+      return list.filter((c) => ['USD', 'USDT', 'USDC'].includes(String(c?.currency || '').toUpperCase()));
+    }
+    return list.filter((c) => normalizeCashCurrency(c?.currency) === normalizedPosCurrency);
+  }, [cashComponents, normalizedPosCurrency]);
+
+  const estimatedCost = useMemo(() => {
+    const q = Number(qty);
+    const c = Number(avgCost);
+    if (!Number.isFinite(q) || q <= 0) return 0;
+    if (!Number.isFinite(c) || c < 0) return 0;
+    return q * c;
+  }, [qty, avgCost]);
+
+  useEffect(() => {
+    if (!deductEnabled) return;
+    if (deductCashId) return;
+    if (eligibleCash.length > 0) {
+      setDeductCashId(String(eligibleCash[0].id));
+    }
+  }, [deductEnabled, deductCashId, eligibleCash]);
+
+  function handleQtyChange(e) {
+    setQty(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
+  }
+
+  function handleAvgCostChange(e) {
+    setAvgCost(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
+  }
+
+  async function handleSave() {
+    setError('');
+    if (!symbol) {
+      setError(t('errors.missingPosition'));
+      return;
+    }
+    const qtyNum = Number(qty);
+    const avgCostNum = Number(avgCost);
+    if (!txDate) {
+      setError('Date is required.');
+      return;
+    }
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      setError(t('errors.quantityGreaterZero'));
+      return;
+    }
+    if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
+      setError(t('errors.avgCostNonNegative'));
+      return;
+    }
+    if (deductEnabled && eligibleCash.length === 0) {
+      setError('No matching cash item found for deduction.');
+      return;
+    }
+    try {
+      setIsSaving(true);
+      await postJson(`/api/portfolio/positions/${encodeURIComponent(symbol)}/transactions`, {
+        txDate,
+        qty: qtyNum,
+        avgCostPerUnit: avgCostNum,
+        deductCashId: deductEnabled ? deductCashId || null : null,
+      });
+      onSaved?.();
+      onClose?.();
+    } catch (err) {
+      setError(err?.message || 'Failed to save transaction.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Record purchase">
+      <section className="modalCard">
+        <header className="modalHeader">
+          <h2>Record purchase</h2>
+          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
+            ✕
+          </button>
+        </header>
+
+        <div className="modalBody">
+          <label className="modalLabel">
+            Asset
+            <input type="text" value={displayName} readOnly className="modalInput" />
+          </label>
+
+          <div className="modalGrid">
+            <label className="modalLabel">
+              Date
+              <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="modalInput" />
+            </label>
+            <label className="modalLabel">
+              Quantity
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={qty}
+                onChange={handleQtyChange}
+                className="modalInput"
+              />
+            </label>
+            <label className="modalLabel">
+              Avg cost per unit ({positionCurrency || 'USD'})
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={avgCost}
+                onChange={handleAvgCostChange}
+                className="modalInput"
+              />
+            </label>
+          </div>
+
+          <div className="privacyToggle" style={{ marginTop: 10 }}>
+            <input
+              type="checkbox"
+              checked={deductEnabled}
+              onChange={(e) => setDeductEnabled(e.target.checked)}
+              id="deductCashToggle"
+            />
+            <label htmlFor="deductCashToggle">
+              Deduct from cash (optional){estimatedCost > 0 ? ` — est. ${estimatedCost.toFixed(2)}` : ''}
+            </label>
+          </div>
+
+          {deductEnabled && (
+            <label className="modalLabel">
+              Select cash item
+              <select
+                className="modalInput"
+                value={deductCashId}
+                onChange={(e) => setDeductCashId(e.target.value)}
+              >
+                {eligibleCash.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {String(c.currency).toUpperCase()} — {c.name}
+                  </option>
+                ))}
+              </select>
+              <p className="hintText" style={{ marginTop: 6 }}>
+                USD / USDT / USDC cash can be used interchangeably for deduction (1:1).
+              </p>
+            </label>
+          )}
+
+          {error && <p className="error">{error}</p>}
+        </div>
+
+        <footer className="modalFooter">
+          <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
+            {t('modals.cancel')}
+          </button>
+          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? t('modals.saving') : t('modals.save')}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+

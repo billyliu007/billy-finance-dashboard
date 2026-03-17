@@ -100,6 +100,27 @@ async function run() {
       WHERE currency IS NULL OR currency = '';
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS portfolio_position_transactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        symbol TEXT NOT NULL,
+        tx_date DATE NOT NULL,
+        qty NUMERIC(20, 8) NOT NULL,
+        avg_cost_per_unit NUMERIC(20, 8) NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol
+      ON portfolio_position_transactions (user_id, symbol);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol_date
+      ON portfolio_position_transactions (user_id, symbol, tx_date DESC);
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS currencies (
         code TEXT PRIMARY KEY,
         name TEXT NOT NULL,

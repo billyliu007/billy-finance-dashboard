@@ -54,7 +54,19 @@ export default function App() {
   }
 
   useEffect(() => {
-    refreshSession();
+    // Initial session state is already loading; avoid synchronous setState inside the effect body.
+    (async () => {
+      try {
+        const response = await fetchJson('/api/auth/session');
+        if (!response?.authenticated) {
+          setSession({ isLoading: false, authenticated: false, user: null, error: '' });
+          return;
+        }
+        setSession({ isLoading: false, authenticated: true, user: response.user, error: '' });
+      } catch (error) {
+        setSession({ isLoading: false, authenticated: false, user: null, error: error?.message || 'Auth check failed.' });
+      }
+    })();
   }, []);
 
   async function handleLogout() {

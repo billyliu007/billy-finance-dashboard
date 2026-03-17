@@ -7,6 +7,8 @@ import {
   formatQty,
 } from '../../utils/formatters.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
+import { deleteJson, fetchJson } from '../../utils/api.js';
+import RecordPurchaseModal from './RecordPurchaseModal.jsx';
 
 export default function PortfolioPositionsTable({
   hideValues,
@@ -15,10 +17,18 @@ export default function PortfolioPositionsTable({
   onAddStock,
   onEditPosition,
   onDeletePosition,
+  cashComponents,
+  onRefresh,
 }) {
   const { t } = useLanguage();
-  const [showMobileDetails, setShowMobileDetails] = useState(true);
+  const [showMobileDetails] = useState(true);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [expanded, setExpanded] = useState(() => new Set());
+  const [txBySymbol, setTxBySymbol] = useState(() => new Map());
+  const [txLoadingBySymbol, setTxLoadingBySymbol] = useState(() => new Map());
+  const [txErrorBySymbol, setTxErrorBySymbol] = useState(() => new Map());
+  const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [recordPosition, setRecordPosition] = useState(null);
 
   useEffect(() => {
     if (!showAddMenu) return;
@@ -99,9 +109,74 @@ export default function PortfolioPositionsTable({
   const formatPrice = (item, value) =>
     !hideValues && priceUnavailable(item) && value === 0 ? '—' : formatMaybeHidden(hideValues, formatMoney, value);
 
+  async function loadTransactionsFor(symbol) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    if (!sym) return;
+    setTxLoadingBySymbol((prev) => new Map(prev).set(sym, true));
+    setTxErrorBySymbol((prev) => {
+      const next = new Map(prev);
+      next.delete(sym);
+      return next;
+    });
+    try {
+      const res = await fetchJson(`/api/portfolio/positions/${encodeURIComponent(sym)}/transactions`);
+      const list = Array.isArray(res?.transactions) ? res.transactions : [];
+      setTxBySymbol((prev) => new Map(prev).set(sym, list));
+    } catch (err) {
+      setTxErrorBySymbol((prev) => new Map(prev).set(sym, err?.message || 'Failed to load transactions.'));
+    } finally {
+      setTxLoadingBySymbol((prev) => new Map(prev).set(sym, false));
+    }
+  }
+
+  function toggleExpanded(item) {
+    const sym = String(item?.symbol || item?.key || '').trim().toUpperCase();
+    if (!sym) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) next.delete(sym);
+      else next.add(sym);
+      return next;
+    });
+    if (!txBySymbol.has(sym)) {
+      loadTransactionsFor(sym);
+    }
+  }
+
+  async function handleDeleteTx(symbol, txId) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    const id = String(txId || '').trim();
+    if (!sym || !id) return;
+    if (!window.confirm('Delete this transaction? This cannot be undone.')) return;
+    try {
+      await deleteJson(`/api/portfolio/transactions/${encodeURIComponent(id)}`);
+      await loadTransactionsFor(sym);
+      onRefresh?.();
+    } catch (err) {
+      window.alert(err?.message || 'Failed to delete transaction.');
+    }
+  }
+
+  function openRecordPurchase(item) {
+    setRecordPosition(item);
+    setRecordModalOpen(true);
+  }
+
   const renderPositionRow = (item) => (
-    <tr key={item.key}>
-      <td data-label={t('portfolio.asset')}>{item.name}</td>
+    <>
+      <tr key={item.key}>
+        <td data-label={t('portfolio.asset')}>
+          <button
+            type="button"
+            className="headerIconBtn positionExpandBtn"
+            onClick={() => toggleExpanded(item)}
+            aria-label="Toggle transactions"
+            title="Show transactions"
+          >
+            {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
+          </button>
+          <span className="positionAssetName">{item.name}</span>
+        </td>
       <td data-label={t('portfolio.currency')}>{item.currency || 'USD'}</td>
       <td data-label={t('portfolio.quantity')}>{formatMaybeHidden(hideValues, formatQty, item.qty)}</td>
       <td data-label={t('portfolio.avgCostPerUnit')}>{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</td>
@@ -117,6 +192,15 @@ export default function PortfolioPositionsTable({
       </td>
       {(onEditPosition || onDeletePosition) && (
         <td data-label={t('netWorth.actions')} className="positionActionsCell">
+          <button
+            type="button"
+            className="headerIconBtn positionActionBtn"
+            onClick={() => openRecordPurchase(item)}
+            aria-label="Record purchase"
+            title="Record purchase"
+          >
+            +
+          </button>
           {onEditPosition && (
             <button
               type="button"
@@ -141,7 +225,68 @@ export default function PortfolioPositionsTable({
           )}
         </td>
       )}
-    </tr>
+      </tr>
+      {expanded.has(String(item.symbol || item.key).toUpperCase()) && (
+        <tr className="positionTxRow">
+          <td colSpan={(onEditPosition || onDeletePosition) ? 11 : 10}>
+            <div className="positionTxPanel">
+              <div className="positionTxPanelHeader">
+                <strong>Transactions</strong>
+                <button type="button" className="modalBtn" onClick={() => openRecordPurchase(item)}>
+                  Record purchase
+                </button>
+              </div>
+              {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+              {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+                <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
+              )}
+              {!txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
+                <table className="positionTxTable">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Qty</th>
+                      <th>Avg Cost</th>
+                      <th>Cost</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ color: '#94a3b8' }}>
+                          No transactions yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      (txBySymbol.get(String(item.symbol || item.key).toUpperCase()) || []).map((tx) => (
+                        <tr key={tx.id}>
+                          <td>{tx.txDate}</td>
+                          <td>{formatMaybeHidden(hideValues, formatQty, tx.qty)}</td>
+                          <td>{formatMaybeHidden(hideValues, formatMoney, tx.avgCostPerUnit)}</td>
+                          <td>{formatMaybeHidden(hideValues, formatMoney, (Number(tx.qty) || 0) * (Number(tx.avgCostPerUnit) || 0))}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                              onClick={() => handleDeleteTx(item.symbol || item.key, tx.id)}
+                              aria-label="Delete transaction"
+                              title="Delete"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 
   return (
@@ -178,6 +323,19 @@ export default function PortfolioPositionsTable({
           ))}
         </div>
       </article>
+
+      <RecordPurchaseModal
+        open={recordModalOpen}
+        position={recordPosition}
+        cashComponents={cashComponents}
+        onClose={() => setRecordModalOpen(false)}
+        onSaved={async () => {
+          if (recordPosition?.symbol) {
+            await loadTransactionsFor(recordPosition.symbol);
+          }
+          onRefresh?.();
+        }}
+      />
 
       <article className="tableCard portfolioMobileDetailsCard">
         <div className="detailsHeaderRow">
