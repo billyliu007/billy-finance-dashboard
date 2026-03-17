@@ -72,6 +72,34 @@ async function run() {
       DROP COLUMN IF EXISTS display_name;
     `);
     await client.query(`
+      UPDATE portfolio_positions
+      SET category = 'US Stock Assets'
+      WHERE category = 'Stock Assets';
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_positions
+      ADD COLUMN IF NOT EXISTS currency TEXT;
+    `);
+    await client.query(`
+      UPDATE portfolio_positions
+      SET currency = 'USD'
+      WHERE (category ILIKE '%stock%' OR category = 'US Stock Assets')
+        AND (currency IS NULL OR currency = '');
+    `);
+    await client.query(`
+      UPDATE portfolio_positions pp
+      SET currency = COALESCE(cp.quote_currency, 'USD')
+      FROM coinbase_products cp
+      WHERE pp.market_instrument_id = cp.product_id
+        AND pp.category ILIKE '%crypto%'
+        AND (pp.currency IS NULL OR pp.currency = '');
+    `);
+    await client.query(`
+      UPDATE portfolio_positions
+      SET currency = 'USD'
+      WHERE currency IS NULL OR currency = '';
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS currencies (
         code TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -109,6 +137,8 @@ async function run() {
       ['THB', 'Thai Baht'],
       ['TRY', 'Turkish Lira'],
       ['USD', 'United States Dollar'],
+      ['USDT', 'Tether'],
+      ['USDC', 'USD Coin'],
       ['ZAR', 'South African Rand'],
     ];
     for (const [code, name] of currencyRows) {

@@ -23,7 +23,7 @@ const DEFAULT_CONFIG = {
     {
       key: 'qqq',
       name: 'QQQ',
-      category: 'Stock Assets',
+      category: 'US Stock Assets',
       providerSymbols: {
         finnhub: 'QQQ',
       },
@@ -31,7 +31,7 @@ const DEFAULT_CONFIG = {
     {
       key: 'qqqm',
       name: 'QQQM',
-      category: 'Stock Assets',
+      category: 'US Stock Assets',
       providerSymbols: {
         finnhub: 'QQQM',
       },
@@ -39,7 +39,7 @@ const DEFAULT_CONFIG = {
     {
       key: 'tsla',
       name: 'TSLA',
-      category: 'Stock Assets',
+      category: 'US Stock Assets',
       providerSymbols: {
         finnhub: 'TSLA',
       },

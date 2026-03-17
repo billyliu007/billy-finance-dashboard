@@ -380,88 +380,25 @@
 }
 
 .appBody {
-  display: grid;
-  grid-template-columns: 248px 1fr;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
 }
 
-.appBody.sideNavCollapsed {
-  grid-template-columns: 0 1fr;
-}
-
 .sideNav {
-  border-right: 1px solid var(--line);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(6, 12, 25, 0.92), rgba(5, 10, 21, 0.92));
   backdrop-filter: blur(14px);
-  padding: 26px 16px;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  transition: min-width 200ms ease, padding 200ms ease;
+  padding: 14px 16px;
 }
 
-.sideNav.sideNav--collapsed {
-  min-width: 0;
-  width: 0;
-  padding: 26px 0;
-  overflow: visible;
-  border-right: none;
-}
-
-.sideNavToggle {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  right: -14px;
-  width: 28px;
-  height: 48px;
-  border-radius: 0 10px 10px 0;
-  border: 1px solid var(--line);
-  border-left: none;
-  background: linear-gradient(180deg, rgba(6, 12, 25, 0.98), rgba(5, 10, 21, 0.98));
-  color: #b6fdff;
-  font-size: 0.75rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
-  transition: background 160ms ease, color 160ms ease;
-}
-
-.sideNavToggle:hover {
-  background: rgba(14, 116, 144, 0.35);
-  color: #ecfeff;
-}
-
-.sideNav.sideNav--collapsed .sideNavToggle {
-  position: fixed;
-  left: 0;
-  right: auto;
-  top: 50%;
-  transform: translateY(-50%);
-  border-radius: 0 10px 10px 0;
-  border: 1px solid var(--line);
-  border-left: none;
-}
-
-.sideTitle {
-  margin: 0 0 18px;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: #b6fdff;
-  font-weight: 700;
-}
-
-.sideNav nav {
+.sideNavTabs {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
+  max-width: 480px;
 }
 
 .privacyToggle {
@@ -490,12 +427,12 @@
   font-weight: 600;
   font-size: 0.92rem;
   transition: all 180ms ease;
+  text-align: center;
 }
 
 .navLink:hover {
   background: rgba(15, 24, 43, 0.78);
   border-color: var(--line);
-  transform: translateX(1px);
 }
 
 .navLink.active {
@@ -506,6 +443,7 @@
 }
 
 .mainContent {
+  flex: 1;
   padding: 24px 26px 28px;
   width: 100%;
   min-width: 0;
@@ -743,9 +681,6 @@
   flex-wrap: wrap;
 }
 
-.appBody.sideNavCollapsed .mainContent {
-  padding-left: 38px;
-}
 
 .userMenu {
   position: relative;
@@ -1407,6 +1342,30 @@ h1 {
   letter-spacing: 0.06em;
 }
 
+.portfolioDesktopTables {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.portfolioAssetClassTable {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portfolioAssetClassTable .assetClassTableTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: 0.02em;
+}
+
+.positionsDesktopByClass {
+  min-width: 720px;
+}
+
 .portfolioMobileDetailsCard {
   display: none;
 }
@@ -1546,12 +1505,16 @@ h1 {
   color: #f8fbff;
 }
 
-.positionMarketPrice {
+.positionMarketPrice,
+.positionMarketMeta {
   font-size: 0.72rem;
   color: #7ee7ff;
   white-space: nowrap;
-  animation: livePriceBlink 1.2s ease-in-out infinite;
   text-shadow: 0 0 8px rgba(34, 211, 238, 0.55);
+}
+
+.positionMarketPrice {
+  animation: livePriceBlink 1.2s ease-in-out infinite;
 }
 
 .positionPnlDock {
@@ -1760,23 +1723,7 @@ tbody tr:hover td {
 }
 
 @media (max-width: 980px) {
-  .appBody {
-    grid-template-columns: 1fr;
-  }
-
-  .sideNav {
-    position: static;
-    height: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    padding: 14px 16px;
-  }
-
-  .sideNavToggle {
-    display: none;
-  }
-
-  .sideNav nav {
+  .sideNavTabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1886,6 +1833,7 @@ tbody tr:hover td {
     margin-right: 0;
   }
 
+  /* 11 cols: asset, currency, qty, avgCost, costBasis, marketPrice, marketValue, weight, unrealizedGain, unrealizedReturn, actions */
   .positionsMobileCompact th:nth-child(2),
   .positionsMobileCompact td:nth-child(2),
   .positionsMobileCompact th:nth-child(3),
@@ -1899,7 +1847,9 @@ tbody tr:hover td {
   .positionsMobileCompact th:nth-child(8),
   .positionsMobileCompact td:nth-child(8),
   .positionsMobileCompact th:nth-child(9),
-  .positionsMobileCompact td:nth-child(9) {
+  .positionsMobileCompact td:nth-child(9),
+  .positionsMobileCompact th:nth-child(10),
+  .positionsMobileCompact td:nth-child(10) {
     display: none;
   }
 
@@ -1917,7 +1867,7 @@ tbody tr:hover td {
 
   .positionsMobileCompact th:nth-child(1),
   .positionsMobileCompact td:nth-child(1) {
-    width: 42%;
+    width: 38%;
   }
 
   .positionsMobileCompact th:nth-child(7),
@@ -1925,8 +1875,8 @@ tbody tr:hover td {
     width: 30%;
   }
 
-  .positionsMobileCompact th:nth-child(10),
-  .positionsMobileCompact td:nth-child(10) {
+  .positionsMobileCompact th:nth-child(11),
+  .positionsMobileCompact td:nth-child(11) {
     width: 28%;
   }
 

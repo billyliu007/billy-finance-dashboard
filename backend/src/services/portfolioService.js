@@ -35,11 +35,19 @@ function normalizePositionsWithConfig(positions, configuredAssetMap) {
   return positions.map((position) => {
     const symbol = String(position?.symbol || '').toUpperCase();
     const configured = configuredAssetMap.get(symbol) || {};
+    const category = position?.category || configured?.category || 'Other';
+    const currency =
+      position?.currency && String(position.currency).trim()
+        ? String(position.currency).trim().toUpperCase()
+        : isStockAsset({ category })
+          ? 'USD'
+          : 'USD';
     return {
       ...configured,
       symbol,
       name: position?.name || configured?.name || symbol,
-      category: position?.category || configured?.category || 'Other',
+      category,
+      currency,
       qty: Number(position?.qty || 0),
       purchasePrice: Number(position?.purchasePrice || 0),
     };

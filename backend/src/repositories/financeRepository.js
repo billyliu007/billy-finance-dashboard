@@ -71,6 +71,7 @@ export async function listPortfolioPositions(userId) {
     `SELECT symbol,
             symbol AS name,
             category,
+            COALESCE(NULLIF(TRIM(currency), ''), 'USD') AS currency,
             qty::float8 AS qty,
             purchase_price::float8 AS "purchasePrice",
             market_provider AS "marketProvider",
@@ -89,13 +90,26 @@ export async function replacePortfolioPositions(userId, positions) {
     try {
       await client.query(`DELETE FROM portfolio_positions WHERE user_id = $1`, [userId]);
       for (const item of positions) {
+        let currency = item.currency && String(item.currency).trim() ? String(item.currency).trim().toUpperCase() : null;
+        if (!currency) {
+          const cat = String(item.category || '').trim();
+          if (cat === 'US Stock Assets' || /stock/i.test(cat)) {
+            currency = 'USD';
+          } else if (/crypto/i.test(cat) && item.marketInstrumentId) {
+            const product = await findCoinbaseProduct(item.marketInstrumentId);
+            currency = product?.quoteCurrency || 'USD';
+          } else {
+            currency = 'USD';
+          }
+        }
         await client.query(
-          `INSERT INTO portfolio_positions (user_id, symbol, category, qty, purchase_price, market_provider, market_instrument_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO portfolio_positions (user_id, symbol, category, currency, qty, purchase_price, market_provider, market_instrument_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             userId,
             String(item.symbol || '').toUpperCase(),
-            item.category || 'Stock Assets',
+            item.category || 'US Stock Assets',
+            currency,
             Number(item.qty || 0),
             Number(item.purchasePrice || 0),
             item.marketProvider || null,
@@ -310,13 +324,14 @@ export async function createCryptoPositionFromCoinbaseProduct({
           user_id,
           symbol,
           category,
+          currency,
           qty,
           purchase_price,
           market_provider,
           market_instrument_id
         )
-        VALUES ($1, $2, 'Crypto Assets', $3, $4, 'coinbase', $5)`,
-        [resolvedUserId, symbol, resolvedQty, resolvedCost, product.productId],
+        VALUES ($1, $2, 'Crypto Assets', $3, $4, $5, 'coinbase', $6)`,
+        [resolvedUserId, symbol, (product.quoteCurrency || 'USD').toUpperCase(), resolvedQty, resolvedCost, product.productId],
       );
 
       await client.query('COMMIT');
@@ -371,12 +386,13 @@ export async function createStockPositionFromSymbol({ userId, symbol, qty, avgCo
           user_id,
           symbol,
           category,
+          currency,
           qty,
           purchase_price,
           market_provider,
           market_instrument_id
         )
-        VALUES ($1, $2, 'Stock Assets', $3, $4, NULL, NULL)`,
+        VALUES ($1, $2, 'US Stock Assets', 'USD', $3, $4, NULL, NULL)`,
         [resolvedUserId, normalizedSymbol, resolvedQty, resolvedCost],
       );
 

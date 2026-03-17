@@ -5,6 +5,31 @@ const COINGECKO_SIMPLE_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/pric
 const COINBASE_TICKER_BASE_URL = 'https://api.exchange.coinbase.com/products';
 const CRYPTO_TIMEOUT_MS = 10000;
 
+const COINBASE_REQUEST_HEADERS = {
+  'User-Agent': 'billy-finance-dashboard/coinbase-ticker',
+  Accept: 'application/json',
+};
+
+/** Fetch one Coinbase product ticker; returns parsed quote or null. */
+async function fetchOneCoinbaseTicker(providerSymbol, assetSymbol, timeoutMs = CRYPTO_TIMEOUT_MS) {
+  const response = await fetchWithTimeout(
+    `${COINBASE_TICKER_BASE_URL}/${providerSymbol}/ticker`,
+    { timeoutMs, headers: COINBASE_REQUEST_HEADERS }
+  );
+  if (!response.ok) return null;
+  const body = await response.json();
+  const price = Number(body?.price);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const timestamp = body?.time ? new Date(body.time).getTime() : Date.now();
+  return {
+    symbol: assetSymbol,
+    pair: providerSymbol,
+    price,
+    timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+    source: 'coinbase',
+  };
+}
+
 function normalizeTargets(targets = []) {
   return targets
     .map((target) => {
@@ -116,6 +141,9 @@ export async function fetchCoingeckoUsdQuotes(symbols = []) {
   }
 }
 
+/** Alternate quote currencies to try if the position's product (e.g. ADA-USDC) fails. */
+const COINBASE_QUOTE_FALLBACKS = ['USDT', 'USDC', 'USD'];
+
 export async function fetchCoinbaseProductQuotes(targets = []) {
   const normalizedTargets = normalizeTargets(targets).map((target) => ({
     ...target,
@@ -125,36 +153,27 @@ export async function fetchCoinbaseProductQuotes(targets = []) {
     return {};
   }
 
-  const requests = normalizedTargets.map(async (target) => {
-    try {
-      const response = await fetchWithTimeout(
-        `${COINBASE_TICKER_BASE_URL}/${target.providerSymbol}/ticker`,
-        { timeoutMs: CRYPTO_TIMEOUT_MS }
-      );
-      if (!response.ok) {
+  const results = await Promise.all(
+    normalizedTargets.map(async (target) => {
+      const base = target.assetSymbol;
+      const preferred = target.providerSymbol; // e.g. ADA-USDC
+      try {
+        let quote = await fetchOneCoinbaseTicker(preferred, base);
+        if (quote) return quote;
+        const preferredQuote = preferred.includes('-') ? preferred.split('-')[1] : '';
+        for (const q of COINBASE_QUOTE_FALLBACKS) {
+          if (q === preferredQuote) continue;
+          const fallbackId = `${base}-${q}`;
+          quote = await fetchOneCoinbaseTicker(fallbackId, base);
+          if (quote) return quote;
+        }
+        return null;
+      } catch {
         return null;
       }
+    })
+  );
 
-      const body = await response.json();
-      const price = Number(body?.price);
-      if (!Number.isFinite(price) || price <= 0) {
-        return null;
-      }
-
-      const timestamp = body?.time ? new Date(body.time).getTime() : Date.now();
-      return {
-        symbol: target.assetSymbol,
-        pair: target.providerSymbol,
-        price,
-        timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
-        source: 'coinbase',
-      };
-    } catch {
-      return null;
-    }
-  });
-
-  const results = await Promise.all(requests);
   return results.reduce((acc, item) => {
     if (item) {
       acc[item.symbol] = item;

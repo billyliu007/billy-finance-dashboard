@@ -5,7 +5,7 @@ import { buildPortfolioPayload } from '../src/services/portfolioService.js';
 function samplePositions() {
   return [
     { symbol: 'BTC', name: 'BTC', category: 'Crypto Assets', qty: 0.5, purchasePrice: 60000 },
-    { symbol: 'QQQ', name: 'QQQ', category: 'Stock Assets', qty: 10, purchasePrice: 500 },
+    { symbol: 'QQQ', name: 'QQQ', category: 'US Stock Assets', qty: 10, purchasePrice: 500 },
   ];
 }
 

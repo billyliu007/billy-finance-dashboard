@@ -32,20 +32,12 @@ export default function App() {
     const saved = localStorage.getItem('hide_values_enabled');
     return saved === 'true';
   });
-  const [sideNavOpen, setSideNavOpen] = useState(() => {
-    const saved = localStorage.getItem('side_nav_open');
-    return saved !== 'false';
-  });
   const [session, setSession] = useState({ isLoading: true, authenticated: false, user: null, error: '' });
   const [buildVersion] = useState(() => resolveFrontendBuildVersion());
 
   useEffect(() => {
     localStorage.setItem('hide_values_enabled', String(hideValues));
   }, [hideValues]);
-
-  useEffect(() => {
-    localStorage.setItem('side_nav_open', String(sideNavOpen));
-  }, [sideNavOpen]);
 
   async function refreshSession() {
     try {
@@ -100,11 +92,8 @@ export default function App() {
             onLogout={handleLogout}
           />
         </header>
-        <div className={`appBody${sideNavOpen ? '' : ' sideNavCollapsed'}`}>
-          <SideNav
-            open={sideNavOpen}
-            onToggle={() => setSideNavOpen((prev) => !prev)}
-          />
+        <div className="appBody">
+          <SideNav />
           <main className="mainContent">
             {session.error && <p className="error">{session.error}</p>}
             <Routes>
