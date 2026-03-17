@@ -37,6 +37,7 @@ function normalizePositionsWithConfig(positions, configuredAssetMap) {
       buyCost: position?.buyCost != null ? Number(position.buyCost) : undefined,
       sellQty: position?.sellQty != null ? Number(position.sellQty) : undefined,
       sellCost: position?.sellCost != null ? Number(position.sellCost) : undefined,
+      realizedPnl: position?.realizedPnl != null ? Number(position.realizedPnl) : undefined,
       totalQty: position?.totalQty != null ? Number(position.totalQty) : undefined,
       totalCost: position?.totalCost != null ? Number(position.totalCost) : undefined,
       totalAvgCost: position?.totalAvgCost != null ? Number(position.totalAvgCost) : undefined,
@@ -80,9 +81,10 @@ function aggregateTotals(visiblePositions) {
       acc.cost += position.totalPurchaseCost;
       acc.value += position.currentValue;
       acc.pnl += position.pnl;
+      acc.realizedPnl += Number(position?.realizedPnl) || 0;
       return acc;
     },
-    { cost: 0, value: 0, pnl: 0 },
+    { cost: 0, value: 0, pnl: 0, realizedPnl: 0 },
   );
 }
 

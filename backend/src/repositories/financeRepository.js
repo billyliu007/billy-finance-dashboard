@@ -105,6 +105,7 @@ export async function listPositionTransactionAggregates(userId) {
             COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
             COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
             COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "sellQty",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "sellProceeds",
             COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "sellCost"
      FROM portfolio_position_transactions
      WHERE user_id = $1

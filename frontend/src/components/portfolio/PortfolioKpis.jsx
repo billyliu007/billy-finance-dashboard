@@ -11,6 +11,12 @@ export default function PortfolioKpis({ hideValues, totals, totalPnlPct }) {
         <small className={totals.pnl >= 0 ? 'pos' : 'neg'}>{formatPercent(totalPnlPct)}</small>
       </article>
       <article className="miniKpi">
+        <p>{t('portfolio.totalRealizedPl')}</p>
+        <h3 className={(Number(totals.realizedPnl) || 0) >= 0 ? 'pos' : 'neg'}>
+          {formatMaybeHidden(hideValues, formatMoney, Number(totals.realizedPnl) || 0)}
+        </h3>
+      </article>
+      <article className="miniKpi">
         <p>{t('portfolio.totalMarketValue')}</p>
         <h3>{formatMaybeHidden(hideValues, formatMoney, totals.value)}</h3>
       </article>
