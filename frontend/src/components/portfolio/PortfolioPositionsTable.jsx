@@ -166,15 +166,6 @@ export default function PortfolioPositionsTable({
     <>
       <tr key={item.key}>
         <td data-label={t('portfolio.asset')}>
-          <button
-            type="button"
-            className="headerIconBtn positionExpandBtn"
-            onClick={() => toggleExpanded(item)}
-            aria-label="Toggle transactions"
-            title="Show transactions"
-          >
-            {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
-          </button>
           <span className="positionAssetName">{item.name}</span>
         </td>
       <td data-label={t('portfolio.currency')}>{item.currency || 'USD'}</td>
@@ -192,6 +183,15 @@ export default function PortfolioPositionsTable({
       </td>
       {(onEditPosition || onDeletePosition) && (
         <td data-label={t('netWorth.actions')} className="positionActionsCell">
+          <button
+            type="button"
+            className="headerIconBtn positionActionBtn positionExpandBtn"
+            onClick={() => toggleExpanded(item)}
+            aria-label="Toggle transactions"
+            title={expanded.has(String(item.symbol || item.key).toUpperCase()) ? 'Hide transactions' : 'Show transactions'}
+          >
+            {expanded.has(String(item.symbol || item.key).toUpperCase()) ? '▾' : '▸'}
+          </button>
           <button
             type="button"
             className="headerIconBtn positionActionBtn"
