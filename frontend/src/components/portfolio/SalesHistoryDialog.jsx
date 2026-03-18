@@ -152,7 +152,7 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
 
   return (
     <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Sales history">
-      <section className="modalCard" style={{ maxWidth: 860 }}>
+      <section className="modalCard modalCard--wide">
         <header className="modalHeader">
           <h2>Sold history (does not affect holdings)</h2>
           <button type="button" className="modalCloseBtn" onClick={onClose} aria-label="Close">
@@ -188,9 +188,6 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
             <button type="button" className="modalBtn" onClick={handleImport} disabled={importing || loading}>
               {importing ? 'Importing…' : 'Import'}
             </button>
-            <button type="button" className="modalBtn secondary" onClick={loadHistory} disabled={importing || loading}>
-              {loading ? 'Refreshing…' : 'Refresh'}
-            </button>
             {importResult && <span className="hintText" style={{ marginLeft: 10 }}>{importResult}</span>}
           </div>
 
@@ -209,7 +206,7 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
             ) : history.length === 0 ? (
               <p className="positionTxEmpty">No imported sold history.</p>
             ) : (
-              <div className="tableWrap">
+              <div className="tableWrap salesHistoryWrap">
                 <table className="positionTxTable salesHistoryTable">
                   <thead>
                     <tr>
@@ -220,7 +217,6 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
                       <th>Sale Amount</th>
                       <th>Realized P/L</th>
                       <th>Realized Return (%)</th>
-                      <th>Notes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -245,7 +241,6 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
                           <td className={realized >= 0 ? 'pos' : 'neg'}>
                             {hideValues ? 'Hidden' : formatPercent(realizedPct)}
                           </td>
-                          <td>{row.notes || ''}</td>
                         </tr>
                       );
                     })}
@@ -263,7 +258,6 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
                       <td className={summary.realizedSum >= 0 ? 'pos' : 'neg'}>
                         {hideValues ? 'Hidden' : formatPercent(summary.realizedPct)}
                       </td>
-                      <td />
                     </tr>
                   </tfoot>
                 </table>

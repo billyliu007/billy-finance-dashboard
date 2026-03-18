@@ -1150,15 +1150,46 @@ h1 {
   width: 118px;
 }
 
-.salesHistoryTable th:nth-child(8),
-.salesHistoryTable td:nth-child(8) {
-  width: auto;
-  white-space: normal;
-}
-
 .salesHistorySummaryRow td {
   font-weight: 750;
   background: rgba(15, 23, 42, 0.45);
+}
+
+.salesHistoryWrap {
+  overflow: scroll;
+  scrollbar-gutter: stable both-edges;
+  max-height: 420px;
+}
+
+/* Scrollbar styling (dark theme, more visible) */
+.modalBody,
+.salesHistoryWrap {
+  scrollbar-color: rgba(148, 163, 184, 0.65) rgba(15, 23, 42, 0.5);
+  scrollbar-width: auto;
+}
+
+.modalBody::-webkit-scrollbar,
+.salesHistoryWrap::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.modalBody::-webkit-scrollbar-track,
+.salesHistoryWrap::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 999px;
+}
+
+.modalBody::-webkit-scrollbar-thumb,
+.salesHistoryWrap::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.65);
+  border-radius: 999px;
+  border: 3px solid rgba(15, 23, 42, 0.55);
+}
+
+.modalBody::-webkit-scrollbar-thumb:hover,
+.salesHistoryWrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(226, 232, 240, 0.72);
 }
 
 .positionTxHeaderBtn {
@@ -1326,6 +1357,10 @@ h1 {
   overflow: hidden;
 }
 
+.modalCard--wide {
+  width: min(980px, 100%);
+}
+
 .modalHeader {
   display: flex;
   align-items: center;
@@ -1355,8 +1390,9 @@ h1 {
   padding: 14px 16px 6px;
   display: grid;
   gap: 10px;
-  overflow: auto;
+  overflow: scroll;
   flex: 1 1 auto;
+  scrollbar-gutter: stable both-edges;
 }
 
 .modalLabel {
@@ -1374,6 +1410,12 @@ h1 {
   color: #f8fafc;
   font-size: 0.95rem;
   padding: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+textarea.modalInput {
+  resize: vertical;
 }
 
 .modalCard input[type="number"] {

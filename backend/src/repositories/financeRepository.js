@@ -171,6 +171,9 @@ export async function createPositionTransaction({
   if (txType === 'SELL' && basisOverride != null && (!Number.isFinite(basisOverride) || basisOverride < 0)) {
     throw new Error('Cost basis per unit must be 0 or greater.');
   }
+  if (txType === 'SELL' && basisOverride != null) {
+    throw new Error('Overriding cost basis per unit is not allowed for sells.');
+  }
 
   const total = q * cost;
 
@@ -216,9 +219,7 @@ export async function createPositionTransaction({
         if (q > currentQty + 1e-12) throw new Error('Sell quantity exceeds current holding quantity.');
       }
 
-      const sellBasisPerUnit = txType === 'SELL'
-        ? (basisOverride != null ? basisOverride : currentAvgCost)
-        : null;
+      const sellBasisPerUnit = txType === 'SELL' ? currentAvgCost : null;
 
       const inserted = await client.query(
         `INSERT INTO portfolio_position_transactions (user_id, symbol, type, tx_date, qty, avg_cost_per_unit, cost_basis_per_unit, notes)

@@ -18,7 +18,6 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
   const [txDate, setTxDate] = useState(todayIsoDate());
   const [qty, setQty] = useState('');
   const [pricePerUnit, setPricePerUnit] = useState('');
-  const [costBasisPerUnit, setCostBasisPerUnit] = useState('');
   const [creditEnabled, setCreditEnabled] = useState(false);
   const [creditCashId, setCreditCashId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -30,17 +29,16 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     setTxDate(todayIsoDate());
     setQty('');
     setPricePerUnit('');
-    const defaultBasis = Number(position?.purchasePrice);
-    setCostBasisPerUnit(Number.isFinite(defaultBasis) ? String(defaultBasis) : '');
     setCreditEnabled(false);
     setCreditCashId('');
-  }, [open, position?.purchasePrice]);
+  }, [open]);
 
   const symbol = String(position?.symbol || '').toUpperCase();
   const displayName = position?.name || symbol;
   const positionCurrency = String(position?.currency || 'USD').toUpperCase();
   const normalizedPosCurrency = normalizeCashCurrency(positionCurrency);
   const isCrypto = /crypto/i.test(String(position?.category || ''));
+  const referenceCostPerUnit = Number(position?.purchasePrice) || 0;
 
   const eligibleCash = useMemo(() => {
     const list = Array.isArray(cashComponents) ? cashComponents : [];
@@ -77,10 +75,6 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     setPricePerUnit(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
   }
 
-  function handleBasisChange(e) {
-    setCostBasisPerUnit(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
-  }
-
   async function handleSave() {
     setError('');
     if (!symbol) {
@@ -89,7 +83,6 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     }
     const qtyNum = Number(qty);
     const priceNum = Number(pricePerUnit);
-    const basisNum = Number(costBasisPerUnit);
     if (!txDate) {
       setError('Date is required.');
       return;
@@ -100,10 +93,6 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     }
     if (!Number.isFinite(priceNum) || priceNum < 0) {
       setError('Sell price per unit must be 0 or greater.');
-      return;
-    }
-    if (!Number.isFinite(basisNum) || basisNum < 0) {
-      setError('Cost per unit must be 0 or greater.');
       return;
     }
     if (creditEnabled && eligibleCash.length === 0) {
@@ -117,7 +106,6 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
         txDate,
         qty: qtyNum,
         avgCostPerUnit: priceNum,
-        costBasisPerUnit: basisNum,
         creditCashId: creditEnabled ? creditCashId || null : null,
       });
       onSaved?.();
@@ -175,14 +163,13 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
               />
             </label>
             <label className="modalLabel">
-              Cost per unit (default: avg cost)
+              Cost per unit (avg cost, read-only)
               <input
                 type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                value={costBasisPerUnit}
-                onChange={handleBasisChange}
+                value={Number.isFinite(referenceCostPerUnit) ? referenceCostPerUnit.toFixed(8).replace(/\.?0+$/, '') : ''}
+                readOnly
                 className="modalInput"
+                aria-readonly="true"
               />
             </label>
           </div>
