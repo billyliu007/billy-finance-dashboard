@@ -372,11 +372,18 @@
 }
 
 .appHeaderBrand {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0;
+  text-transform: none;
+  letter-spacing: 0;
   color: #b6fdff;
   font-weight: 700;
+}
+
+.appHeaderBrand .logoWordmark {
+  display: block;
 }
 
 .appBody {
@@ -1416,6 +1423,35 @@ h1 {
 
 textarea.modalInput {
   resize: vertical;
+}
+
+.modalRange {
+  width: 100%;
+  accent-color: rgba(94, 234, 212, 0.95);
+  cursor: pointer;
+}
+
+.modalRange:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modalRangeMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.modalRangeMeta strong {
+  font-size: 0.95rem;
+  color: #e2efff;
+}
+
+.modalRangeMeta span {
+  font-size: 0.82rem;
+  color: rgba(203, 213, 225, 0.9);
 }
 
 .modalCard input[type="number"] {

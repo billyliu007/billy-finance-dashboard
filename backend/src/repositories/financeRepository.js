@@ -383,6 +383,40 @@ export async function importHistoricalSaleTransactions({ userId, symbol, rows })
   return { ok: true, imported: list.length };
 }
 
+export async function clearHistoricalSaleTransactions({ userId, symbol }) {
+  const resolvedUserId = String(userId || '').trim();
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  if (!sym) throw new Error('Symbol is required.');
+  const result = await query(
+    `DELETE FROM portfolio_position_transactions
+     WHERE user_id = $1
+       AND upper(symbol) = $2
+       AND type = 'SELL'
+       AND affects_holdings = FALSE
+     RETURNING id`,
+    [resolvedUserId, sym],
+  );
+  return { ok: true, deleted: result.rowCount || 0 };
+}
+
+export async function getHistoricalSaleCount(userId, symbol) {
+  const resolvedUserId = String(userId || '').trim();
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  if (!sym) return 0;
+  const result = await query(
+    `SELECT COUNT(*)::int AS count
+     FROM portfolio_position_transactions
+     WHERE user_id = $1
+       AND upper(symbol) = $2
+       AND type = 'SELL'
+       AND affects_holdings = FALSE`,
+    [resolvedUserId, sym],
+  );
+  return Number(result?.rows?.[0]?.count) || 0;
+}
+
 export async function replacePortfolioPositions(userId, positions) {
   const cryptoInstrumentIds = [
     ...new Set(
@@ -615,7 +649,11 @@ export async function createCryptoPositionFromCoinbaseProduct({
     throw new Error('Missing user id.');
   }
   if (!Number.isFinite(resolvedQty) || resolvedQty <= 0) {
-    throw new Error('Quantity must be greater than 0.');
+    if (resolvedQty === 0) {
+      // Allow placeholder positions with 0 initial quantity (e.g. for importing realized history).
+    } else {
+      throw new Error('Quantity must be 0 or greater.');
+    }
   }
   if (!Number.isFinite(resolvedCost) || resolvedCost < 0) {
     throw new Error('Average cost per unit must be 0 or greater.');
@@ -690,7 +728,11 @@ export async function createStockPositionFromSymbol({ userId, symbol, qty, avgCo
     throw new Error('Stock symbol is required.');
   }
   if (!Number.isFinite(resolvedQty) || resolvedQty <= 0) {
-    throw new Error('Quantity must be greater than 0.');
+    if (resolvedQty === 0) {
+      // Allow placeholder positions with 0 initial quantity (e.g. for importing realized history).
+    } else {
+      throw new Error('Quantity must be 0 or greater.');
+    }
   }
   if (!Number.isFinite(resolvedCost) || resolvedCost < 0) {
     throw new Error('Average cost per unit must be 0 or greater.');
@@ -749,7 +791,11 @@ export async function updatePosition({ userId, symbol, qty, avgCostPerUnit }) {
     throw new Error('User id and symbol are required.');
   }
   if (!Number.isFinite(resolvedQty) || resolvedQty <= 0) {
-    throw new Error('Quantity must be greater than 0.');
+    if (resolvedQty === 0) {
+      // Allow placeholder positions with 0 initial quantity (e.g. for importing realized history).
+    } else {
+      throw new Error('Quantity must be 0 or greater.');
+    }
   }
   if (!Number.isFinite(resolvedCost) || resolvedCost < 0) {
     throw new Error('Average cost per unit must be 0 or greater.');

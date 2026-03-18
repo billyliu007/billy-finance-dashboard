@@ -32,6 +32,8 @@ import {
   deletePositionTransaction,
   listHistoricalSaleTransactions,
   importHistoricalSaleTransactions,
+  clearHistoricalSaleTransactions,
+  getHistoricalSaleCount,
   replaceCashComponents,
   replacePortfolioPositions,
 } from './repositories/financeRepository.js';
@@ -398,6 +400,28 @@ export default function createApp() {
       const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
       const result = await importHistoricalSaleTransactions({ userId: req.auth.user.userId, symbol, rows });
       return res.status(201).json(result);
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  });
+
+  app.delete('/api/portfolio/positions/:symbol/sales-history', requireAuth, async (req, res, next) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const result = await clearHistoricalSaleTransactions({ userId: req.auth.user.userId, symbol });
+      return res.status(200).json(result);
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  });
+
+  app.get('/api/portfolio/positions/:symbol/sales-history/count', requireAuth, async (req, res, next) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const count = await getHistoricalSaleCount(req.auth.user.userId, symbol);
+      return res.json({ count });
     } catch (error) {
       error.statusCode = 400;
       next(error);

@@ -31,6 +31,15 @@ export function formatMoney(value) {
   }).format(value);
 }
 
+export function formatMoneyPrecise(value, { minimumFractionDigits = 5, maximumFractionDigits = 8 } = {}) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits,
+    maximumFractionDigits,
+  }).format(value);
+}
+
 export function formatCurrencyValue(value, currency = 'USD') {
   const normalized = normalizeCurrencyCode(currency);
   const locale = normalized === 'CNY' ? 'zh-CN' : 'en-US';

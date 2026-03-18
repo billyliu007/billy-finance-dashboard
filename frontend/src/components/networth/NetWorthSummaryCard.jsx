@@ -5,15 +5,37 @@ import useApiData from '../../hooks/useApiData.js';
 import { patchJson } from '../../utils/api.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
-function renderKpiName(name) {
-  const match = String(name).match(/^(.+?)\s+\((As in [A-Z]{3})\)$/);
-  if (!match) {
-    return name;
+function renderKpiName(name, t) {
+  const fullMatch = String(name).match(/^([A-Z]{3}) Assets Total \(As in ([A-Z]{3})\)$/);
+  if (fullMatch) {
+    const currency = fullMatch[1];
+    const base = fullMatch[2];
+    return (
+      <>
+        <span>{t('netWorth.assetsTotal', { currency })}</span>
+        <span className="kpiNameSuffix"> {t('netWorth.asIn', { currency: base })}</span>
+      </>
+    );
   }
+
+  const simpleAssetsMatch = String(name).match(/^([A-Z]{3}) Assets Total$/);
+  if (simpleAssetsMatch) {
+    return t('netWorth.assetsTotal', { currency: simpleAssetsMatch[1] });
+  }
+
+  const match = String(name).match(/^(.+?)\s+\(As in ([A-Z]{3})\)$/);
+  if (!match) return name;
+
+  const firstRaw = match[1].trim();
+  const suffixCurrency = match[2];
+
+  const firstAssetsMatch = firstRaw.match(/^([A-Z]{3}) Assets Total$/);
+  const firstLabel = firstAssetsMatch ? t('netWorth.assetsTotal', { currency: firstAssetsMatch[1] }) : firstRaw;
+
   return (
     <>
-      <span>{match[1].trim()}</span>
-      <span className="kpiNameSuffix"> {match[2]}</span>
+      <span>{firstLabel}</span>
+      <span className="kpiNameSuffix"> {t('netWorth.asIn', { currency: suffixCurrency })}</span>
     </>
   );
 }
@@ -88,7 +110,7 @@ export default function NetWorthSummaryCard({
       <ul className="kpiBreakdown">
         {componentValues.map((component) => (
           <li key={component.key}>
-            <span className="kpiName">{renderKpiName(component.name)}</span>
+            <span className="kpiName">{renderKpiName(component.name, t)}</span>
             <strong className={component.value >= 0 ? 'pos' : 'neg'}>
               {component.found ? formatMaybeHidden(hideValues, formatValue, component.value) : t('netWorth.notFound')}
             </strong>

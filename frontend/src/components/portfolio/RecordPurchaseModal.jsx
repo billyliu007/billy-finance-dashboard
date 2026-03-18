@@ -85,7 +85,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
     const qtyNum = Number(qty);
     const avgCostNum = Number(avgCost);
     if (!txDate) {
-      setError('Date is required.');
+      setError(t('errors.dateRequired'));
       return;
     }
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
@@ -97,7 +97,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
       return;
     }
     if (deductEnabled && eligibleCash.length === 0) {
-      setError('No matching cash account found for deduction.');
+      setError(t('errors.noMatchingCashForDeduction'));
       return;
     }
     try {
@@ -111,7 +111,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || 'Failed to save purchase.');
+      setError(err?.message || t('errors.failedSavePosition'));
     } finally {
       setIsSaving(false);
     }
@@ -178,7 +178,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
 
           {deductEnabled && (
             <label className="modalLabel">
-              Select cash account
+              {t('modals.selectCashAccount')}
               <select
                 className="modalInput"
                 value={deductCashId}
@@ -192,7 +192,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
               </select>
               {isCrypto && (
                 <p className="hintText" style={{ marginTop: 6 }}>
-                  Crypto deductions are limited to USDT/USDC cash accounts for consistency; either stablecoin can be used (1:1).
+                  {t('modals.cryptoDeductionsHint')}
                 </p>
               )}
             </label>

@@ -53,17 +53,17 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
     setError('');
     const productId = normalizeText(selectedProductId);
     const qtyNum = Number(qty);
-    const avgCostNum = Number(avgCost);
+    const avgCostNum = normalizeText(avgCost) ? Number(avgCost) : 0;
 
     if (!productId) {
       setError(t('errors.selectCoinbaseProduct'));
       return;
     }
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      setError(t('errors.quantityGreaterZero'));
+    if (!Number.isFinite(qtyNum) || qtyNum < 0) {
+      setError(t('errors.quantityNonNegative'));
       return;
     }
-    if (!normalizeText(avgCost)) {
+    if (qtyNum > 0 && !normalizeText(avgCost)) {
       setError(t('errors.enterAvgCost'));
       return;
     }
@@ -185,7 +185,12 @@ export default function AddCryptoPositionModal({ open, onClose, onSaved }) {
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
             {t('modals.cancel')}
           </button>
-          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving || !selected || !normalizeText(avgCost) || !normalizeText(qty) || Number(qty) <= 0}>
+          <button
+            type="button"
+            className="modalBtn"
+            onClick={handleSave}
+            disabled={isSaving || !selected || !normalizeText(qty) || Number(qty) < 0 || (Number(qty) > 0 && !normalizeText(avgCost))}
+          >
             {isSaving ? t('modals.saving') : t('modals.save')}
           </button>
         </footer>

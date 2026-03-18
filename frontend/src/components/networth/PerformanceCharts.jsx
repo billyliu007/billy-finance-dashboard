@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { useEffect, useState } from 'react';
 import { formatBaseCurrency, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 const NET_WORTH_X_KEY = 'dateTimeLabel';
 
@@ -117,7 +118,7 @@ function ActivePeriodBar(props) {
   );
 }
 
-function PeriodReturnTooltip({ active, payload, hideValues, baseCurrency = 'USD' }) {
+function PeriodReturnTooltip({ active, payload, hideValues, baseCurrency = 'USD', t }) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -143,17 +144,18 @@ function PeriodReturnTooltip({ active, payload, hideValues, baseCurrency = 'USD'
         {formatLocalDateTime(point.recordedAtUtc || point.dateTimeLabel || point.date)}
       </p>
       <p style={{ margin: '4px 0 0' }}>
-        Prev month-end:{' '}
+        {t('netWorth.chartTooltipPrevMonthEnd')}{' '}
         {point.previousNetWorth == null
           ? '-'
-          : formatMaybeHidden(hideValues, formatValue, Number(point.previousNetWorth) || 0)}
+          : formatMaybeHidden(hideValues, formatValue, Number(point.previousNetWorth) || 0, t('app.hidden'))}
       </p>
       <p style={{ margin: '2px 0 0' }}>
-        Current month-end:{' '}
-        {formatMaybeHidden(hideValues, formatValue, Number(point.currentNetWorth) || 0)}
+        {t('netWorth.chartTooltipCurrentMonthEnd')}{' '}
+        {formatMaybeHidden(hideValues, formatValue, Number(point.currentNetWorth) || 0, t('app.hidden'))}
       </p>
       <p style={{ margin: '2px 0 0' }}>
-        MoM Return: {hideValues ? 'Hidden' : formatPercent(Number(point.derivedChangePct) || 0)}
+        {t('netWorth.chartTooltipMoMReturn')}{' '}
+        {hideValues ? t('app.hidden') : formatPercent(Number(point.derivedChangePct) || 0)}
       </p>
     </div>
   );
@@ -161,6 +163,7 @@ function PeriodReturnTooltip({ active, payload, hideValues, baseCurrency = 'USD'
 
 export default function PerformanceCharts({ hideValues, cashflowData, derivedSeries, netWorthDomain, baseCurrency = 'USD' }) {
   const [isSmallScreen, setIsSmallScreen] = useState(false);
+  const { t } = useLanguage();
   const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
 
   useEffect(() => {
@@ -242,7 +245,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
   return (
     <div className="portfolioCharts">
       <article className="chartCard">
-        <h2>Net Worth Trend</h2>
+        <h2>{t('netWorth.netWorthTrend')}</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={cashflowData} margin={{ top: 28, right: 12, left: isSmallScreen ? 6 : 24, bottom: 8 }}>
@@ -257,7 +260,10 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                 tickMargin={isSmallScreen ? 0 : 6}
               />
               <Tooltip
-                formatter={(value) => formatMaybeHidden(hideValues, formatValue, Number(value) || 0)}
+                formatter={(value) => [
+                  formatMaybeHidden(hideValues, formatValue, Number(value) || 0, t('app.hidden')),
+                  t('netWorth.tooltipNetWorth'),
+                ]}
                 labelFormatter={(label, payload) => {
                   const point = payload?.[0]?.payload;
                   return formatLocalDateTime(point?.recordedAtUtc || point?.dateTimeLabel || label);
@@ -288,7 +294,14 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
                       color={marker.color}
                       side={marker.side}
                       offsetY={marker.offsetY}
-                      value={`${marker.labels.join('/')} ${formatMaybeHidden(hideValues, formatValue, marker.point.netWorth, 'Hidden')}`}
+                      value={`${marker.labels
+                        .map((lbl) => {
+                          if (lbl === 'Latest') return t('netWorth.chartMarkerLatest');
+                          if (lbl === 'High') return t('netWorth.chartMarkerHigh');
+                          if (lbl === 'Low') return t('netWorth.chartMarkerLow');
+                          return lbl;
+                        })
+                        .join('/')} ${formatMaybeHidden(hideValues, formatValue, marker.point.netWorth, t('app.hidden'))}`}
                     />
                   )}
                 />
@@ -299,7 +312,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
       </article>
 
       <article className="chartCard">
-        <h2>Monthly Return (Month-End, %)</h2>
+        <h2>{t('netWorth.monthlyReturn')}</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={derivedSeries} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
@@ -307,7 +320,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
               <XAxis dataKey="date" tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis tickFormatter={(value) => `${value}%`} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <Tooltip
-                content={<PeriodReturnTooltip hideValues={hideValues} baseCurrency={baseCurrency} />}
+                content={<PeriodReturnTooltip hideValues={hideValues} baseCurrency={baseCurrency} t={t} />}
                 cursor={false}
                 contentStyle={{
                   backgroundColor: '#0b1220',

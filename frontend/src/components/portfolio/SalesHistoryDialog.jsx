@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchJson, postJson } from '../../utils/api.js';
-import { formatMaybeHidden, formatMoney, formatPercent, formatQty } from '../../utils/formatters.js';
+import { deleteJson, fetchJson, postJson } from '../../utils/api.js';
+import { formatMaybeHidden, formatPercent, formatQty } from '../../utils/formatters.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 function parseDelimitedLines(raw) {
   const text = String(raw || '').replace(/\r\n/g, '\n').trim();
@@ -59,7 +60,8 @@ function parseDelimitedLines(raw) {
   return { rows, errors };
 }
 
-export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, onHistoryCountChange }) {
+export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, onHistoryCountChange, isCrypto = false }) {
+  const { t } = useLanguage();
   const sym = String(symbol || '').trim().toUpperCase();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -98,6 +100,15 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
     };
   }, [history]);
 
+  const usdFractionDigits = isCrypto ? 4 : 2;
+  const formatUsd = (value) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: usdFractionDigits,
+      maximumFractionDigits: usdFractionDigits,
+    }).format(value);
+
   async function loadHistory() {
     if (!sym) return;
     setError('');
@@ -108,7 +119,7 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
       setHistory(list);
       onHistoryCountChange?.(sym, list.length);
     } catch (err) {
-      setError(err?.message || 'Failed to load sales history.');
+      setError(err?.message || t('errors.failedLoadSalesHistory'));
     } finally {
       setLoading(false);
     }
@@ -130,7 +141,7 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
       return;
     }
     if (parsed.rows.length === 0) {
-      setError('Paste at least one row to import.');
+      setError(t('errors.pasteAtLeastOneRowToImport'));
       return;
     }
     try {
@@ -139,10 +150,30 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
         rows: parsed.rows,
       });
       setImportRaw('');
-      setImportResult(`Imported ${Number(res?.imported) || parsed.rows.length} rows.`);
+      setImportResult(
+        t('modals.importedResult', { count: Number(res?.imported) || parsed.rows.length }),
+      );
       await loadHistory();
     } catch (err) {
-      setError(err?.message || 'Failed to import sales history.');
+      setError(err?.message || t('errors.failedImportSalesHistory'));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleClearHistory() {
+    setImportResult('');
+    setError('');
+    if (!sym) return;
+    const confirmed = window.confirm(t('modals.clearAllHistoryConfirm', { symbol: sym }));
+    if (!confirmed) return;
+    try {
+      setImporting(true);
+      const res = await deleteJson(`/api/portfolio/positions/${encodeURIComponent(sym)}/sales-history`);
+      setImportResult(t('modals.clearedResult', { count: Number(res?.deleted) || 0 }));
+      await loadHistory();
+    } catch (err) {
+      setError(err?.message || t('errors.failedClearSalesHistory'));
     } finally {
       setImporting(false);
     }
@@ -151,24 +182,24 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
   if (!open) return null;
 
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Sales history">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={t('modals.soldHistoryTitle')}>
       <section className="modalCard modalCard--wide">
         <header className="modalHeader">
-          <h2>Sold history (does not affect holdings)</h2>
-          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label="Close">
+          <h2>{t('modals.soldHistoryTitle')}</h2>
+          <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>
         </header>
 
         <div className="modalBody">
           <p className="hintText" style={{ marginTop: 0 }}>
-            Import format: one row per line, CSV or TSV:
+            {t('modals.importFormatTitle')}
             <br />
             <code>YYYY-MM-DD, qty, sellPricePerUnit, costBasisPerUnit, notes(optional)</code>
           </p>
 
           <label className="modalLabel">
-            Paste rows to import
+            {t('modals.pasteRowsToImport')}
             <textarea
               className="modalInput"
               style={{ minHeight: 120, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
@@ -180,13 +211,23 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
 
           {importRaw.trim() && (
             <p className="hintText" style={{ marginTop: 6 }}>
-              Parsed {parsed.rows.length} rows{parsed.errors.length ? `, ${parsed.errors.length} errors` : ''}.
+              {t('modals.parsedRowsPrefix', { count: parsed.rows.length })}
+              {parsed.errors.length ? t('modals.parsedErrorsSuffix', { count: parsed.errors.length }) : ''}
             </p>
           )}
 
           <div className="modalFooter" style={{ justifyContent: 'flex-start', padding: 0, marginTop: 10 }}>
             <button type="button" className="modalBtn" onClick={handleImport} disabled={importing || loading}>
-              {importing ? 'Importing…' : 'Import'}
+              {importing ? t('modals.importing') : t('modals.import')}
+            </button>
+            <button
+              type="button"
+              className="modalBtn secondary"
+              onClick={handleClearHistory}
+              disabled={importing || loading || history.length === 0}
+              title={history.length === 0 ? t('modals.noImportedHistoryToClear') : t('modals.clearImportedHistory')}
+            >
+              {t('modals.clearHistory')}
             </button>
             {importResult && <span className="hintText" style={{ marginLeft: 10 }}>{importResult}</span>}
           </div>
@@ -199,24 +240,24 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
 
           <div style={{ marginTop: 14 }}>
             <h3 style={{ margin: '8px 0 10px', fontSize: '0.9rem', color: '#dbeafe' }}>
-              History for {sym}
+              {t('modals.historyFor', { symbol: sym })}
             </h3>
             {loading ? (
-              <p>Loading…</p>
+              <p>{t('app.loading')}</p>
             ) : history.length === 0 ? (
-              <p className="positionTxEmpty">No imported sold history.</p>
+              <p className="positionTxEmpty">{t('modals.noImportedSoldHistory')}</p>
             ) : (
               <div className="tableWrap salesHistoryWrap">
                 <table className="positionTxTable salesHistoryTable">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Qty</th>
-                      <th>Sell Price</th>
-                      <th>Cost / Unit</th>
-                      <th>Sale Amount</th>
-                      <th>Realized P/L</th>
-                      <th>Realized Return (%)</th>
+                      <th>{t('modals.historyTableDate')}</th>
+                      <th>{t('modals.historyTableQty')}</th>
+                      <th>{t('modals.historyTableSellPrice')}</th>
+                      <th>{t('modals.historyTableCostPerUnit')}</th>
+                      <th>{t('modals.historyTableSaleAmount')}</th>
+                      <th>{t('modals.historyTableRealizedPl')}</th>
+                      <th>{t('modals.historyTableRealizedReturn')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -232,11 +273,11 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
                         <tr key={row.id}>
                           <td>{row.txDate}</td>
                           <td>{formatMaybeHidden(hideValues, formatQty, qty)}</td>
-                          <td>{formatMaybeHidden(hideValues, formatMoney, sellPrice)}</td>
-                          <td>{formatMaybeHidden(hideValues, formatMoney, basis)}</td>
-                          <td>{formatMaybeHidden(hideValues, formatMoney, proceeds)}</td>
+                          <td>{formatMaybeHidden(hideValues, formatUsd, sellPrice)}</td>
+                          <td>{formatMaybeHidden(hideValues, formatUsd, basis)}</td>
+                          <td>{formatMaybeHidden(hideValues, formatUsd, proceeds)}</td>
                           <td className={realized >= 0 ? 'pos' : 'neg'}>
-                            {formatMaybeHidden(hideValues, formatMoney, realized)}
+                            {formatMaybeHidden(hideValues, formatUsd, realized)}
                           </td>
                           <td className={realized >= 0 ? 'pos' : 'neg'}>
                             {hideValues ? 'Hidden' : formatPercent(realizedPct)}
@@ -247,13 +288,13 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
                   </tbody>
                   <tfoot>
                     <tr className="salesHistorySummaryRow">
-                      <td>Total / Avg</td>
+                      <td>{t('modals.historyTotalAvg')}</td>
                       <td>{formatMaybeHidden(hideValues, formatQty, summary.qtySum)}</td>
-                      <td>{formatMaybeHidden(hideValues, formatMoney, summary.avgSell)}</td>
-                      <td>{formatMaybeHidden(hideValues, formatMoney, summary.avgBasis)}</td>
-                      <td>{formatMaybeHidden(hideValues, formatMoney, summary.proceedsSum)}</td>
+                      <td>{formatMaybeHidden(hideValues, formatUsd, summary.avgSell)}</td>
+                      <td>{formatMaybeHidden(hideValues, formatUsd, summary.avgBasis)}</td>
+                      <td>{formatMaybeHidden(hideValues, formatUsd, summary.proceedsSum)}</td>
                       <td className={summary.realizedSum >= 0 ? 'pos' : 'neg'}>
-                        {formatMaybeHidden(hideValues, formatMoney, summary.realizedSum)}
+                        {formatMaybeHidden(hideValues, formatUsd, summary.realizedSum)}
                       </td>
                       <td className={summary.realizedSum >= 0 ? 'pos' : 'neg'}>
                         {hideValues ? 'Hidden' : formatPercent(summary.realizedPct)}
@@ -268,7 +309,7 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
 
         <footer className="modalFooter">
           <button type="button" className="modalBtn secondary" onClick={onClose}>
-            Close
+            {t('modals.close')}
           </button>
         </footer>
       </section>

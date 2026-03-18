@@ -17,6 +17,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
   const { t } = useLanguage();
   const [txDate, setTxDate] = useState(todayIsoDate());
   const [qty, setQty] = useState('');
+  const [sellPct, setSellPct] = useState(0);
   const [pricePerUnit, setPricePerUnit] = useState('');
   const [creditEnabled, setCreditEnabled] = useState(false);
   const [creditCashId, setCreditCashId] = useState('');
@@ -27,7 +28,10 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     if (!open) return;
     setError('');
     setTxDate(todayIsoDate());
-    setQty('');
+    const available = Number(position?.qty) || 0;
+    setSellPct(available > 0 ? 100 : 0);
+    // When slider is at 100%, we want to sell the full available qty.
+    setQty(available > 0 ? String(available) : '');
     setPricePerUnit('');
     setCreditEnabled(false);
     setCreditCashId('');
@@ -39,6 +43,50 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
   const normalizedPosCurrency = normalizeCashCurrency(positionCurrency);
   const isCrypto = /crypto/i.test(String(position?.category || ''));
   const referenceCostPerUnit = Number(position?.purchasePrice) || 0;
+  const availableQty = Number(position?.qty) || 0;
+
+  function roundDownQty(value, decimals = 8) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 0;
+    const factor = 10 ** decimals;
+    return Math.floor(num * factor) / factor;
+  }
+
+  function handleSellPctChange(e) {
+    const pct = Number(e.target.value);
+    const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+    setSellPct(safePct);
+    if (!(availableQty > 0)) {
+      setQty('');
+      return;
+    }
+    const nextQty = safePct >= 100 - 1e-9 ? availableQty : roundDownQty((availableQty * safePct) / 100, 8);
+    setQty(nextQty > 0 ? String(nextQty) : '');
+  }
+
+  function handleQtyChange(e) {
+    const nextRaw = sanitizeDecimalInput(e.target.value, { allowNegative: false });
+    setQty(nextRaw);
+
+    if (!(availableQty > 0)) {
+      setSellPct(0);
+      return;
+    }
+
+    const qtyNum = Number(nextRaw);
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      setSellPct(0);
+      return;
+    }
+
+    const clamped = Math.min(qtyNum, availableQty);
+    if (qtyNum > availableQty + 1e-12) {
+      setQty(String(availableQty));
+    }
+
+    const pct = availableQty > 0 ? (clamped / availableQty) * 100 : 0;
+    setSellPct(Number(Math.max(0, Math.min(100, pct)).toFixed(1)));
+  }
 
   const eligibleCash = useMemo(() => {
     const list = Array.isArray(cashComponents) ? cashComponents : [];
@@ -67,10 +115,6 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     }
   }, [creditEnabled, creditCashId, eligibleCash]);
 
-  function handleQtyChange(e) {
-    setQty(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
-  }
-
   function handlePriceChange(e) {
     setPricePerUnit(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
   }
@@ -84,7 +128,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     const qtyNum = Number(qty);
     const priceNum = Number(pricePerUnit);
     if (!txDate) {
-      setError('Date is required.');
+      setError(t('errors.dateRequired'));
       return;
     }
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
@@ -92,11 +136,11 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
       return;
     }
     if (!Number.isFinite(priceNum) || priceNum < 0) {
-      setError('Sell price per unit must be 0 or greater.');
+      setError(t('errors.sellPricePerUnitNonNegative'));
       return;
     }
     if (creditEnabled && eligibleCash.length === 0) {
-      setError('No matching cash account found for credit.');
+      setError(t('errors.noMatchingCashForCredit'));
       return;
     }
     try {
@@ -111,7 +155,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err?.message || 'Failed to save sale.');
+      setError(err?.message || t('errors.failedSaveSale'));
     } finally {
       setIsSaving(false);
     }
@@ -119,11 +163,16 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
 
   if (!open) return null;
 
+  const qtyNum = Number(qty);
+  const priceNum = Number(pricePerUnit);
+  const canSave =
+    Number.isFinite(qtyNum) && qtyNum > 0 && Number.isFinite(priceNum) && priceNum >= 0 && !isSaving;
+
   return (
-    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label="Add sale">
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={t('modals.addSale')}>
       <section className="modalCard">
         <header className="modalHeader">
-          <h2>Add sale</h2>
+          <h2>{t('modals.addSale')}</h2>
           <button type="button" className="modalCloseBtn" onClick={onClose} aria-label={t('modals.close')}>
             ✕
           </button>
@@ -131,17 +180,17 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
 
         <div className="modalBody">
           <label className="modalLabel">
-            Asset
+            {t('modals.asset')}
             <input type="text" value={displayName} readOnly className="modalInput" />
           </label>
 
           <div className="modalGrid">
             <label className="modalLabel">
-              Date
+              {t('modals.date')}
               <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="modalInput" />
             </label>
             <label className="modalLabel">
-              Quantity
+              {t('modals.sellQty')}
               <input
                 type="text"
                 inputMode="decimal"
@@ -149,10 +198,12 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
                 value={qty}
                 onChange={handleQtyChange}
                 className="modalInput"
+                disabled={!(availableQty > 0)}
+                placeholder={availableQty > 0 ? `<= ${availableQty}` : '0'}
               />
             </label>
             <label className="modalLabel">
-              Sell price per unit ({positionCurrency || 'USD'})
+              {t('modals.sellPricePerUnit', { currency: positionCurrency || 'USD' })}
               <input
                 type="text"
                 inputMode="decimal"
@@ -163,7 +214,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
               />
             </label>
             <label className="modalLabel">
-              Cost per unit (avg cost, read-only)
+              {t('modals.costPerUnitReadOnly')}
               <input
                 type="text"
                 value={Number.isFinite(referenceCostPerUnit) ? referenceCostPerUnit.toFixed(8).replace(/\.?0+$/, '') : ''}
@@ -171,6 +222,25 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
                 className="modalInput"
                 aria-readonly="true"
               />
+            </label>
+            <label className="modalLabel">
+              {t('modals.sellPct')}
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="0.1"
+                value={sellPct}
+                onChange={handleSellPctChange}
+                className="modalRange"
+                disabled={!(availableQty > 0)}
+              />
+              <div className="modalRangeMeta">
+                <strong>{Number.isFinite(sellPct) ? `${sellPct.toFixed(1)}%` : '0.0%'}</strong>
+                <span>
+                  {t('modals.qtyShort')} {qty || '0'}
+                </span>
+              </div>
             </label>
           </div>
 
@@ -182,13 +252,14 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
               id="creditCashToggle"
             />
             <label htmlFor="creditCashToggle">
-              Add proceeds to cash (optional){estimatedProceeds > 0 ? ` — est. ${estimatedProceeds.toFixed(2)}` : ''}
+              {t('modals.addProceedsToCashOptional')}
+              {estimatedProceeds > 0 ? t('modals.estimatedSuffix', { value: estimatedProceeds.toFixed(2) }) : ''}
             </label>
           </div>
 
           {creditEnabled && (
             <label className="modalLabel">
-              Select cash account
+              {t('modals.selectCashAccount')}
               <select className="modalInput" value={creditCashId} onChange={(e) => setCreditCashId(e.target.value)}>
                 {eligibleCash.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -198,7 +269,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
               </select>
               {isCrypto && (
                 <p className="hintText" style={{ marginTop: 6 }}>
-                  Crypto credits are limited to USDT/USDC cash accounts for consistency; either stablecoin can be used (1:1).
+                  {t('modals.cryptoCreditsHint')}
                 </p>
               )}
             </label>
@@ -211,7 +282,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
           <button type="button" className="modalBtn secondary" onClick={onClose} disabled={isSaving}>
             {t('modals.cancel')}
           </button>
-          <button type="button" className="modalBtn" onClick={handleSave} disabled={isSaving}>
+          <button type="button" className="modalBtn" onClick={handleSave} disabled={!canSave}>
             {isSaving ? t('modals.saving') : t('modals.save')}
           </button>
         </footer>

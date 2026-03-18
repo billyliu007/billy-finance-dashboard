@@ -17,6 +17,7 @@ import {
 import { useMemo, useState } from 'react';
 import { HOLDING_COLORS } from '../../constants.js';
 import { formatMaybeHidden, formatMoney, formatPercent } from '../../utils/formatters.js';
+import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
 function HoldingAxisTick({ y, payload }) {
   return (
@@ -26,7 +27,7 @@ function HoldingAxisTick({ y, payload }) {
   );
 }
 
-function PnlTooltip({ active, payload, hideValues }) {
+function PnlTooltip({ active, payload, hideValues, t }) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -48,10 +49,10 @@ function PnlTooltip({ active, payload, hideValues }) {
     >
       <p style={{ margin: 0, color: '#f8fafc', fontWeight: 600 }}>{point.name}</p>
       <p style={{ margin: '4px 0 0' }}>
-        P/L: {formatMaybeHidden(hideValues, formatMoney, Number(point.pnl) || 0)}
+        {t('portfolio.chartTooltipPl')}: {formatMaybeHidden(hideValues, formatMoney, Number(point.pnl) || 0, t('app.hidden'))}
       </p>
       <p style={{ margin: '2px 0 0' }}>
-        Return: {hideValues ? 'Hidden' : formatPercent(Number(point.pnlPct) || 0)}
+        {t('portfolio.chartTooltipReturn')}: {hideValues ? t('app.hidden') : formatPercent(Number(point.pnlPct) || 0)}
       </p>
     </div>
   );
@@ -120,7 +121,7 @@ function ActivePnlBar(props) {
   );
 }
 
-function PnlBarLabel({ x, y, width, height, index, data, hideValues }) {
+function PnlBarLabel({ x, y, width, height, index, data, hideValues, t }) {
   if (![x, y, width, height].every((value) => Number.isFinite(value))) {
     return null;
   }
@@ -128,8 +129,8 @@ function PnlBarLabel({ x, y, width, height, index, data, hideValues }) {
   const point = Number.isInteger(index) ? data[index] : null;
   const pnl = Number(point?.pnl) || 0;
   const pnlPct = Number(point?.pnlPct) || 0;
-  const moneyText = formatMaybeHidden(hideValues, formatMoney, pnl);
-  const pctText = hideValues ? 'Hidden' : formatPercent(pnlPct);
+  const moneyText = formatMaybeHidden(hideValues, formatMoney, pnl, t('app.hidden'));
+  const pctText = hideValues ? t('app.hidden') : formatPercent(pnlPct);
   const labelX = pnl >= 0 ? x + width + 8 : x - 8;
   const textAnchor = pnl >= 0 ? 'start' : 'end';
 
@@ -143,6 +144,7 @@ function PnlBarLabel({ x, y, width, height, index, data, hideValues }) {
 
 export default function PortfolioCharts({ hideValues, allocationData, chartData, assetColorMap }) {
   const [activePieIndex, setActivePieIndex] = useState(-1);
+  const { t } = useLanguage();
   const pieCells = useMemo(
     () => allocationData.map((entry, index) => ({
       key: `${entry.name}-alloc-${index}`,
@@ -154,7 +156,7 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
   return (
     <div className="portfolioCharts">
       <article className="chartCard">
-        <h2>Holdings Allocation (% of Market Value)</h2>
+        <h2>{t('portfolio.holdingsAllocation')}</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -201,7 +203,7 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
       </article>
 
       <article className="chartCard">
-        <h2>Unrealized P/L by Holding</h2>
+        <h2>{t('portfolio.unrealizedPlByHolding')}</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 18, left: 0, bottom: 8 }}>
@@ -220,7 +222,7 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                 tickLine={false}
               />
               <Tooltip
-                content={<PnlTooltip hideValues={hideValues} />}
+                content={<PnlTooltip hideValues={hideValues} t={t} />}
                 cursor={false}
                 contentStyle={{
                   backgroundColor: '#0b1220',
@@ -238,6 +240,7 @@ export default function PortfolioCharts({ hideValues, allocationData, chartData,
                     {...props}
                     hideValues={hideValues}
                     data={chartData}
+                    t={t}
                   />
                 )}
                 />

@@ -33,9 +33,49 @@ export default function PortfolioPositionsTable({
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [recordPosition, setRecordPosition] = useState(null);
   const [deleteTxConfirm, setDeleteTxConfirm] = useState(null); // { symbol, txId, txType } | null
-  const [salesHistoryOpen, setSalesHistoryOpen] = useState(false);
-  const [salesHistorySymbol, setSalesHistorySymbol] = useState('');
+  const [salesHistoryState, setSalesHistoryState] = useState(() => ({
+    open: false,
+    symbol: '',
+    isCrypto: false,
+  }));
   const [historyCountBySymbol, setHistoryCountBySymbol] = useState(() => new Map());
+
+  useEffect(() => {
+    const symbols = Array.from(
+      new Set(
+        (rows || [])
+          .map((r) => String(r?.symbol || r?.key || '').trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    );
+    if (symbols.length === 0) return;
+
+    let cancelled = false;
+    async function loadCounts() {
+      // Fire in parallel (small set); errors should not break UI.
+      await Promise.all(
+        symbols.map(async (sym) => {
+          try {
+            const res = await fetchJson(`/api/portfolio/positions/${encodeURIComponent(sym)}/sales-history/count`);
+            const count = Number(res?.count) || 0;
+            if (cancelled) return;
+            setHistoryCountBySymbol((prev) => {
+              const next = new Map(prev);
+              next.set(sym, count);
+              return next;
+            });
+          } catch {
+            // ignore
+          }
+        }),
+      );
+    }
+
+    loadCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
 
   useEffect(() => {
     if (!showAddMenu) return;
@@ -61,8 +101,12 @@ export default function PortfolioPositionsTable({
 
   /** Display label for asset class. "Stock Assets" (legacy) → "US Stock Assets"; others shown as-is for future classes. */
   const getAssetClassDisplayLabel = (category) => {
-    if (category === 'Stock Assets' || category === 'US Stock Assets') return 'US Stock Assets';
-    return category || 'Other';
+    const raw = String(category || '').trim();
+    const normalized = raw.toLowerCase();
+
+    if (normalized.includes('crypto')) return t('portfolio.assetClassCryptoAssets');
+    if (normalized.includes('stock')) return t('portfolio.assetClassUSStockAssets');
+    return raw || 'Other';
   };
 
   const tableHeaderRow = (
@@ -184,8 +228,8 @@ export default function PortfolioPositionsTable({
   function openSalesHistory(item) {
     const sym = String(item?.symbol || item?.key || '').trim().toUpperCase();
     if (!sym) return;
-    setSalesHistorySymbol(sym);
-    setSalesHistoryOpen(true);
+    const isCrypto = /crypto/i.test(String(item?.category || ''));
+    setSalesHistoryState({ open: true, symbol: sym, isCrypto });
   }
 
   function historyCountFor(item) {
@@ -214,7 +258,7 @@ export default function PortfolioPositionsTable({
     <div className="positionTxPanel positionTxPanel--mobile">
       <section className="positionTxSection positionTxSection--base">
         <div className="positionTxSectionHeader">
-          <strong>Initial Holding</strong>
+          <strong>{t('portfolio.initialHolding')}</strong>
         </div>
         {(() => {
           const baseQty = Number(item.baseQty ?? 0);
@@ -229,27 +273,27 @@ export default function PortfolioPositionsTable({
               <div className="positionTxCard">
                 <div className="positionTxCardGrid">
                   <div>
-                    <span>Quantity</span>
+                    <span>{t('portfolio.quantity')}</span>
                     <strong>{formatMaybeHidden(hideValues, formatQty, baseQty)}</strong>
                   </div>
                   <div>
-                    <span>Avg Cost Per Unit</span>
+                    <span>{t('portfolio.avgCostPerUnit')}</span>
                     <strong>{formatMaybeHidden(hideValues, formatMoney, baseAvg)}</strong>
                   </div>
                   <div>
-                    <span>Cost Basis</span>
+                    <span>{t('portfolio.costBasis')}</span>
                     <strong>{formatMaybeHidden(hideValues, formatMoney, baseCost)}</strong>
                   </div>
                   <div>
-                    <span>Market Value</span>
+                    <span>{t('portfolio.marketValue')}</span>
                     <strong>{formatPrice(item, marketValue)}</strong>
                   </div>
                   <div>
-                    <span>Unrealized Gain/Loss</span>
+                    <span>{t('portfolio.unrealizedGainLoss')}</span>
                     <strong className={pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, pnl)}</strong>
                   </div>
                   <div>
-                    <span>Unrealized Return (%)</span>
+                    <span>{t('portfolio.unrealizedReturn')}</span>
                     <strong className={pnl >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(pnlPct)}</strong>
                   </div>
                 </div>
@@ -291,7 +335,7 @@ export default function PortfolioPositionsTable({
 
       <section className="positionTxSection positionTxSection--purchases">
         <div className="positionTxSectionHeader">
-          <strong>Purchases</strong>
+          <strong>{t('portfolio.purchases')}</strong>
           <button
             type="button"
             className="headerIconBtn positionActionBtn"
@@ -302,7 +346,7 @@ export default function PortfolioPositionsTable({
             +
           </button>
         </div>
-        {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+        {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>{t('app.loading')}</p>}
         {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
           <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
         )}
@@ -311,7 +355,7 @@ export default function PortfolioPositionsTable({
             {(() => {
               const { buys } = splitTxForItem(item);
               return buys.length === 0 ? (
-              <p className="positionTxEmpty">No purchases yet.</p>
+              <p className="positionTxEmpty">{t('portfolio.noPurchasesYet')}</p>
               ) : (
               buys.map((tx) => {
                 const qty = Number(tx.qty) || 0;
@@ -337,27 +381,27 @@ export default function PortfolioPositionsTable({
                     </div>
                     <div className="positionTxCardGrid">
                       <div>
-                        <span>Quantity</span>
+                        <span>{t('portfolio.quantity')}</span>
                         <strong>{formatMaybeHidden(hideValues, formatQty, qty)}</strong>
                       </div>
                       <div>
-                        <span>Avg Cost Per Unit</span>
+                        <span>{t('portfolio.avgCostPerUnit')}</span>
                         <strong>{formatMaybeHidden(hideValues, formatMoney, avgCost)}</strong>
                       </div>
                       <div>
-                        <span>Cost Basis</span>
+                        <span>{t('portfolio.costBasis')}</span>
                         <strong>{formatMaybeHidden(hideValues, formatMoney, cost)}</strong>
                       </div>
                       <div>
-                        <span>Market Value</span>
+                        <span>{t('portfolio.marketValue')}</span>
                         <strong>{formatPrice(item, marketValue)}</strong>
                       </div>
                       <div>
-                        <span>Unrealized Gain/Loss</span>
+                        <span>{t('portfolio.unrealizedGainLoss')}</span>
                         <strong className={pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, pnl)}</strong>
                       </div>
                       <div>
-                        <span>Unrealized Return (%)</span>
+                        <span>{t('portfolio.unrealizedReturn')}</span>
                         <strong className={pnl >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(pnlPct)}</strong>
                       </div>
                     </div>
@@ -373,10 +417,10 @@ export default function PortfolioPositionsTable({
       <section className="positionTxSection positionTxSection--sold">
         <div className="positionTxSectionHeader">
           <strong>
-            Sold
+            {t('portfolio.sold')}
             {historyCountFor(item) > 0 && (
-              <span className="positionTxHint" title="Realized P/L includes imported sold history">
-                + history
+              <span className="positionTxHint" title={t('portfolio.realizedPlIncludesImportedHistoryTitle')}>
+                + {t('portfolio.history')}
               </span>
             )}
           </strong>
@@ -384,8 +428,8 @@ export default function PortfolioPositionsTable({
             type="button"
             className="headerIconBtn positionActionBtn"
             onClick={() => openSalesHistory(item)}
-            aria-label="Show sold history"
-            title="Show sold history"
+            aria-label={t('portfolio.showSoldHistory')}
+            title={t('portfolio.showSoldHistory')}
             style={{ marginLeft: 'auto' }}
           >
             <span className="positionTxIconWithBadge">
@@ -397,13 +441,13 @@ export default function PortfolioPositionsTable({
             type="button"
             className="headerIconBtn positionActionBtn"
             onClick={() => openRecordSale(item)}
-            aria-label="Add Sale"
-            title="Add Sale"
+            aria-label={t('portfolio.addSale')}
+            title={t('portfolio.addSale')}
           >
             +
           </button>
         </div>
-        {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+        {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>{t('app.loading')}</p>}
         {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
           <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
         )}
@@ -412,7 +456,7 @@ export default function PortfolioPositionsTable({
             {(() => {
               const { sells } = splitTxForItem(item);
               return sells.length === 0 ? (
-                <p className="positionTxEmpty">No sales yet.</p>
+                <p className="positionTxEmpty">{t('portfolio.noSalesYet')}</p>
               ) : (
                 sells.map((tx) => {
                   const qty = Number(tx.qty) || 0;
@@ -438,27 +482,27 @@ export default function PortfolioPositionsTable({
                       </div>
                       <div className="positionTxCardGrid">
                         <div>
-                          <span>Quantity</span>
+                          <span>{t('portfolio.quantity')}</span>
                           <strong>{formatMaybeHidden(hideValues, formatQty, qty)}</strong>
                         </div>
                         <div>
-                          <span>Sell Price Per Unit</span>
+                          <span>{t('modals.historyTableSellPrice')}</span>
                           <strong>{formatMaybeHidden(hideValues, formatMoney, sellPrice)}</strong>
                         </div>
                         <div>
-                          <span>Cost Per Unit</span>
+                          <span>{t('modals.historyTableCostPerUnit')}</span>
                           <strong>{formatMaybeHidden(hideValues, formatMoney, basisPerUnit)}</strong>
                         </div>
                         <div>
-                          <span>Sale Amount</span>
+                          <span>{t('modals.historyTableSaleAmount')}</span>
                           <strong>{formatMaybeHidden(hideValues, formatMoney, proceeds)}</strong>
                         </div>
                         <div>
-                          <span>Realized P/L</span>
+                          <span>{t('modals.historyTableRealizedPl')}</span>
                           <strong className={realized >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, realized)}</strong>
                         </div>
                         <div>
-                          <span>Realized Return (%)</span>
+                          <span>{t('modals.historyTableRealizedReturn')}</span>
                           <strong className={realized >= 0 ? 'pos' : 'neg'}>{hideValues ? 'Hidden' : formatPercent(realizedPct)}</strong>
                         </div>
                       </div>
@@ -525,20 +569,20 @@ export default function PortfolioPositionsTable({
             <div className="positionTxPanel">
               <section className="positionTxSection positionTxSection--base">
                 <div className="positionTxSectionHeader">
-                  <strong>Initial Holding</strong>
+                  <strong>{t('portfolio.initialHolding')}</strong>
                 </div>
                 <div className="tableWrap">
                   <table className="positionTxTable positionHoldingTable positionTxAlignedTable">
                     <thead>
                       <tr>
                         <th aria-hidden="true" className="positionTxColDate" />
-                        <th>Quantity</th>
-                        <th>Avg Cost Per Unit</th>
-                        <th>Cost Basis</th>
-                        <th>Market Value</th>
-                        <th>Unrealized Gain/Loss</th>
-                        <th>Unrealized Return (%)</th>
-                        <th>Actions</th>
+                        <th>{t('portfolio.quantity')}</th>
+                        <th>{t('portfolio.avgCostPerUnit')}</th>
+                        <th>{t('portfolio.costBasis')}</th>
+                        <th>{t('portfolio.marketValue')}</th>
+                        <th>{t('portfolio.unrealizedGainLoss')}</th>
+                        <th>{t('portfolio.unrealizedReturn')}</th>
+                        <th>{t('netWorth.actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -603,7 +647,7 @@ export default function PortfolioPositionsTable({
 
               <section className="positionTxSection positionTxSection--purchases">
                 <div className="positionTxSectionHeader">
-                  <strong>Purchases</strong>
+                  <strong>{t('portfolio.purchases')}</strong>
                   <button
                     type="button"
                     className="headerIconBtn positionActionBtn"
@@ -614,7 +658,7 @@ export default function PortfolioPositionsTable({
                     +
                   </button>
                 </div>
-              {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+              {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>{t('app.loading')}</p>}
               {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
                 <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
               )}
@@ -623,14 +667,14 @@ export default function PortfolioPositionsTable({
                   <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable">
                     <thead>
                       <tr>
-                        <th className="positionTxColDate">Date</th>
-                        <th>Quantity</th>
-                        <th>Avg Cost Per Unit</th>
-                        <th>Cost Basis</th>
-                        <th>Market Value</th>
-                        <th>Unrealized Gain/Loss</th>
-                        <th>Unrealized Return (%)</th>
-                        <th>Actions</th>
+                        <th className="positionTxColDate">{t('modals.historyTableDate')}</th>
+                        <th>{t('portfolio.quantity')}</th>
+                        <th>{t('portfolio.avgCostPerUnit')}</th>
+                        <th>{t('portfolio.costBasis')}</th>
+                        <th>{t('portfolio.marketValue')}</th>
+                        <th>{t('portfolio.unrealizedGainLoss')}</th>
+                        <th>{t('portfolio.unrealizedReturn')}</th>
+                        <th>{t('netWorth.actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -639,7 +683,7 @@ export default function PortfolioPositionsTable({
                         return buys.length === 0 ? (
                         <tr>
                             <td colSpan={8} style={{ color: '#94a3b8' }}>
-                            No purchases yet.
+                            {t('portfolio.noPurchasesYet')}
                           </td>
                         </tr>
                         ) : (
@@ -689,10 +733,10 @@ export default function PortfolioPositionsTable({
               <section className="positionTxSection positionTxSection--sold">
                 <div className="positionTxSectionHeader">
                   <strong>
-                    Sold
+                    {t('portfolio.sold')}
                     {historyCountFor(item) > 0 && (
-                      <span className="positionTxHint" title="Realized P/L includes imported sold history">
-                        + history
+                      <span className="positionTxHint" title={t('portfolio.realizedPlIncludesImportedHistoryTitle')}>
+                        + {t('portfolio.history')}
                       </span>
                     )}
                   </strong>
@@ -700,8 +744,8 @@ export default function PortfolioPositionsTable({
                     type="button"
                     className="headerIconBtn positionActionBtn"
                     onClick={() => openSalesHistory(item)}
-                    aria-label="Show sold history"
-                    title="Show sold history"
+                    aria-label={t('portfolio.showSoldHistory')}
+                    title={t('portfolio.showSoldHistory')}
                     style={{ marginLeft: 'auto' }}
                   >
                     <span className="positionTxIconWithBadge">
@@ -713,13 +757,13 @@ export default function PortfolioPositionsTable({
                     type="button"
                     className="headerIconBtn positionActionBtn"
                     onClick={() => openRecordSale(item)}
-                    aria-label="Add Sale"
-                    title="Add Sale"
+                    aria-label={t('portfolio.addSale')}
+                    title={t('portfolio.addSale')}
                   >
                     +
                   </button>
                 </div>
-                {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>Loading…</p>}
+                {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>{t('app.loading')}</p>}
                 {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
                   <p className="error">{txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase())}</p>
                 )}
@@ -728,14 +772,14 @@ export default function PortfolioPositionsTable({
                     <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable">
                       <thead>
                         <tr>
-                          <th className="positionTxColDate">Date</th>
-                          <th>Quantity</th>
-                          <th>Sell Price Per Unit</th>
-                          <th>Cost Per Unit</th>
-                          <th>Sale Amount</th>
-                          <th>Realized P/L</th>
-                          <th>Realized Return (%)</th>
-                          <th>Actions</th>
+                          <th className="positionTxColDate">{t('modals.historyTableDate')}</th>
+                          <th>{t('modals.historyTableQty')}</th>
+                          <th>{t('modals.historyTableSellPrice')}</th>
+                          <th>{t('modals.historyTableCostPerUnit')}</th>
+                          <th>{t('modals.historyTableSaleAmount')}</th>
+                          <th>{t('modals.historyTableRealizedPl')}</th>
+                          <th>{t('modals.historyTableRealizedReturn')}</th>
+                          <th>{t('netWorth.actions')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -744,7 +788,7 @@ export default function PortfolioPositionsTable({
                           return sells.length === 0 ? (
                             <tr>
                               <td colSpan={8} style={{ color: '#94a3b8' }}>
-                                No sales yet.
+                                {t('portfolio.noSalesYet')}
                               </td>
                             </tr>
                           ) : (
@@ -859,8 +903,9 @@ export default function PortfolioPositionsTable({
       />
 
       <SalesHistoryDialog
-        open={salesHistoryOpen}
-        symbol={salesHistorySymbol}
+        open={salesHistoryState.open}
+        symbol={salesHistoryState.symbol}
+        isCrypto={salesHistoryState.isCrypto}
         hideValues={hideValues}
         onHistoryCountChange={(sym, count) => {
           setHistoryCountBySymbol((prev) => {
@@ -869,7 +914,7 @@ export default function PortfolioPositionsTable({
             return next;
           });
         }}
-        onClose={() => setSalesHistoryOpen(false)}
+        onClose={() => setSalesHistoryState((prev) => ({ ...prev, open: false }))}
       />
 
       {deleteTxConfirm && (
@@ -987,26 +1032,26 @@ export default function PortfolioPositionsTable({
                       </header>
                       <div className="positionQuickGrid">
                         <div className="positionQuickItem">
-                          <span>Market Value</span>
+                          <span>{t('portfolio.marketValue')}</span>
                           <strong>{formatPrice(item, item.currentValue)}</strong>
                         </div>
                         <div className="positionQuickItem">
-                          <span>Cost Basis</span>
+                          <span>{t('portfolio.costBasis')}</span>
                           <strong>{formatMaybeHidden(hideValues, formatMoney, item.totalPurchaseCost)}</strong>
                         </div>
                         <div className="positionQuickItem">
-                          <span>Quantity</span>
+                          <span>{t('portfolio.quantity')}</span>
                           <strong>{formatMaybeHidden(hideValues, formatQty, item.qty)}</strong>
                         </div>
                         <div className="positionQuickItem">
-                          <span>Avg Cost</span>
+                          <span>{t('portfolio.avgCostPerUnit')}</span>
                           <strong>{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</strong>
                         </div>
                       </div>
                       <dl className="positionMetaList">
                         <div className="positionMetaRowWithActions">
                           <div>
-                            <dt>Weight</dt>
+                            <dt>{t('portfolio.portfolioWeight')}</dt>
                             <dd>{formatPercentUnsigned(item.weightPct)}</dd>
                           </div>
                           {onDeletePosition && (

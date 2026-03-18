@@ -4,6 +4,7 @@ import SideNav from './components/SideNav.jsx';
 import UserMenu from './components/UserMenu.jsx';
 import AiAnalysisFab from './components/AiAnalysisFab.jsx';
 import { useLanguage } from './contexts/LanguageContext.jsx';
+import LogoWordmark from './components/LogoWordmark.jsx';
 import { DashboardProvider } from './contexts/DashboardContext.jsx';
 import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
 import NetWorthPage from './pages/NetWorthPage.jsx';
@@ -28,16 +29,10 @@ function LoadingScreen() {
 }
 
 export default function App() {
-  const [hideValues, setHideValues] = useState(() => {
-    const saved = localStorage.getItem('hide_values_enabled');
-    return saved === 'true';
-  });
+  const { t } = useLanguage();
+  const hideValues = false; // Privacy mode removed; always show full values.
   const [session, setSession] = useState({ isLoading: true, authenticated: false, user: null, error: '' });
   const [buildVersion] = useState(() => resolveFrontendBuildVersion());
-
-  useEffect(() => {
-    localStorage.setItem('hide_values_enabled', String(hideValues));
-  }, [hideValues]);
 
   async function refreshSession() {
     try {
@@ -96,11 +91,11 @@ export default function App() {
     <DashboardProvider>
       <div className="appShell">
         <header className="appHeader">
-          <span className="appHeaderBrand">My Worth Track</span>
+          <span className="appHeaderBrand">
+            <LogoWordmark label={t('app.brand')} />
+          </span>
           <UserMenu
             user={session.user}
-            hideValues={hideValues}
-            onHideValuesChange={setHideValues}
             onLogout={handleLogout}
           />
         </header>

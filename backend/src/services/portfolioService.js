@@ -4,7 +4,8 @@ import { resolvePositionPrice } from '../lib/priceResolution.js';
 
 function isNonPositiveOrInvalidQuantity(value) {
   const num = Number(value);
-  return !Number.isFinite(num) || num <= 0;
+  // 0 is allowed for placeholder positions (e.g. for importing realized history later).
+  return !Number.isFinite(num) || num < 0;
 }
 
 function resolveCurrentPrice(asset, stockQuotes, cryptoQuotes) {
@@ -57,9 +58,13 @@ function computePositionMetrics(asset, priceResolution) {
   const currentValue = asset.qty * currentPrice;
   const pnl = currentValue - totalPurchaseCost;
   const pnlPct = totalPurchaseCost === 0 ? 0 : (pnl / totalPurchaseCost) * 100;
+  const realizedPnl = Number(asset?.realizedPnl) || 0;
+  const realizedCost = Number(asset?.sellCost) || 0;
   const found =
-    !isNonPositiveOrInvalidQuantity(asset.qty) &&
-    (Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice));
+    (!isNonPositiveOrInvalidQuantity(asset.qty) &&
+      (Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice))) ||
+    Math.abs(realizedPnl) > 1e-12 ||
+    realizedCost > 1e-12;
   return {
     ...asset,
     found,
@@ -75,18 +80,21 @@ function computePositionMetrics(asset, priceResolution) {
   };
 }
 
-function aggregateTotals(visiblePositions) {
-  return visiblePositions.reduce(
+function aggregateTotals({ visiblePositions, allPositions }) {
+  const totals = visiblePositions.reduce(
     (acc, position) => {
       acc.cost += position.totalPurchaseCost;
       acc.value += position.currentValue;
       acc.pnl += position.pnl;
-      acc.realizedPnl += Number(position?.realizedPnl) || 0;
-      acc.realizedCost += Number(position?.sellCost) || 0;
       return acc;
     },
     { cost: 0, value: 0, pnl: 0, realizedPnl: 0, realizedCost: 0 },
   );
+  for (const position of allPositions) {
+    totals.realizedPnl += Number(position?.realizedPnl) || 0;
+    totals.realizedCost += Number(position?.sellCost) || 0;
+  }
+  return totals;
 }
 
 /**
@@ -107,7 +115,7 @@ export function buildPortfolioPayload({ positions = [], stockQuotes = {}, crypto
     return computePositionMetrics(asset, priceResolution);
   });
   const visiblePositions = computedPositions.filter((position) => position.found);
-  const totals = aggregateTotals(visiblePositions);
+  const totals = aggregateTotals({ visiblePositions, allPositions: computedPositions });
   const totalPnlPct = totals.cost === 0 ? 0 : (totals.pnl / totals.cost) * 100;
   const chartData = visiblePositions.map((position) => ({
     name: position.name,
