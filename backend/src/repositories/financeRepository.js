@@ -197,10 +197,10 @@ export async function createPositionTransaction({
 
       const agg = await client.query(
         `SELECT
-            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
-            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
-            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "sellQty",
-            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "sellCost"
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "sellQty",
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "sellCost"
          FROM portfolio_position_transactions
          WHERE user_id = $1 AND upper(symbol) = $2`,
         [resolvedUserId, sym],
