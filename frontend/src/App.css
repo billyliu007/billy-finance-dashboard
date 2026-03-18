@@ -2079,10 +2079,8 @@ tbody tr:hover td {
 
   .cashMobileCompact .positionActionsCell {
     white-space: nowrap;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 4px;
+    display: table-cell;
+    text-align: right;
   }
 
   .cashMobileCompact .positionActionsCell .headerIconBtn {
@@ -2093,6 +2091,14 @@ tbody tr:hover td {
     padding: 0;
     font-size: 0.7rem;
     margin-right: 0;
+  }
+
+  .cashMobileCompact .cashRowActions {
+    display: inline-flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
   }
 
   .cashMobileCompact .positionActionsCell .headerIconBtn:last-child {

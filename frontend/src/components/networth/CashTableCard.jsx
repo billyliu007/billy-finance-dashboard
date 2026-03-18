@@ -88,28 +88,30 @@ export default function CashTableCard({
                 </td>
                 {hasActions && (
                   <td data-label={t('netWorth.actions')} className="positionActionsCell">
-                    {onEdit && (
-                      <button
-                        type="button"
-                        className="headerIconBtn positionActionBtn"
-                        onClick={() => onEdit(item)}
-                        aria-label={`${t('netWorth.edit')} ${item.instrument}`}
-                        title={t('netWorth.edit')}
-                      >
-                        ✎
-                      </button>
-                    )}
-                    {onDelete && (
-                      <button
-                        type="button"
-                        className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                        onClick={() => onDelete(item)}
-                        aria-label={`${t('netWorth.delete')} ${item.instrument}`}
-                        title={t('netWorth.delete')}
-                      >
-                        ✕
-                      </button>
-                    )}
+                    <div className="cashRowActions">
+                      {onEdit && (
+                        <button
+                          type="button"
+                          className="headerIconBtn positionActionBtn"
+                          onClick={() => onEdit(item)}
+                          aria-label={`${t('netWorth.edit')} ${item.instrument}`}
+                          title={t('netWorth.edit')}
+                        >
+                          ✎
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          type="button"
+                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                          onClick={() => onDelete(item)}
+                          aria-label={`${t('netWorth.delete')} ${item.instrument}`}
+                          title={t('netWorth.delete')}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
