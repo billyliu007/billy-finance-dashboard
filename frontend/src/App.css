@@ -2046,17 +2046,20 @@ tbody tr:hover td {
 
   .cashMobileCompact th:nth-child(2),
   .cashMobileCompact td:nth-child(2) {
-    width: 52%;
+    width: 50%;
   }
 
   .cashMobileCompact th:nth-child(4),
   .cashMobileCompact td:nth-child(4) {
-    width: 30%;
+    width: 28%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .cashMobileCompact th:nth-child(7),
   .cashMobileCompact td:nth-child(7) {
-    width: 18%;
+    width: 22%;
     padding: 6px 2px;
     box-sizing: border-box;
   }
@@ -2076,6 +2079,10 @@ tbody tr:hover td {
 
   .cashMobileCompact .positionActionsCell {
     white-space: nowrap;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
   }
 
   .cashMobileCompact .positionActionsCell .headerIconBtn {
@@ -2085,7 +2092,7 @@ tbody tr:hover td {
     min-height: 20px;
     padding: 0;
     font-size: 0.7rem;
-    margin-right: 2px;
+    margin-right: 0;
   }
 
   .cashMobileCompact .positionActionsCell .headerIconBtn:last-child {
