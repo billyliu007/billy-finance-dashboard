@@ -38,27 +38,42 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
       {
         buyQty: Number(r.buyQty) || 0,
         buyCost: Number(r.buyCost) || 0,
-        sellQty: Number(r.sellQty) || 0,
-        sellProceeds: Number(r.sellProceeds) || 0,
-        sellCost: Number(r.sellCost) || 0,
+        holdingSellQty: Number(r.holdingSellQty) || 0,
+        holdingSellProceeds: Number(r.holdingSellProceeds) || 0,
+        holdingSellCost: Number(r.holdingSellCost) || 0,
+        realizedSellQty: Number(r.realizedSellQty) || 0,
+        realizedSellProceeds: Number(r.realizedSellProceeds) || 0,
+        realizedSellCost: Number(r.realizedSellCost) || 0,
       },
     ]),
   );
   const effectivePositions = (positions || []).map((p) => {
     const sym = String(p.symbol || '').toUpperCase();
-    const tx = txAggBySymbol.get(sym) || { buyQty: 0, buyCost: 0, sellQty: 0, sellProceeds: 0, sellCost: 0 };
+    const tx = txAggBySymbol.get(sym) || {
+      buyQty: 0,
+      buyCost: 0,
+      holdingSellQty: 0,
+      holdingSellProceeds: 0,
+      holdingSellCost: 0,
+      realizedSellQty: 0,
+      realizedSellProceeds: 0,
+      realizedSellCost: 0,
+    };
     const baseQty = Number(p.qty) || 0;
     const baseAvg = Number(p.purchasePrice) || 0;
     const baseCost = baseQty * baseAvg;
     const buyQty = Number(tx.buyQty) || 0;
     const buyCost = Number(tx.buyCost) || 0;
-    const sellQty = Number(tx.sellQty) || 0;
-    const sellProceeds = Number(tx.sellProceeds) || 0;
-    const sellCost = Number(tx.sellCost) || 0;
-    const totalQty = baseQty + buyQty - sellQty;
-    const totalCost = baseCost + buyCost - sellCost;
+    const holdingSellQty = Number(tx.holdingSellQty) || 0;
+    const holdingSellProceeds = Number(tx.holdingSellProceeds) || 0;
+    const holdingSellCost = Number(tx.holdingSellCost) || 0;
+    const realizedSellQty = Number(tx.realizedSellQty) || 0;
+    const realizedSellProceeds = Number(tx.realizedSellProceeds) || 0;
+    const realizedSellCost = Number(tx.realizedSellCost) || 0;
+    const totalQty = baseQty + buyQty - holdingSellQty;
+    const totalCost = baseCost + buyCost - holdingSellCost;
     const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
-    const realizedPnl = sellProceeds - sellCost;
+    const realizedPnl = realizedSellProceeds - realizedSellCost;
     return {
       ...p,
       baseQty,
@@ -66,9 +81,15 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
       baseCost,
       buyQty,
       buyCost,
-      sellQty,
-      sellProceeds,
-      sellCost,
+      sellQty: holdingSellQty,
+      sellProceeds: realizedSellProceeds,
+      sellCost: realizedSellCost,
+      holdingSellQty,
+      holdingSellProceeds,
+      holdingSellCost,
+      realizedSellQty,
+      realizedSellProceeds,
+      realizedSellCost,
       realizedPnl,
       totalQty,
       totalCost,

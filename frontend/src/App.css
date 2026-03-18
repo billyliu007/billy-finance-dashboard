@@ -900,6 +900,8 @@ h1 {
 .positionActionsHeader {
   width: 128px;
   white-space: nowrap;
+  text-align: right;
+  vertical-align: middle;
 }
 
 .positionActionsCell {
@@ -1063,6 +1065,102 @@ h1 {
   gap: 8px;
 }
 
+.positionTxHint {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(219, 234, 254, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.positionTxIconWithBadge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.positionTxBadge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(251, 113, 133, 0.92);
+  color: #0b1020;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  border: 1px solid rgba(2, 6, 23, 0.35);
+}
+
+.salesHistoryTable th,
+.salesHistoryTable td {
+  white-space: nowrap;
+}
+
+.salesHistoryTable th {
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.salesHistoryTable th:nth-child(1),
+.salesHistoryTable td:nth-child(1) {
+  width: 92px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.salesHistoryTable th:nth-child(2),
+.salesHistoryTable td:nth-child(2) {
+  width: 84px;
+}
+
+.salesHistoryTable th:nth-child(3),
+.salesHistoryTable td:nth-child(3) {
+  width: 110px;
+}
+
+.salesHistoryTable th:nth-child(4),
+.salesHistoryTable td:nth-child(4) {
+  width: 110px;
+}
+
+.salesHistoryTable th:nth-child(5),
+.salesHistoryTable td:nth-child(5) {
+  width: 124px;
+}
+
+.salesHistoryTable th:nth-child(6),
+.salesHistoryTable td:nth-child(6) {
+  width: 110px;
+}
+
+.salesHistoryTable th:nth-child(7),
+.salesHistoryTable td:nth-child(7) {
+  width: 118px;
+}
+
+.salesHistoryTable th:nth-child(8),
+.salesHistoryTable td:nth-child(8) {
+  width: auto;
+  white-space: normal;
+}
+
+.salesHistorySummaryRow td {
+  font-weight: 750;
+  background: rgba(15, 23, 42, 0.45);
+}
+
 .positionTxHeaderBtn {
   padding: 8px 10px;
   border-radius: 10px;
@@ -1212,10 +1310,14 @@ h1 {
   place-items: center;
   padding: 18px;
   z-index: 50;
+  overflow-y: auto;
 }
 
 .modalCard {
   width: min(560px, 100%);
+  max-height: calc(100vh - 36px);
+  display: flex;
+  flex-direction: column;
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 16px;
   background: linear-gradient(165deg, rgba(8, 16, 33, 0.98), rgba(12, 22, 43, 0.92));
@@ -1253,6 +1355,8 @@ h1 {
   padding: 14px 16px 6px;
   display: grid;
   gap: 10px;
+  overflow: auto;
+  flex: 1 1 auto;
 }
 
 .modalLabel {
@@ -1299,6 +1403,9 @@ h1 {
   justify-content: flex-end;
   gap: 10px;
   padding: 12px 16px 8px;
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(8, 16, 33, 0.92);
 }
 
 .modalDisclaimer {
@@ -2055,6 +2162,12 @@ tbody tr:hover td {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Allow the "Balance (Local)" header to wrap to 2 lines */
+  .cashMobileCompact th:nth-child(4) {
+    white-space: normal;
+    line-height: 1.15;
   }
 
   .cashMobileCompact th:nth-child(7),

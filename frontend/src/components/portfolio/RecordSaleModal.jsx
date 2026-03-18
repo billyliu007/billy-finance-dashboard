@@ -48,9 +48,9 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
       return list.filter((c) => ['USDT', 'USDC'].includes(String(c?.currency || '').toUpperCase()));
     }
     if (normalizedPosCurrency === 'USD') {
-      return list.filter((c) => normalizeCashCurrency(c?.currency) === 'USD');
+      return list.filter((c) => String(c?.currency || '').trim().toUpperCase() === 'USD');
     }
-    return list.filter((c) => normalizeCashCurrency(c?.currency) === normalizedPosCurrency);
+    return list.filter((c) => String(c?.currency || '').trim().toUpperCase() === normalizedPosCurrency);
   }, [cashComponents, isCrypto, normalizedPosCurrency]);
 
   const estimatedProceeds = useMemo(() => {
@@ -107,7 +107,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
       return;
     }
     if (creditEnabled && eligibleCash.length === 0) {
-      setError('No matching cash item found for credit.');
+      setError('No matching cash account found for credit.');
       return;
     }
     try {
@@ -201,7 +201,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
 
           {creditEnabled && (
             <label className="modalLabel">
-              Select cash item
+              Select cash account
               <select className="modalInput" value={creditCashId} onChange={(e) => setCreditCashId(e.target.value)}>
                 {eligibleCash.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -209,9 +209,11 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
                   </option>
                 ))}
               </select>
-              <p className="hintText" style={{ marginTop: 6 }}>
-                Crypto credits are limited to USDT/USDC cash items for consistency; either stablecoin can be used (1:1).
-              </p>
+              {isCrypto && (
+                <p className="hintText" style={{ marginTop: 6 }}>
+                  Crypto credits are limited to USDT/USDC cash accounts for consistency; either stablecoin can be used (1:1).
+                </p>
+              )}
             </label>
           )}
 

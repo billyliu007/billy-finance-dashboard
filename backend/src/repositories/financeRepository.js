@@ -102,11 +102,14 @@ export async function listPortfolioPositions(userId) {
 export async function listPositionTransactionAggregates(userId) {
   const result = await query(
     `SELECT upper(symbol) AS symbol,
-            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
-            COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
-            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "sellQty",
-            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "sellProceeds",
-            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "sellCost"
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "holdingSellQty",
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "holdingSellProceeds",
+            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "holdingSellCost",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "realizedSellQty",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "realizedSellProceeds",
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "realizedSellCost"
      FROM portfolio_position_transactions
      WHERE user_id = $1
      GROUP BY upper(symbol)`,
@@ -128,7 +131,7 @@ export async function listPositionTransactions(userId, symbol) {
             notes,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
      FROM portfolio_position_transactions
-     WHERE user_id = $1 AND upper(symbol) = $2
+     WHERE user_id = $1 AND upper(symbol) = $2 AND affects_holdings = TRUE
      ORDER BY tx_date DESC, created_at DESC`,
     [userId, sym],
   );
@@ -289,6 +292,94 @@ export async function deletePositionTransaction({ userId, transactionId }) {
   );
   if (result.rowCount === 0) throw new Error('Transaction not found.');
   return { ok: true };
+}
+
+export async function listHistoricalSaleTransactions(userId, symbol) {
+  const resolvedUserId = String(userId || '').trim();
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  if (!sym) return [];
+  const result = await query(
+    `SELECT id,
+            to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
+            qty::float8 AS qty,
+            avg_cost_per_unit::float8 AS "sellPricePerUnit",
+            cost_basis_per_unit::float8 AS "costBasisPerUnit",
+            notes,
+            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
+     FROM portfolio_position_transactions
+     WHERE user_id = $1
+       AND upper(symbol) = $2
+       AND type = 'SELL'
+       AND affects_holdings = FALSE
+     ORDER BY tx_date DESC, created_at DESC`,
+    [resolvedUserId, sym],
+  );
+  return result.rows;
+}
+
+export async function importHistoricalSaleTransactions({ userId, symbol, rows }) {
+  const resolvedUserId = String(userId || '').trim();
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  if (!sym) throw new Error('Symbol is required.');
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) {
+    throw new Error('No rows to import.');
+  }
+
+  await withDbClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const positionRow = await client.query(
+        `SELECT 1 FROM portfolio_positions WHERE user_id = $1 AND symbol = $2`,
+        [resolvedUserId, sym],
+      );
+      if (positionRow.rowCount === 0) {
+        throw new Error('Position not found.');
+      }
+
+      for (const [index, raw] of list.entries()) {
+        const txDate = String(raw?.txDate || '').trim();
+        const qty = Number(raw?.qty);
+        const sellPricePerUnit = Number(raw?.sellPricePerUnit);
+        const costBasisPerUnit = Number(raw?.costBasisPerUnit);
+        const notes = raw?.notes == null ? null : String(raw.notes).trim() || null;
+
+        if (!txDate) throw new Error(`Row ${index + 1}: txDate is required (YYYY-MM-DD).`);
+        if (!Number.isFinite(qty) || qty <= 0) throw new Error(`Row ${index + 1}: qty must be > 0.`);
+        if (!Number.isFinite(sellPricePerUnit) || sellPricePerUnit < 0) {
+          throw new Error(`Row ${index + 1}: sellPricePerUnit must be >= 0.`);
+        }
+        if (!Number.isFinite(costBasisPerUnit) || costBasisPerUnit < 0) {
+          throw new Error(`Row ${index + 1}: costBasisPerUnit must be >= 0.`);
+        }
+
+        await client.query(
+          `INSERT INTO portfolio_position_transactions (
+            user_id,
+            symbol,
+            type,
+            affects_holdings,
+            tx_date,
+            qty,
+            avg_cost_per_unit,
+            cost_basis_per_unit,
+            notes
+          )
+          VALUES ($1, $2, 'SELL', FALSE, $3::date, $4, $5, $6, $7)`,
+          [resolvedUserId, sym, txDate, qty, sellPricePerUnit, costBasisPerUnit, notes],
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+
+  return { ok: true, imported: list.length };
 }
 
 export async function replacePortfolioPositions(userId, positions) {

@@ -10,6 +10,7 @@ import { useLanguage } from '../../contexts/LanguageContext.jsx';
 import { deleteJson, fetchJson } from '../../utils/api.js';
 import RecordPurchaseModal from './RecordPurchaseModal.jsx';
 import RecordSaleModal from './RecordSaleModal.jsx';
+import SalesHistoryDialog from './SalesHistoryDialog.jsx';
 
 export default function PortfolioPositionsTable({
   hideValues,
@@ -32,6 +33,9 @@ export default function PortfolioPositionsTable({
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [recordPosition, setRecordPosition] = useState(null);
   const [deleteTxConfirm, setDeleteTxConfirm] = useState(null); // { symbol, txId, txType } | null
+  const [salesHistoryOpen, setSalesHistoryOpen] = useState(false);
+  const [salesHistorySymbol, setSalesHistorySymbol] = useState('');
+  const [historyCountBySymbol, setHistoryCountBySymbol] = useState(() => new Map());
 
   useEffect(() => {
     if (!showAddMenu) return;
@@ -175,6 +179,18 @@ export default function PortfolioPositionsTable({
   function openRecordSale(item) {
     setRecordPosition(item);
     setSaleModalOpen(true);
+  }
+
+  function openSalesHistory(item) {
+    const sym = String(item?.symbol || item?.key || '').trim().toUpperCase();
+    if (!sym) return;
+    setSalesHistorySymbol(sym);
+    setSalesHistoryOpen(true);
+  }
+
+  function historyCountFor(item) {
+    const sym = String(item?.symbol || item?.key || '').trim().toUpperCase();
+    return Number(historyCountBySymbol.get(sym) || 0);
   }
 
   function getTxType(tx) {
@@ -356,7 +372,27 @@ export default function PortfolioPositionsTable({
 
       <section className="positionTxSection positionTxSection--sold">
         <div className="positionTxSectionHeader">
-          <strong>Sold</strong>
+          <strong>
+            Sold
+            {historyCountFor(item) > 0 && (
+              <span className="positionTxHint" title="Realized P/L includes imported sold history">
+                + history
+              </span>
+            )}
+          </strong>
+          <button
+            type="button"
+            className="headerIconBtn positionActionBtn"
+            onClick={() => openSalesHistory(item)}
+            aria-label="Show sold history"
+            title="Show sold history"
+            style={{ marginLeft: 'auto' }}
+          >
+            <span className="positionTxIconWithBadge">
+              ☰
+              {historyCountFor(item) > 0 && <span className="positionTxBadge">{historyCountFor(item)}</span>}
+            </span>
+          </button>
           <button
             type="button"
             className="headerIconBtn positionActionBtn"
@@ -652,7 +688,27 @@ export default function PortfolioPositionsTable({
 
               <section className="positionTxSection positionTxSection--sold">
                 <div className="positionTxSectionHeader">
-                  <strong>Sold</strong>
+                  <strong>
+                    Sold
+                    {historyCountFor(item) > 0 && (
+                      <span className="positionTxHint" title="Realized P/L includes imported sold history">
+                        + history
+                      </span>
+                    )}
+                  </strong>
+                  <button
+                    type="button"
+                    className="headerIconBtn positionActionBtn"
+                    onClick={() => openSalesHistory(item)}
+                    aria-label="Show sold history"
+                    title="Show sold history"
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    <span className="positionTxIconWithBadge">
+                      ☰
+                      {historyCountFor(item) > 0 && <span className="positionTxBadge">{historyCountFor(item)}</span>}
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className="headerIconBtn positionActionBtn"
@@ -800,6 +856,20 @@ export default function PortfolioPositionsTable({
           }
           onRefresh?.({ mode: 'silent' });
         }}
+      />
+
+      <SalesHistoryDialog
+        open={salesHistoryOpen}
+        symbol={salesHistorySymbol}
+        hideValues={hideValues}
+        onHistoryCountChange={(sym, count) => {
+          setHistoryCountBySymbol((prev) => {
+            const next = new Map(prev);
+            next.set(String(sym || '').toUpperCase(), Number(count) || 0);
+            return next;
+          });
+        }}
+        onClose={() => setSalesHistoryOpen(false)}
       />
 
       {deleteTxConfirm && (

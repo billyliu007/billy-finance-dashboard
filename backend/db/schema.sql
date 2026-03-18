@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS portfolio_position_transactions (
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   symbol TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'BUY' CHECK (type IN ('BUY', 'SELL')),
+  affects_holdings BOOLEAN NOT NULL DEFAULT TRUE,
   tx_date DATE NOT NULL,
   qty NUMERIC(20, 8) NOT NULL,
   avg_cost_per_unit NUMERIC(20, 8) NOT NULL,

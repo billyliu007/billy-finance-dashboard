@@ -45,11 +45,11 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
     if (isCrypto) {
       return list.filter((c) => ['USDT', 'USDC'].includes(String(c?.currency || '').toUpperCase()));
     }
-    // For non-crypto, match by currency (USDT/USDC normalize to USD).
+    // For non-crypto (US stocks): only allow true USD cash accounts (exclude USDT/USDC).
     if (normalizedPosCurrency === 'USD') {
-      return list.filter((c) => normalizeCashCurrency(c?.currency) === 'USD');
+      return list.filter((c) => String(c?.currency || '').trim().toUpperCase() === 'USD');
     }
-    return list.filter((c) => normalizeCashCurrency(c?.currency) === normalizedPosCurrency);
+    return list.filter((c) => String(c?.currency || '').trim().toUpperCase() === normalizedPosCurrency);
   }, [cashComponents, isCrypto, normalizedPosCurrency]);
 
   const estimatedCost = useMemo(() => {
@@ -97,7 +97,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
       return;
     }
     if (deductEnabled && eligibleCash.length === 0) {
-      setError('No matching cash item found for deduction.');
+      setError('No matching cash account found for deduction.');
       return;
     }
     try {
@@ -178,7 +178,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
 
           {deductEnabled && (
             <label className="modalLabel">
-              Select cash item
+              Select cash account
               <select
                 className="modalInput"
                 value={deductCashId}
@@ -190,9 +190,11 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
                   </option>
                 ))}
               </select>
-              <p className="hintText" style={{ marginTop: 6 }}>
-                Crypto deductions are limited to USDT/USDC cash items for consistency; either stablecoin can be used (1:1).
-              </p>
+              {isCrypto && (
+                <p className="hintText" style={{ marginTop: 6 }}>
+                  Crypto deductions are limited to USDT/USDC cash accounts for consistency; either stablecoin can be used (1:1).
+                </p>
+              )}
             </label>
           )}
 

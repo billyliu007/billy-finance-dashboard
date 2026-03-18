@@ -30,6 +30,8 @@ import {
   listPositionTransactions,
   createPositionTransaction,
   deletePositionTransaction,
+  listHistoricalSaleTransactions,
+  importHistoricalSaleTransactions,
   replaceCashComponents,
   replacePortfolioPositions,
 } from './repositories/financeRepository.js';
@@ -373,6 +375,29 @@ export default function createApp() {
         creditCashId,
       });
       return res.status(201).json({ ok: true });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  });
+
+  app.get('/api/portfolio/positions/:symbol/sales-history', requireAuth, async (req, res, next) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const rows = await listHistoricalSaleTransactions(req.auth.user.userId, symbol);
+      return res.json({ history: rows });
+    } catch (error) {
+      error.statusCode = 400;
+      next(error);
+    }
+  });
+
+  app.post('/api/portfolio/positions/:symbol/sales-history/import', requireAuth, async (req, res, next) => {
+    try {
+      const symbol = String(req.params?.symbol || '').trim().toUpperCase();
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      const result = await importHistoricalSaleTransactions({ userId: req.auth.user.userId, symbol, rows });
+      return res.status(201).json(result);
     } catch (error) {
       error.statusCode = 400;
       next(error);

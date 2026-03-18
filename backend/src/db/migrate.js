@@ -123,6 +123,23 @@ async function run() {
       ADD COLUMN IF NOT EXISTS cost_basis_per_unit NUMERIC(20, 8);
     `);
     await client.query(`
+      ALTER TABLE portfolio_position_transactions
+      ADD COLUMN IF NOT EXISTS affects_holdings BOOLEAN;
+    `);
+    await client.query(`
+      UPDATE portfolio_position_transactions
+      SET affects_holdings = TRUE
+      WHERE affects_holdings IS NULL;
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_position_transactions
+      ALTER COLUMN affects_holdings SET NOT NULL;
+    `);
+    await client.query(`
+      ALTER TABLE portfolio_position_transactions
+      ALTER COLUMN affects_holdings SET DEFAULT TRUE;
+    `);
+    await client.query(`
       UPDATE portfolio_position_transactions
       SET type = 'BUY'
       WHERE type IS NULL OR trim(type) = '';
