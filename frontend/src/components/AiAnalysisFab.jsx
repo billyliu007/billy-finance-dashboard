@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 
@@ -128,6 +128,74 @@ function buildPrompt({ cashComponents, positions, language = 'en' }) {
   return lines.join('\n');
 }
 
+function buildAssetsSnapshotPrompt({ cashComponents, positions, language = 'en' }) {
+  const now = new Date().toISOString();
+  const isZh = language === 'zh';
+
+  const cash = (cashComponents || [])
+    .map((c) => ({
+      name: String(c?.name || (isZh ? '现金' : 'Cash')).trim(),
+      currency: String(c?.currency || 'USD').trim().toUpperCase(),
+      balance: Number(c?.balance ?? 0),
+    }))
+    .filter((c) => c.name || c.currency);
+
+  // Snapshot of assets only: include non-negative cash and holdings; exclude debts.
+  const cashAssets = cash.filter((c) => Number.isFinite(c.balance) && c.balance >= 0);
+
+  const rows = Array.isArray(positions) ? positions : [];
+  const byClass = new Map();
+  for (const row of rows) {
+    const cls = String(row?.category || 'Other').trim() || 'Other';
+    if (!byClass.has(cls)) byClass.set(cls, []);
+    byClass.get(cls).push(row);
+  }
+
+  const lines = [];
+  lines.push(isZh ? '以下是我的资产快照（仅供记录）。' : 'Below is a snapshot of my assets (for record-keeping only).');
+  lines.push('');
+  lines.push(isZh ? `数据快照时间（UTC）：${now}` : `Data snapshot time (UTC): ${now}`);
+  lines.push('');
+
+  lines.push(isZh ? '## 现金（资产）' : '## Cash (assets)');
+  if (cashAssets.length === 0) {
+    lines.push(isZh ? '- （无）' : '- (none)');
+  } else {
+    for (const item of cashAssets) {
+      lines.push(`- ${item.name}: ${formatNumber(item.balance)} ${item.currency}`);
+    }
+  }
+  lines.push('');
+
+  lines.push(isZh ? '## 持仓（按资产类别分组）' : '## Holdings (grouped by asset class)');
+  if (rows.length === 0) {
+    lines.push(isZh ? '- （无）' : '- (none)');
+  } else {
+    for (const [cls, clsRows] of Array.from(byClass.entries())) {
+      lines.push(`### ${cls}`);
+      for (const p of clsRows) {
+        lines.push(
+          [
+            `- ${p?.name ?? p?.symbol ?? (isZh ? '未知' : 'Unknown')}`,
+            `symbol=${p?.symbol ?? ''}`,
+            `qty=${formatNumber(p?.qty, { maxFrac: 8 })}`,
+            `avgCost=${formatMoneyUsd(p?.purchasePrice)}`,
+            `costBasis=${formatMoneyUsd(p?.totalPurchaseCost)}`,
+            `marketPrice=${formatMoneyUsd(p?.currentPrice)}`,
+            `marketValue=${formatMoneyUsd(p?.currentValue)}`,
+            `weight=${formatPct(p?.weightPct)}`,
+            `unrealizedPnL=${formatMoneyUsd(p?.pnl)}`,
+            `unrealizedReturn=${formatPct(p?.pnlPct)}`,
+          ].join(' | ')
+        );
+      }
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n');
+}
+
 const PROVIDER_WEB_URLS = {
   chatgpt: 'https://chat.openai.com/',
   gemini: 'https://gemini.google.com/app',
@@ -142,16 +210,51 @@ export default function AiAnalysisFab() {
   const [isCopying, setIsCopying] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showInlineHint, setShowInlineHint] = useState(false);
+  const [promptType, setPromptType] = useState('evaluation'); // 'evaluation' | 'assets_snapshot'
+  const lastPromptTypeRef = useRef(null);
 
   const prompt = useMemo(() => {
     const cashComponents = netWorth?.overview?.cashComponents ?? [];
     const positions = portfolio?.tableRows ?? [];
+    if (promptType === 'assets_snapshot') {
+      return buildAssetsSnapshotPrompt({ cashComponents, positions, language });
+    }
     return buildPrompt({ cashComponents, positions, language });
-  }, [netWorth, portfolio, language]);
+  }, [netWorth, portfolio, language, promptType]);
 
   function closeModal() {
     setIsModalOpen(false);
   }
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      lastPromptTypeRef.current = null;
+      return;
+    }
+
+    // Only auto-copy when user *switches* type (not first open).
+    if (lastPromptTypeRef.current == null) {
+      lastPromptTypeRef.current = promptType;
+      return;
+    }
+
+    if (lastPromptTypeRef.current === promptType) {
+      return;
+    }
+
+    lastPromptTypeRef.current = promptType;
+
+    (async () => {
+      try {
+        await copyToClipboard(prompt || '');
+        setToast(language === 'zh' ? '已复制到剪贴板' : 'Copied to clipboard');
+        window.setTimeout(() => setToast(''), 1600);
+      } catch (err) {
+        setToast(err?.message || (language === 'zh' ? '复制失败。' : 'Failed to copy.'));
+        window.setTimeout(() => setToast(''), 2600);
+      }
+    })();
+  }, [isModalOpen, promptType, prompt, language]);
 
   useEffect(() => {
     // One-time inline hint next to the AI button:
@@ -212,8 +315,14 @@ export default function AiAnalysisFab() {
   }
 
   const copyHint = language === 'zh'
-    ? '下方为将发送给 AI 的提示词，其中包含你的净资产、现金、债务和持仓明细。选择任一 AI 即可复制并打开其页面。在新标签页中粘贴：电脑端用 Ctrl+V 或 Cmd+V；手机端在输入框长按并选择「粘贴」。'
-    : 'The prompt below includes your net worth, cash balances, debts, and position details so the AI can analyze your portfolio. Choose an AI to copy and open its chat. In the new tab, paste the prompt: on desktop use Ctrl+V or Cmd+V; on mobile, long-press in the input and tap Paste.';
+    ? (promptType === 'assets_snapshot'
+      ? '下方为资产快照提示词（仅包含资产，不包含负债）。选择任一 AI 即可复制并打开其页面。在新标签页中粘贴：电脑端用 Ctrl+V 或 Cmd+V；手机端在输入框长按并选择「粘贴」。'
+      : '下方为将发送给 AI 的提示词，其中包含你的净资产、现金、债务和持仓明细。选择任一 AI 即可复制并打开其页面。在新标签页中粘贴：电脑端用 Ctrl+V 或 Cmd+V；手机端在输入框长按并选择「粘贴」。')
+    : (promptType === 'assets_snapshot'
+      ? 'The prompt below is an assets snapshot only (assets only, excludes debts). Choose an AI to copy and open its chat. In the new tab, paste: on desktop use Ctrl+V or Cmd+V; on mobile, long-press and tap Paste.'
+      : 'The prompt below includes your net worth, cash balances, debts, and position details so the AI can analyze your portfolio. Choose an AI to copy and open its chat. In the new tab, paste the prompt: on desktop use Ctrl+V or Cmd+V; on mobile, long-press in the input and tap Paste.');
+
+  const promptPreview = prompt || (language === 'zh' ? '（暂无可用提示词）' : '(No prompt available)');
 
   return (
     <div className="aiFabWrap" aria-live="polite">
@@ -222,7 +331,7 @@ export default function AiAnalysisFab() {
         <div className="modalOverlay" role="dialog" aria-modal="true" aria-label={language === 'zh' ? 'AI 分析' : 'AI analysis'}>
           <section className="modalCard aiModalCard">
             <header className="modalHeader">
-              <h2>{language === 'zh' ? '粘贴到 AI 开始分析' : 'Paste in AI to start analysis'}</h2>
+              <h2>{language === 'zh' ? 'AI 分析' : 'AI analysis'}</h2>
               <button
                 type="button"
                 className="modalCloseBtn"
@@ -233,9 +342,52 @@ export default function AiAnalysisFab() {
               </button>
             </header>
             <div className="modalBody">
+              <div className="aiPromptTabs" role="tablist" aria-label={language === 'zh' ? '提示词类型' : 'Prompt type'}>
+                <button
+                  type="button"
+                  role="tab"
+                  className={`aiPromptTab${promptType === 'evaluation' ? ' active' : ''}`}
+                  aria-selected={promptType === 'evaluation'}
+                  onClick={() => setPromptType('evaluation')}
+                >
+                  <span className="aiPromptTabIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Magnifier + mini chart (review/evaluation) */}
+                      <path d="M10.5 6.5H6.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M9.5 10H6.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M11.2 13.5H6.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M14.5 14.5l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <circle cx="13.5" cy="13.5" r="4.5" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                  </span>
+                  <span className="aiPromptTabLabel">
+                    {language === 'zh' ? '组合评估' : 'Portfolio evaluation'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  className={`aiPromptTab${promptType === 'assets_snapshot' ? ' active' : ''}`}
+                  aria-selected={promptType === 'assets_snapshot'}
+                  onClick={() => setPromptType('assets_snapshot')}
+                >
+                  <span className="aiPromptTabIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Camera (snapshot) */}
+                      <path d="M7 7h3l1.2-2h1.6L14 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                      <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="2" />
+                      <path d="M17.2 10.2h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <span className="aiPromptTabLabel">
+                    {language === 'zh' ? '资产快照' : 'Assets snapshot'}
+                  </span>
+                </button>
+              </div>
               <p className="aiPromptHint">{copyHint}</p>
+              <p className="aiPromptPreviewLabel">{language === 'zh' ? '提示词预览' : 'Prompt preview'}</p>
               <div className="aiPromptBoxWrap">
-                <pre className="aiPromptBox" role="document">{prompt}</pre>
+                <pre className="aiPromptBox" role="document">{promptPreview}</pre>
               </div>
               <p className="aiProviderLabel">{language === 'zh' ? '选择 AI 助手' : 'Choose AI assistant'}</p>
               <div className="aiProviderGrid">

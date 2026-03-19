@@ -656,10 +656,78 @@
   line-height: 1.4;
 }
 
+.aiPromptTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.35);
+  margin-bottom: 10px;
+}
+
+.aiPromptTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: rgba(226, 232, 240, 0.92);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.aiPromptTab:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(15, 23, 42, 0.75);
+  transform: translateY(-1px);
+}
+
+.aiPromptTab.active {
+  border-color: rgba(34, 211, 238, 0.85);
+  background: rgba(56, 189, 248, 0.14);
+  color: #e2e8f0;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.15) inset;
+}
+
+.aiPromptTabIcon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.aiPromptTab.active .aiPromptTabIcon {
+  color: #22d3ee;
+}
+
+.aiPromptTabLabel {
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.aiPromptPreviewLabel {
+  margin: 2px 0 -2px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: rgba(148, 163, 184, 0.95);
+}
+
 .aiPromptBoxWrap {
+  min-height: 140px;
   max-height: 280px;
   overflow: auto;
-  border: 1px solid var(--line-soft);
+  border: 1px solid rgba(56, 189, 248, 0.28);
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.9);
   margin-bottom: 12px;
