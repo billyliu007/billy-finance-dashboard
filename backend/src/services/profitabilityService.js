@@ -426,7 +426,7 @@ export async function resolveProfitabilityPayload(userId, baseCurrency, range = 
     range: { from, to },
     summary: {
       totalReturn: { value: totalPnl, pct: totalReturnPct },
-      realized: { pnl: realizedPnl },
+      realized: { pnl: realizedPnl, pct: realizedCost === 0 ? 0 : (realizedPnl / realizedCost) * 100 },
       unrealized: { pnl: unrealizedPnl },
       realizedVsUnrealized: { realizedPnl, unrealizedPnl, totalPnl },
       winStats: tradeAnalytics.stats,

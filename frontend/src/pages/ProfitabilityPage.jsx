@@ -176,9 +176,12 @@ export default function ProfitabilityPage({ hideValues }) {
               <div className="profitabilityCards">
                 <div className="profitabilityCard">
                   <span className="profitabilityCardLabel">{t('profitability.realizedPl')}</span>
-                  <span className={`profitabilityCardValue ${Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}`}>
+                      <span className={`profitabilityCardValue ${Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}`}>
                     {formatVal(hideValues, summary.realized?.pnl)}
                   </span>
+                      <span className={`profitabilityCardSub ${Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}`}>
+                        {hideValues ? '—' : formatPercent(summary.realized?.pct ?? 0)}
+                      </span>
                 </div>
                 <div className="profitabilityCard">
                   <span className="profitabilityCardLabel">{t('profitability.winRate')}</span>
@@ -347,17 +350,39 @@ export default function ProfitabilityPage({ hideValues }) {
               <p className="profitabilitySectionDesc">{t('profitability.tradeReturnDistribution')}</p>
               <div className="profitabilityChartArea profitabilityChartArea--md">
                 <ResponsiveContainer>
-                  <BarChart data={tradeReturnHistogram}>
+                  <BarChart
+                    data={tradeReturnHistogram}
+                    margin={{ left: -14, right: 10, top: 0, bottom: 0 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-                    <XAxis dataKey="bucket" tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 11 }} interval={2} />
-                    <YAxis tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
+                    <XAxis
+                      dataKey="bucket"
+                      padding={{ left: 0, right: 0 }}
+                      allowDataOverflow
+                      tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 10 }}
+                      tickMargin={0}
+                      interval={2}
+                    />
+                    <YAxis
+                      width={42}
+                      tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }}
+                      tickMargin={0}
+                    />
                     <Tooltip
                       contentStyle={CHART_TOOLTIP_STYLE}
                       labelStyle={{ color: '#f8fafc' }}
                       itemStyle={{ color: '#e2e8f0' }}
                       cursor={false}
                     />
-                    <Bar dataKey="count" name="count" fill="#a78bfa" activeBar={<ActiveAttributionBar />} />
+                    <Bar
+                      dataKey="count"
+                      name="count"
+                      fill="#a78bfa"
+                      activeBar={<ActiveAttributionBar />}
+                      barCategoryGap="0%"
+                      barGap={0}
+                      barSize={28}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
