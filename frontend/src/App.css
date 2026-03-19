@@ -456,6 +456,7 @@
   min-width: 0;
 }
 
+/* --- AI FAB and modal --- */
 .aiFabWrap {
   position: fixed;
   right: 18px;

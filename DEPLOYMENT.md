@@ -23,10 +23,11 @@ Render and local dev use the **same** database. Schema and data are already appl
 
 When you add or change schema (e.g. new migration in the repo):
 
-1. Run migrations once (e.g. from your machine or Render Shell with `DATABASE_URL` set):
+1. Run migrations once (from repo root or Render Shell with `DATABASE_URL` set):
    ```bash
-   npm run db:migrate --prefix backend
+   npm run db:migrate
    ```
+   (Root script runs `npm run db:migrate --prefix backend`.)
 2. Deploy as usual; no pre-deploy migration step.
 
 ## 3. Environment variables

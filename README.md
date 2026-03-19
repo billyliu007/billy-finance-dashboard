@@ -50,8 +50,10 @@ Set required backend values in `backend/.env`:
 ### 3) Run DB schema migration
 
 ```bash
-npm run db:migrate --prefix backend
+npm run db:migrate
 ```
+
+(Runs the backend migration script; apply after pulling schema changes or when using a fresh DB.)
 
 ### 4) Start app
 
@@ -59,7 +61,7 @@ npm run db:migrate --prefix backend
 npm run dev
 ```
 
-- Frontend: `http://localhost:5173`
+- Frontend: `http://localhost:5173` (if 5173 is in use, Vite may use the next port, e.g. 5174)
 - Backend: `http://localhost:4000`
 
 ## Authentication + onboarding flow
