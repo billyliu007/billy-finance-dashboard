@@ -1,5 +1,6 @@
 import { resolveDashboardPayload } from './dashboardService.js';
 import { listAllPositionTransactions, listNetWorthHistory } from '../repositories/financeRepository.js';
+import { normalizeCurrencyCode } from '../lib/number.js';
 
 function toDateOnly(value) {
   const raw = String(value || '').trim();
@@ -43,7 +44,34 @@ function monthKey(dateOnly) {
   return String(dateOnly || '').slice(0, 7); // YYYY-MM
 }
 
-function computeTradeAnalytics(transactions) {
+function resolveNetWorthValue(row, baseCurrency = 'USD') {
+  const base = String(baseCurrency || 'USD').trim().toUpperCase();
+  const usd = Number(row?.netWorthUsd);
+  const cny = Number(row?.netWorthCny);
+  if (base === 'CNY') {
+    if (Number.isFinite(cny)) return cny;
+    if (Number.isFinite(usd)) return usd;
+    return null;
+  }
+  if (Number.isFinite(usd)) return usd;
+  if (Number.isFinite(cny)) return cny;
+  return null;
+}
+
+function toUsdAmount(value, currency, fxRates = {}) {
+  const amount = safeNum(value);
+  const cur = normalizeCurrencyCode(currency || 'USD');
+  if (cur === 'USD') return amount;
+  const usdToCny = safeNum(fxRates?.USD);
+  const curToCny = safeNum(fxRates?.[cur]);
+  if (usdToCny > 0 && curToCny > 0) {
+    return (amount * curToCny) / usdToCny;
+  }
+  // Fallback when conversion is unavailable: keep raw amount to avoid dropping data.
+  return amount;
+}
+
+function computeTradeAnalytics(transactions, { currencyBySymbol = new Map(), fxRates = {} } = {}) {
   const sells = (transactions || []).filter((tx) => String(tx.type).toUpperCase() === 'SELL');
   const buyFirstDateBySymbol = new Map();
   for (const tx of transactions || []) {
@@ -61,11 +89,16 @@ function computeTradeAnalytics(transactions) {
       const qty = safeNum(tx.qty);
       const sellPx = safeNum(tx.avgCostPerUnit);
       const basis = safeNum(tx.costBasisPerUnit);
-      const proceeds = qty * sellPx;
+      const feeTotal = safeNum(tx.feeFlat);
+      const proceeds = qty * sellPx - feeTotal;
       const cost = qty * basis;
       const pnl = proceeds - cost;
       const retPct = cost > 0 ? (pnl / cost) * 100 : null;
       const sym = String(tx.symbol || '').toUpperCase();
+      const currency = currencyBySymbol.get(sym) || 'USD';
+      const proceedsUsd = toUsdAmount(proceeds, currency, fxRates);
+      const costUsd = toUsdAmount(cost, currency, fxRates);
+      const pnlUsd = proceedsUsd - costUsd;
       const buyFirst = buyFirstDateBySymbol.get(sym) || null;
       const daysHeld = buyFirst ? diffDays(buyFirst, tx.txDate) : null;
       return {
@@ -75,9 +108,13 @@ function computeTradeAnalytics(transactions) {
         qty,
         sellPricePerUnit: sellPx,
         costBasisPerUnit: basis,
+        currency,
         proceeds,
         cost,
         pnl,
+        proceedsUsd,
+        costUsd,
+        pnlUsd,
         returnPct: retPct,
         affectsHoldings: Boolean(tx.affectsHoldings),
         daysHeld,
@@ -86,17 +123,17 @@ function computeTradeAnalytics(transactions) {
     })
     .filter((t) => t.qty > 0);
 
-  const wins = trades.filter((t) => t.pnl > 0);
-  const losses = trades.filter((t) => t.pnl < 0);
+  const wins = trades.filter((t) => t.pnlUsd > 0);
+  const losses = trades.filter((t) => t.pnlUsd < 0);
   const winRate = trades.length === 0 ? 0 : (wins.length / trades.length) * 100;
-  const avgWin = wins.length === 0 ? 0 : wins.reduce((acc, t) => acc + t.pnl, 0) / wins.length;
-  const avgLoss = losses.length === 0 ? 0 : losses.reduce((acc, t) => acc + t.pnl, 0) / losses.length; // negative
-  const grossProfit = wins.reduce((acc, t) => acc + t.pnl, 0);
-  const grossLossAbs = losses.reduce((acc, t) => acc + Math.abs(t.pnl), 0);
+  const avgWin = wins.length === 0 ? 0 : wins.reduce((acc, t) => acc + t.pnlUsd, 0) / wins.length;
+  const avgLoss = losses.length === 0 ? 0 : losses.reduce((acc, t) => acc + t.pnlUsd, 0) / losses.length; // negative
+  const grossProfit = wins.reduce((acc, t) => acc + t.pnlUsd, 0);
+  const grossLossAbs = losses.reduce((acc, t) => acc + Math.abs(t.pnlUsd), 0);
   const profitFactor = grossLossAbs === 0 ? null : grossProfit / grossLossAbs;
 
-  const bestTrades = [...trades].sort((a, b) => b.pnl - a.pnl).slice(0, 10);
-  const worstTrades = [...trades].sort((a, b) => a.pnl - b.pnl).slice(0, 10);
+  const bestTrades = [...trades].sort((a, b) => b.pnlUsd - a.pnlUsd).slice(0, 10);
+  const worstTrades = [...trades].sort((a, b) => a.pnlUsd - b.pnlUsd).slice(0, 10);
 
   return {
     trades,
@@ -149,57 +186,11 @@ function bucketizeDays(values) {
   return ranges.map((r) => ({ bucket: r.key, count: counts.get(r.key) || 0 }));
 }
 
-function computeDrawdownAndRisk(netWorthSeries) {
-  const points = (netWorthSeries || [])
-    .map((p) => ({
-      date: p.date,
-      value: Number.isFinite(Number(p.netWorthUsd)) ? Number(p.netWorthUsd) : Number(p.netWorthCny),
-    }))
-    .filter((p) => Number.isFinite(p.value) && p.value > 0 && p.date);
-
-  if (points.length < 2) {
-    return { maxDrawdownPct: null, volatilityAnnualized: null, sharpe: null };
-  }
-
-  let peak = points[0].value;
-  let maxDd = 0;
-  for (const p of points) {
-    if (p.value > peak) peak = p.value;
-    const dd = peak > 0 ? (p.value - peak) / peak : 0;
-    if (dd < maxDd) maxDd = dd;
-  }
-
-  const returns = [];
-  for (let i = 1; i < points.length; i += 1) {
-    const prev = points[i - 1].value;
-    const cur = points[i].value;
-    if (prev > 0 && Number.isFinite(cur)) {
-      returns.push(cur / prev - 1);
-    }
-  }
-
-  if (returns.length < 2) {
-    return { maxDrawdownPct: maxDd * 100, volatilityAnnualized: null, sharpe: null };
-  }
-
-  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance = returns.reduce((acc, r) => acc + (r - mean) ** 2, 0) / (returns.length - 1);
-  const std = Math.sqrt(Math.max(0, variance));
-  const volAnnual = std * Math.sqrt(252);
-  const sharpe = std === 0 ? null : (mean / std) * Math.sqrt(252);
-
-  return {
-    maxDrawdownPct: maxDd * 100,
-    volatilityAnnualized: volAnnual * 100,
-    sharpe,
-  };
-}
-
-function computeMonthlySeries({ netWorthSeries, realizedMonthly }) {
+function computeMonthlySeries({ netWorthSeries, realizedMonthly, baseCurrency = 'USD' }) {
   const monthEnd = new Map();
   for (const p of netWorthSeries || []) {
     const m = monthKey(p.date);
-    const val = Number.isFinite(Number(p.netWorthUsd)) ? Number(p.netWorthUsd) : Number(p.netWorthCny);
+    const val = resolveNetWorthValue(p, baseCurrency);
     if (!m || !Number.isFinite(val)) continue;
     const existing = monthEnd.get(m);
     if (!existing || String(p.date) > existing.date) {
@@ -306,6 +297,65 @@ function computeInsights({ attribution, realizedMonthly, totalPnl }) {
   return insights;
 }
 
+function computeRealizedAttribution({ trades, portfolioRows }) {
+  const metaBySymbol = new Map(
+    (portfolioRows || []).map((r) => [
+      String(r.symbol || r.key || '').toUpperCase(),
+      {
+        symbol: String(r.symbol || r.key || '').toUpperCase(),
+        name: r.name ?? String(r.symbol || r.key || '').toUpperCase(),
+        category: String(r.category || 'Other'),
+        currency: String(r.currency || 'USD').toUpperCase(),
+      },
+    ]),
+  );
+
+  const realizedBySymbol = new Map();
+  for (const tr of trades || []) {
+    const sym = String(tr.symbol || '').toUpperCase();
+    if (!sym) continue;
+    realizedBySymbol.set(sym, safeNum(realizedBySymbol.get(sym)) + safeNum(tr.pnlUsd));
+  }
+
+  const bySymbol = Array.from(realizedBySymbol.entries()).map(([symbol, realizedPnl]) => {
+    const meta = metaBySymbol.get(symbol) || {
+      symbol,
+      name: symbol,
+      category: 'Other',
+      currency: 'USD',
+    };
+    return {
+      symbol,
+      name: meta.name,
+      category: meta.category,
+      currency: meta.currency,
+      realizedPnl,
+    };
+  });
+
+  const byAssetClass = new Map();
+  const byCurrency = new Map();
+  for (const row of bySymbol) {
+    const cls = byAssetClass.get(row.category) || { key: row.category, realizedPnl: 0 };
+    cls.realizedPnl += safeNum(row.realizedPnl);
+    byAssetClass.set(row.category, cls);
+
+    const cur = byCurrency.get(row.currency) || { key: row.currency, realizedPnl: 0 };
+    cur.realizedPnl += safeNum(row.realizedPnl);
+    byCurrency.set(row.currency, cur);
+  }
+
+  const contributors = [...bySymbol].sort((a, b) => b.realizedPnl - a.realizedPnl).slice(0, 10);
+  const detractors = [...bySymbol].sort((a, b) => a.realizedPnl - b.realizedPnl).slice(0, 10);
+
+  return {
+    byAssetClass: Array.from(byAssetClass.values()).sort((a, b) => b.realizedPnl - a.realizedPnl),
+    byCurrency: Array.from(byCurrency.values()).sort((a, b) => b.realizedPnl - a.realizedPnl),
+    contributors,
+    detractors,
+  };
+}
+
 /**
  * Build profitability analytics for the Profitability page.
  * @param {string} userId
@@ -321,9 +371,16 @@ export async function resolveProfitabilityPayload(userId, baseCurrency, range = 
     listNetWorthHistory(userId),
   ]);
 
-  const tradeAnalytics = computeTradeAnalytics(transactions);
-  const realizedPnl = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.pnl), 0);
-  const realizedCost = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.cost), 0);
+  const portfolioRows = dashboard?.portfolio?.tableRows || [];
+  const currencyBySymbol = new Map(
+    portfolioRows.map((r) => [
+      String(r.symbol || '').toUpperCase(),
+      String(r.currency || 'USD').toUpperCase(),
+    ]),
+  );
+  const tradeAnalytics = computeTradeAnalytics(transactions, { currencyBySymbol, fxRates: dashboard?.fxRates || {} });
+  const realizedPnl = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.pnlUsd), 0);
+  const realizedCost = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.costUsd), 0);
 
   const unrealizedPnl = safeNum(dashboard?.portfolio?.totals?.pnl);
   const unrealizedCost = safeNum(dashboard?.portfolio?.totals?.cost);
@@ -336,7 +393,7 @@ export async function resolveProfitabilityPayload(userId, baseCurrency, range = 
   for (const tr of tradeAnalytics.trades) {
     const m = monthKey(tr.txDate);
     if (!m) continue;
-    realizedByMonth.set(m, safeNum(realizedByMonth.get(m)) + safeNum(tr.pnl));
+    realizedByMonth.set(m, safeNum(realizedByMonth.get(m)) + safeNum(tr.pnlUsd));
   }
   const realizedMonthly = Array.from(realizedByMonth.entries())
     .map(([m, pnl]) => ({ month: m, realizedPnl: pnl }))
@@ -348,10 +405,13 @@ export async function resolveProfitabilityPayload(userId, baseCurrency, range = 
     if (to && String(p.date) > to) return false;
     return true;
   });
-  const risk = computeDrawdownAndRisk(filteredNetWorth);
-
-  const monthlySeries = computeMonthlySeries({ netWorthSeries: filteredNetWorth, realizedMonthly });
-  const attribution = computeAttribution({ portfolioRows: dashboard?.portfolio?.tableRows || [] });
+  const monthlySeries = computeMonthlySeries({
+    netWorthSeries: filteredNetWorth,
+    realizedMonthly,
+    baseCurrency,
+  });
+  const attribution = computeAttribution({ portfolioRows });
+  const realizedAttribution = computeRealizedAttribution({ trades: tradeAnalytics.trades, portfolioRows });
   const insights = computeInsights({ attribution, realizedMonthly, totalPnl });
 
   const tradeReturnHistogram = bucketize(
@@ -370,14 +430,13 @@ export async function resolveProfitabilityPayload(userId, baseCurrency, range = 
       unrealized: { pnl: unrealizedPnl },
       realizedVsUnrealized: { realizedPnl, unrealizedPnl, totalPnl },
       winStats: tradeAnalytics.stats,
-      risk,
     },
-    benchmarks: dashboard?.benchmarks ?? null,
     timeSeries: {
       realizedMonthly,
       monthlyStacked: monthlySeries, // realized + estimated unrealized (from net worth deltas)
     },
     attribution,
+    realizedAttribution,
     trades: {
       best: tradeAnalytics.bestTrades,
       worst: tradeAnalytics.worstTrades,

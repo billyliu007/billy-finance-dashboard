@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
-import { buildPrompt, buildAssetsSnapshotPrompt } from '../utils/aiPrompts.js';
+import useApiData from '../hooks/useApiData.js';
+import { buildPrompt, buildAssetsSnapshotPrompt, buildTradingPerformancePrompt } from '../utils/aiPrompts.js';
 
 async function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) {
@@ -26,6 +27,21 @@ const PROVIDER_WEB_URLS = {
   deepseek: 'https://chat.deepseek.com/',
 };
 
+function todayDateOnly() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function startOfYearDateOnly() {
+  const d = new Date();
+  return `${d.getFullYear()}-01-01`;
+}
+
+function subtractMonthsDateOnly(dateOnly, months) {
+  const d = new Date(`${dateOnly}T00:00:00.000Z`);
+  d.setUTCMonth(d.getUTCMonth() - months);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function AiAnalysisFab() {
   const { netWorth, portfolio, isLoading } = useDashboard();
   const { language, t } = useLanguage();
@@ -33,8 +49,25 @@ export default function AiAnalysisFab() {
   const [isCopying, setIsCopying] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showInlineHint, setShowInlineHint] = useState(false);
-  const [promptType, setPromptType] = useState('evaluation'); // 'evaluation' | 'assets_snapshot'
+  const [promptType, setPromptType] = useState('evaluation'); // 'evaluation' | 'assets_snapshot' | 'trading_performance'
+  const [tradingReviewTimeframe, setTradingReviewTimeframe] = useState('since'); // since | ytd | 1y
   const lastPromptTypeRef = useRef(null);
+  const tradingReviewRange = useMemo(() => {
+    const today = todayDateOnly();
+    if (tradingReviewTimeframe === 'ytd') return { from: startOfYearDateOnly(), to: today };
+    if (tradingReviewTimeframe === '1y') return { from: subtractMonthsDateOnly(today, 12), to: today };
+    return { from: null, to: null };
+  }, [tradingReviewTimeframe]);
+
+  const tradingPerformancePath = useMemo(() => {
+    const params = new URLSearchParams();
+    if (tradingReviewRange.from) params.set('from', tradingReviewRange.from);
+    if (tradingReviewRange.to) params.set('to', tradingReviewRange.to);
+    const qs = params.toString();
+    return qs ? `/api/trading-performance?${qs}` : '/api/trading-performance';
+  }, [tradingReviewRange.from, tradingReviewRange.to]);
+
+  const { data: tradingPerformance } = useApiData(tradingPerformancePath);
 
   const prompt = useMemo(() => {
     const cashComponents = netWorth?.overview?.cashComponents ?? [];
@@ -42,8 +75,14 @@ export default function AiAnalysisFab() {
     if (promptType === 'assets_snapshot') {
       return buildAssetsSnapshotPrompt({ cashComponents, positions, language });
     }
+    if (promptType === 'trading_performance') {
+      return buildTradingPerformancePrompt({
+        analytics: tradingPerformance,
+        language,
+      });
+    }
     return buildPrompt({ cashComponents, positions, language });
-  }, [netWorth, portfolio, language, promptType]);
+  }, [netWorth, portfolio, language, promptType, tradingPerformance]);
 
   function closeModal() {
     setIsModalOpen(false);
@@ -127,7 +166,11 @@ export default function AiAnalysisFab() {
     }
   }
 
-  const copyHint = promptType === 'assets_snapshot' ? t('ai.copyHintSnapshot') : t('ai.copyHintEvaluation');
+  const copyHint = promptType === 'assets_snapshot'
+    ? t('ai.copyHintSnapshot')
+    : promptType === 'trading_performance'
+      ? t('ai.copyHintTradingPerformance')
+      : t('ai.copyHintEvaluation');
   const promptPreview = prompt || t('ai.noPromptAvailable');
 
   return (
@@ -183,7 +226,42 @@ export default function AiAnalysisFab() {
                   </span>
                   <span className="aiPromptTabLabel">{t('ai.assetsSnapshot')}</span>
                 </button>
+                <button
+                  type="button"
+                  role="tab"
+                  className={`aiPromptTab${promptType === 'trading_performance' ? ' active' : ''}`}
+                  aria-selected={promptType === 'trading_performance'}
+                  onClick={() => setPromptType('trading_performance')}
+                >
+                  <span className="aiPromptTabIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M8 19v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M12 19v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M16 19V9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M20 19V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <span className="aiPromptTabLabel">{t('ai.tradingPerformanceReview')}</span>
+                </button>
               </div>
+              {promptType === 'trading_performance' && (
+                <div className="aiReviewTimeframeRow">
+                  <label htmlFor="ai-review-timeframe" className="aiReviewTimeframeLabel">
+                    {t('ai.reviewTimeframe')}
+                  </label>
+                  <select
+                    id="ai-review-timeframe"
+                    className="aiReviewTimeframeSelect"
+                    value={tradingReviewTimeframe}
+                    onChange={(e) => setTradingReviewTimeframe(e.target.value)}
+                  >
+                    <option value="since">{t('profitability.sinceInception')}</option>
+                    <option value="ytd">{t('profitability.ytd')}</option>
+                    <option value="1y">{t('profitability.oneYear')}</option>
+                  </select>
+                </div>
+              )}
               <p className="aiPromptHint">{copyHint}</p>
               <p className="aiPromptPreviewLabel">{t('ai.promptPreview')}</p>
               <div className="aiPromptBoxWrap">

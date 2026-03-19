@@ -403,9 +403,9 @@
 
 .sideNavTabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
-  max-width: 480px;
+  width: 100%;
 }
 
 .privacyToggle {
@@ -657,9 +657,32 @@
   line-height: 1.4;
 }
 
+.aiReviewTimeframeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.aiReviewTimeframeLabel {
+  font-size: 0.82rem;
+  color: rgba(148, 163, 184, 0.95);
+  font-weight: 650;
+}
+
+.aiReviewTimeframeSelect {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 0.86rem;
+  min-width: 170px;
+}
+
 .aiPromptTabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px;
   padding: 8px;
   border: 1px solid rgba(148, 163, 184, 0.22);
@@ -681,7 +704,7 @@
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .aiPromptTab:hover {
@@ -907,29 +930,34 @@ h1 {
 
 /* --- Profitability page --- */
 .profitabilitySection {
-  margin-bottom: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  padding: 16px;
+  backdrop-filter: blur(10px);
 }
 
-.profitabilitySection:last-child {
-  margin-bottom: 0;
+.profitabilitySection + .profitabilitySection {
+  margin-top: 14px;
 }
 
 .profitabilitySectionTitle {
-  font-size: 1.05rem;
+  font-size: 1.02rem;
   font-weight: 650;
-  color: #e2e8f0;
-  margin: 0 0 8px;
+  color: #f8fbff;
+  margin: 0 0 10px;
+  letter-spacing: 0.01em;
 }
 
 .profitabilitySectionDesc {
-  font-size: 0.88rem;
-  color: #94a3b8;
+  font-size: 0.86rem;
+  color: var(--text-dim);
   margin: 0 0 12px;
 }
 
 .profitabilityCards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
 }
 
@@ -938,23 +966,27 @@ h1 {
 }
 
 .profitabilityCard {
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(15, 23, 42, 0.6);
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line-soft);
+  background: var(--panel-strong);
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .profitabilityCardLabel {
-  font-size: 0.8rem;
-  color: #94a3b8;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
 }
 
 .profitabilityCardValue {
-  font-size: 1.1rem;
-  font-weight: 650;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  font-weight: 700;
   color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
 }
 
 .profitabilityCardValue.pos {
@@ -967,6 +999,61 @@ h1 {
 
 .profitabilityCardSub {
   font-size: 0.78rem;
+}
+
+.profitabilityInfoWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.profitabilityValueWithInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profitabilityInfoDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #94a3b8;
+  font-size: 0.72rem;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(15, 23, 42, 0.55);
+  padding: 0;
+}
+
+.profitabilityTooltip {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 220px;
+  max-width: min(320px, 70vw);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.97);
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 20;
+}
+
+.profitabilityInfoWrap:hover .profitabilityTooltip,
+.profitabilityInfoWrap:focus-within .profitabilityTooltip {
+  opacity: 1;
+  visibility: visible;
 }
 
 .profitabilityCardSub.pos {
@@ -984,12 +1071,17 @@ h1 {
 }
 
 .profitabilityTableWrap {
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   margin-bottom: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
 }
 
 .profitabilityTable {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
@@ -1011,13 +1103,14 @@ h1 {
 }
 
 .profitabilityInput {
-  width: 72px;
+  width: 84px;
   padding: 6px 8px;
   border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--line-soft);
+  background: var(--panel-strong);
   color: #e2e8f0;
   font-size: 0.88rem;
+  box-sizing: border-box;
 }
 
 .profitabilityResetBtn {
@@ -1034,11 +1127,19 @@ h1 {
 .profitabilitySelect {
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--line-soft);
+  background: var(--panel-strong);
   color: #e2e8f0;
   font-size: 0.88rem;
   min-width: 160px;
+  box-sizing: border-box;
+}
+
+.profitabilityControlRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
 }
 
 .profitabilitySellDownRow {
@@ -1066,6 +1167,8 @@ h1 {
   color: #e2e8f0;
   display: grid;
   gap: 8px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .profitabilityTable td.pos {
@@ -1074,6 +1177,28 @@ h1 {
 
 .profitabilityTable td.neg {
   color: #f87171;
+}
+
+.profitabilityChartArea {
+  width: 100%;
+}
+
+.profitabilityChartArea--lg {
+  height: 260px;
+}
+
+.profitabilityChartArea--md {
+  height: 220px;
+}
+
+.profitabilityChartArea--sm {
+  height: 200px;
+}
+
+.profitabilityTwoCol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .tableHeaderRow {
@@ -2408,7 +2533,7 @@ tbody tr:hover td {
 
 @media (max-width: 980px) {
   .sideNavTabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   }
 
   .mainContent {
@@ -2436,6 +2561,73 @@ tbody tr:hover td {
   .portfolioCharts,
   .kpiRow {
     grid-template-columns: 1fr;
+  }
+
+  .profitabilityCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profitabilitySection {
+    padding: 12px;
+  }
+
+  .profitabilityControlRow {
+    gap: 10px;
+  }
+
+  .profitabilityControlRow label {
+    width: 100%;
+  }
+
+  .profitabilitySellDownRow {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .profitabilitySellDownRow label {
+    width: 100%;
+  }
+
+  .profitabilitySelect,
+  .profitabilityInput {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .profitabilityChartArea--lg {
+    height: 230px;
+  }
+
+  .profitabilityChartArea--md,
+  .profitabilityChartArea--sm {
+    height: 200px;
+  }
+
+  .profitabilityTwoCol {
+    grid-template-columns: 1fr;
+  }
+
+  .profitabilityTable {
+    font-size: 0.8rem;
+    min-width: 560px;
+  }
+
+  .profitabilityTable th,
+  .profitabilityTable td {
+    padding: 7px 8px;
+  }
+
+  .profitabilityTable--trades th:nth-child(3),
+  .profitabilityTable--trades td:nth-child(3),
+  .profitabilityTable--trades th:nth-child(5),
+  .profitabilityTable--trades td:nth-child(5) {
+    display: none;
+  }
+
+  .profitabilityTable--rebalance th:nth-child(5),
+  .profitabilityTable--rebalance td:nth-child(5) {
+    display: none;
   }
 
   .chartArea {
@@ -2692,6 +2884,57 @@ tbody tr:hover td {
 }
 
 @media (max-width: 480px) {
+  .profitabilitySection {
+    padding: 10px;
+  }
+
+  .profitabilitySectionTitle {
+    font-size: 0.98rem;
+  }
+
+  .profitabilitySectionDesc {
+    font-size: 0.82rem;
+  }
+
+  .profitabilityCards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .profitabilityCard {
+    padding: 10px 12px;
+  }
+
+  .profitabilityCardValue {
+    font-size: 1rem;
+  }
+
+  .profitabilityChartArea--lg,
+  .profitabilityChartArea--md,
+  .profitabilityChartArea--sm {
+    height: 180px;
+  }
+
+  .profitabilityTable {
+    font-size: 0.76rem;
+    min-width: 460px;
+  }
+
+  .profitabilityTable th,
+  .profitabilityTable td {
+    padding: 6px 6px;
+  }
+
+  .profitabilityTable--trades th:nth-child(1),
+  .profitabilityTable--trades td:nth-child(1) {
+    display: none;
+  }
+
+  .profitabilityTable--rebalance th:nth-child(4),
+  .profitabilityTable--rebalance td:nth-child(4) {
+    display: none;
+  }
+
   .modalOverlay {
     padding: 6px;
   }
@@ -2702,5 +2945,84 @@ tbody tr:hover td {
 
   .onboardingRow {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Landscape phones: keep density high without breaking readability */
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 932px) {
+  .profitabilitySection {
+    margin-bottom: 16px;
+  }
+
+  .profitabilitySectionTitle {
+    font-size: 0.92rem;
+    margin-bottom: 6px;
+  }
+
+  .profitabilitySectionDesc {
+    font-size: 0.78rem;
+    margin-bottom: 8px;
+  }
+
+  .profitabilityCards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .profitabilityCard {
+    padding: 8px 10px;
+    gap: 2px;
+  }
+
+  .profitabilityCardLabel {
+    font-size: 0.72rem;
+  }
+
+  .profitabilityCardValue {
+    font-size: 0.92rem;
+  }
+
+  .profitabilityChartArea--lg,
+  .profitabilityChartArea--md,
+  .profitabilityChartArea--sm {
+    height: 140px;
+  }
+
+  .profitabilitySellDownRow {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .profitabilitySellDownRow label {
+    width: auto;
+  }
+
+  .profitabilityTable {
+    font-size: 0.72rem;
+    min-width: 520px;
+  }
+
+  .profitabilityTable th,
+  .profitabilityTable td {
+    padding: 5px 6px;
+    white-space: nowrap;
+  }
+
+  .profitabilityTable--trades th:nth-child(3),
+  .profitabilityTable--trades td:nth-child(3),
+  .profitabilityTable--trades th:nth-child(5),
+  .profitabilityTable--trades td:nth-child(5),
+  .profitabilityTable--trades th:nth-child(7),
+  .profitabilityTable--trades td:nth-child(7) {
+    display: none;
+  }
+
+  .profitabilityTable--rebalance th:nth-child(3),
+  .profitabilityTable--rebalance td:nth-child(3),
+  .profitabilityTable--rebalance th:nth-child(5),
+  .profitabilityTable--rebalance td:nth-child(5) {
+    display: none;
   }
 }

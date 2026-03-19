@@ -10,6 +10,7 @@ import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
 import NetWorthPage from './pages/NetWorthPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import ProfitabilityPage from './pages/ProfitabilityPage.jsx';
+import StrategySimulatorPage from './pages/StrategySimulatorPage.jsx';
 import DevelopmentPage from './pages/DevelopmentPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import OnboardingPage from './pages/OnboardingPage.jsx';
@@ -110,7 +111,9 @@ export default function App() {
             <Route path="/net-worth" element={<NetWorthPage hideValues={hideValues} />} />
             <Route path="/overview" element={<Navigate to="/net-worth" replace />} />
             <Route path="/portfolio" element={<PortfolioPage hideValues={hideValues} />} />
-            <Route path="/profitability" element={<ProfitabilityPage hideValues={hideValues} />} />
+            <Route path="/trading-performance" element={<ProfitabilityPage hideValues={hideValues} />} />
+            <Route path="/strategy-simulator" element={<StrategySimulatorPage hideValues={hideValues} />} />
+            <Route path="/profitability" element={<Navigate to="/trading-performance" replace />} />
             {SHOW_DEVELOPMENT_PAGE && (
               <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />
             )}

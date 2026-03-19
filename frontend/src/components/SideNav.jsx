@@ -24,10 +24,16 @@ export default function SideNav() {
           {t('nav.portfolioHoldings')}
         </NavLink>
         <NavLink
-          to="/profitability"
+          to="/trading-performance"
           className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
         >
-          {t('nav.profitability')}
+          {t('nav.tradingPerformance')}
+        </NavLink>
+        <NavLink
+          to="/strategy-simulator"
+          className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
+        >
+          {t('nav.strategySimulator')}
         </NavLink>
         {SHOW_DEVELOPMENT_PAGE && (
           <NavLink

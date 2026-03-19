@@ -3,6 +3,7 @@ import { fetchWithTimeout } from './http.js';
 const BINANCE_TICKER_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price';
 const COINGECKO_SIMPLE_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 const COINBASE_TICKER_BASE_URL = 'https://api.exchange.coinbase.com/products';
+const COINBASE_CANDLES_BASE_URL = 'https://api.exchange.coinbase.com/products';
 const CRYPTO_TIMEOUT_MS = 10000;
 
 const COINBASE_REQUEST_HEADERS = {
@@ -180,4 +181,44 @@ export async function fetchCoinbaseProductQuotes(targets = []) {
     }
     return acc;
   }, {});
+}
+
+/**
+ * Fetch daily close candles for a Coinbase product.
+ * @param {{ productId: string, fromDate: string, toDate: string }} options
+ * @returns {Promise<Array<{ date: string, close: number }>>}
+ */
+export async function fetchCoinbaseDailyCloses({ productId, fromDate, toDate }) {
+  const id = String(productId || '').trim().toUpperCase();
+  if (!id || !fromDate || !toDate) return [];
+  const start = new Date(`${fromDate}T00:00:00.000Z`);
+  const end = new Date(`${toDate}T23:59:59.999Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return [];
+
+  try {
+    const params = new URLSearchParams({
+      granularity: '86400',
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+    const response = await fetchWithTimeout(
+      `${COINBASE_CANDLES_BASE_URL}/${id}/candles?${params.toString()}`,
+      { timeoutMs: CRYPTO_TIMEOUT_MS, headers: COINBASE_REQUEST_HEADERS },
+    );
+    if (!response.ok) return [];
+    const rows = await response.json();
+    if (!Array.isArray(rows)) return [];
+
+    return rows
+      .map((row) => {
+        const ts = Number(row?.[0]);
+        const close = Number(row?.[4]);
+        if (!Number.isFinite(ts) || !Number.isFinite(close) || close <= 0) return null;
+        return { date: new Date(ts * 1000).toISOString().slice(0, 10), close };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+  } catch {
+    return [];
+  }
 }

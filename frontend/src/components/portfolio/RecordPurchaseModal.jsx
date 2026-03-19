@@ -18,6 +18,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
   const [txDate, setTxDate] = useState(todayIsoDate());
   const [qty, setQty] = useState('');
   const [avgCost, setAvgCost] = useState('');
+  const [feeFlatTotal, setFeeFlatTotal] = useState('');
   const [deductEnabled, setDeductEnabled] = useState(false);
   const [deductCashId, setDeductCashId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -29,6 +30,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
     setTxDate(todayIsoDate());
     setQty('');
     setAvgCost('');
+    setFeeFlatTotal('');
     setDeductEnabled(false);
     setDeductCashId('');
   }, [open]);
@@ -55,10 +57,12 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
   const estimatedCost = useMemo(() => {
     const q = Number(qty);
     const c = Number(avgCost);
+    const f = Number(feeFlatTotal);
     if (!Number.isFinite(q) || q <= 0) return 0;
     if (!Number.isFinite(c) || c < 0) return 0;
-    return q * c;
-  }, [qty, avgCost]);
+    const fee = Number.isFinite(f) && f >= 0 ? f : 0;
+    return q * c + fee;
+  }, [qty, avgCost, feeFlatTotal]);
 
   useEffect(() => {
     if (!deductEnabled) return;
@@ -76,6 +80,10 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
     setAvgCost(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
   }
 
+  function handleFeeFlatTotalChange(e) {
+    setFeeFlatTotal(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
+  }
+
   async function handleSave() {
     setError('');
     if (!symbol) {
@@ -84,6 +92,8 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
     }
     const qtyNum = Number(qty);
     const avgCostNum = Number(avgCost);
+    const feeNumRaw = feeFlatTotal.trim() === '' ? null : Number(feeFlatTotal);
+    const feeNum = feeNumRaw == null ? null : feeNumRaw;
     if (!txDate) {
       setError(t('errors.dateRequired'));
       return;
@@ -96,6 +106,10 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
       setError(t('errors.avgCostNonNegative'));
       return;
     }
+    if (feeNum != null && (!Number.isFinite(feeNum) || feeNum < 0)) {
+      setError(t('errors.feePerUnitNonNegative'));
+      return;
+    }
     if (deductEnabled && eligibleCash.length === 0) {
       setError(t('errors.noMatchingCashForDeduction'));
       return;
@@ -106,6 +120,7 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
         txDate,
         qty: qtyNum,
         avgCostPerUnit: avgCostNum,
+        feeFlatTotal: feeNum,
         deductCashId: deductEnabled ? deductCashId || null : null,
       });
       onSaved?.();
@@ -159,6 +174,17 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
                 autoComplete="off"
                 value={avgCost}
                 onChange={handleAvgCostChange}
+                className="modalInput"
+              />
+            </label>
+            <label className="modalLabel">
+              Fee (flat, optional)
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={feeFlatTotal}
+                onChange={handleFeeFlatTotalChange}
                 className="modalInput"
               />
             </label>

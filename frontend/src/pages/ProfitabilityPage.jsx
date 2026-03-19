@@ -3,9 +3,11 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
+  Cell,
   Line,
   LineChart,
+  Rectangle,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,7 +16,7 @@ import {
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import useApiData from '../hooks/useApiData.js';
-import { formatMoney, formatPercent } from '../utils/formatters.js';
+import { formatCurrencyValue, formatMoney, formatPercent } from '../utils/formatters.js';
 
 function todayDateOnly() {
   return new Date().toISOString().slice(0, 10);
@@ -23,12 +25,6 @@ function todayDateOnly() {
 function startOfYearDateOnly() {
   const d = new Date();
   return `${d.getFullYear()}-01-01`;
-}
-
-function addDaysDateOnly(dateOnly, deltaDays) {
-  const d = new Date(`${dateOnly}T00:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + deltaDays);
-  return d.toISOString().slice(0, 10);
 }
 
 function subtractMonthsDateOnly(dateOnly, months) {
@@ -42,14 +38,48 @@ function formatVal(hideValues, v) {
   return formatMoney(v);
 }
 
-function formatPct(hideValues, v) {
+function formatValByCurrency(hideValues, v, currency) {
   if (hideValues) return '—';
-  return formatPercent(v);
+  return formatCurrencyValue(Number(v) || 0, currency || 'USD');
 }
+
+function ActiveAttributionBar(props) {
+  const {
+    x,
+    y,
+    width,
+    height,
+    fill,
+  } = props;
+  return (
+    <Rectangle
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      radius={4}
+      fill={fill}
+      stroke="#67e8f9"
+      strokeWidth={2}
+      style={{ filter: 'drop-shadow(0 0 8px rgba(56,189,248,0.45))' }}
+    />
+  );
+}
+
+const CHART_GRID_STROKE = '#334155';
+const CHART_AXIS_TICK = { fill: '#94a3b8', fontSize: 12 };
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: '#0b1220',
+  border: '1px solid #334155',
+  borderRadius: '10px',
+  color: '#e2e8f0',
+};
+const POS_BAR = '#22c55e';
+const NEG_BAR = '#fb7185';
 
 export default function ProfitabilityPage({ hideValues }) {
   const { t } = useLanguage();
-  const { portfolio: portfolioSnapshot, benchmarks: benchmarksObj, isLoading: isDashboardLoading, error: dashboardError } = useDashboard();
+  const { portfolio: portfolioSnapshot, isLoading: isDashboardLoading, error: dashboardError } = useDashboard();
 
   const [timeframe, setTimeframe] = useState('since'); // since | ytd | 1m | 3m | 1y | custom
   const [customFrom, setCustomFrom] = useState('');
@@ -65,73 +95,35 @@ export default function ProfitabilityPage({ hideValues }) {
     return { from: null, to: null };
   }, [timeframe, customFrom, customTo]);
 
-  const profitabilityPath = useMemo(() => {
+  const tradingPerformancePath = useMemo(() => {
     const params = new URLSearchParams();
     if (range.from) params.set('from', range.from);
     if (range.to) params.set('to', range.to);
     const qs = params.toString() ? `?${params.toString()}` : '';
-    return `/api/profitability${qs}`;
+    return `/api/trading-performance${qs}`;
   }, [range.from, range.to]);
 
-  const { data: analytics, isLoading: isAnalyticsLoading, error: analyticsError } = useApiData(profitabilityPath);
+  const { data: analytics, isLoading: isAnalyticsLoading, error: analyticsError } = useApiData(tradingPerformancePath);
 
-  const portfolioRows = useMemo(() => portfolioSnapshot?.tableRows ?? [], [portfolioSnapshot]);
   const hasHoldings = Boolean(portfolioSnapshot && !portfolioSnapshot.isEmpty);
   const summary = analytics?.summary ?? null;
   const monthlyStacked = analytics?.timeSeries?.monthlyStacked ?? [];
-  const realizedMonthly = analytics?.timeSeries?.realizedMonthly ?? [];
-  const attribution = analytics?.attribution ?? null;
+  const realizedAttribution = analytics?.realizedAttribution ?? null;
   const trades = analytics?.trades ?? null;
-  const insights = analytics?.insights ?? [];
-
-  const [targetWeights, setTargetWeights] = useState({});
-  const [rebalanceDirty, setRebalanceDirty] = useState(false);
-  const [sellDownSymbol, setSellDownSymbol] = useState('');
-  const [sellDownPct, setSellDownPct] = useState(20);
-
-  const totalValue = Number(portfolioSnapshot?.totals?.value) || 0;
-
-  const rebalanceRows = useMemo(() => {
-    if (!portfolioRows.length || totalValue <= 0) return [];
-    return portfolioRows.map((r) => {
-      const currentWeight = r.weightPct ?? 0;
-      const currentVal = r.currentValue ?? 0;
-      const targetPct = targetWeights[r.symbol];
-      const targetNum = targetPct != null && targetPct !== '' ? Number(targetPct) : null;
-      const targetVal = Number.isFinite(targetNum) && targetNum >= 0 ? (totalValue * targetNum) / 100 : null;
-      const trade = targetVal != null ? targetVal - currentVal : null;
-      const newWeight = targetVal != null && totalValue > 0 ? (targetVal / totalValue) * 100 : null;
-      return {
-        ...r,
-        currentWeight,
-        targetPct: targetNum,
-        targetVal,
-        trade,
-        newWeight,
-      };
-    });
-  }, [portfolioRows, totalValue, targetWeights]);
-
-  const sellDownResult = useMemo(() => {
-    if (!sellDownSymbol || !Number.isFinite(sellDownPct) || sellDownPct <= 0 || sellDownPct > 100) return null;
-    const row = portfolioRows.find((r) => String(r.symbol) === String(sellDownSymbol));
-    if (!row) return null;
-    const value = row.currentValue ?? 0;
-    const sellValue = (value * sellDownPct) / 100;
-    const remaining = value - sellValue;
-    const newTotal = totalValue - sellValue;
-    return { sellValue, remaining, newTotal, name: row.name };
-  }, [portfolioRows, sellDownSymbol, sellDownPct, totalValue]);
-
-  function handleTargetWeightChange(symbol, value) {
-    setTargetWeights((prev) => ({ ...prev, [symbol]: value }));
-    setRebalanceDirty(true);
-  }
-
-  function handleResetRebalance() {
-    setTargetWeights({});
-    setRebalanceDirty(false);
-  }
+  const tradeReturnHistogram = useMemo(() => {
+    const raw = trades?.distributions?.tradeReturnHistogram ?? [];
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    const first = raw.findIndex((b) => Number(b?.count) > 0);
+    if (first < 0) return [];
+    let last = -1;
+    for (let i = raw.length - 1; i >= 0; i -= 1) {
+      if (Number(raw[i]?.count) > 0) {
+        last = i;
+        break;
+      }
+    }
+    return raw.slice(first, last + 1);
+  }, [trades]);
 
   return (
     <section className="contentWrap">
@@ -146,7 +138,7 @@ export default function ProfitabilityPage({ hideValues }) {
 
         <section className="profitabilitySection">
           <h2 className="profitabilitySectionTitle">{t('profitability.timeframe')}</h2>
-          <div className="profitabilitySellDownRow">
+          <div className="profitabilityControlRow profitabilitySellDownRow">
             <label>
               <span className="profitabilityLabel">{t('profitability.timeframe')}</span>
               <select className="profitabilitySelect" value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
@@ -183,98 +175,69 @@ export default function ProfitabilityPage({ hideValues }) {
               <h2 className="profitabilitySectionTitle">{t('profitability.yourPortfolio')}</h2>
               <div className="profitabilityCards">
                 <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.totalReturn')}</span>
-                  <span className={`profitabilityCardValue ${Number(summary.totalReturn?.value) >= 0 ? 'pos' : 'neg'}`}>
-                    {formatVal(hideValues, summary.totalReturn?.value)}
-                  </span>
-                  <span className={`profitabilityCardSub ${Number(summary.totalReturn?.pct) >= 0 ? 'pos' : 'neg'}`}>
-                    {formatPct(hideValues, summary.totalReturn?.pct ?? 0)}
-                  </span>
-                </div>
-                <div className="profitabilityCard">
                   <span className="profitabilityCardLabel">{t('profitability.realizedPl')}</span>
                   <span className={`profitabilityCardValue ${Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}`}>
                     {formatVal(hideValues, summary.realized?.pnl)}
                   </span>
                 </div>
                 <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.unrealizedPl')}</span>
-                  <span className={`profitabilityCardValue ${Number(summary.unrealized?.pnl) >= 0 ? 'pos' : 'neg'}`}>
-                    {formatVal(hideValues, summary.unrealized?.pnl)}
-                  </span>
-                </div>
-                <div className="profitabilityCard">
                   <span className="profitabilityCardLabel">{t('profitability.winRate')}</span>
-                  <span className="profitabilityCardValue">{hideValues ? '—' : formatPercent(summary.winStats?.winRate ?? 0)}</span>
+                  <span className="profitabilityValueWithInfo">
+                    <span className="profitabilityCardValue">{hideValues ? '—' : formatPercent(summary.winStats?.winRate ?? 0)}</span>
+                    <span className="profitabilityInfoWrap">
+                      <button
+                        type="button"
+                        className="profitabilityInfoDot"
+                        aria-label={t('profitability.winRateHelp')}
+                      >
+                        ⓘ
+                      </button>
+                      <span className="profitabilityTooltip" role="tooltip">
+                        {t('profitability.winRateHelp')}
+                      </span>
+                    </span>
+                  </span>
                 </div>
                 <div className="profitabilityCard">
                   <span className="profitabilityCardLabel">{t('profitability.profitFactor')}</span>
-                  <span className="profitabilityCardValue">
-                    {hideValues ? '—' : (summary.winStats?.profitFactor == null ? '—' : Number(summary.winStats.profitFactor).toFixed(2))}
+                  <span className="profitabilityValueWithInfo">
+                    <span className="profitabilityCardValue">
+                      {hideValues ? '—' : (summary.winStats?.profitFactor == null ? '—' : Number(summary.winStats.profitFactor).toFixed(2))}
+                    </span>
+                    <span className="profitabilityInfoWrap">
+                      <button
+                        type="button"
+                        className="profitabilityInfoDot"
+                        aria-label={t('profitability.profitFactorHelp')}
+                      >
+                        ⓘ
+                      </button>
+                      <span className="profitabilityTooltip" role="tooltip">
+                        {t('profitability.profitFactorHelp')}
+                      </span>
+                    </span>
                   </span>
                 </div>
                 <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.largestDrawdown')}</span>
-                  <span className="profitabilityCardValue">
-                    {hideValues ? '—' : (summary.risk?.maxDrawdownPct == null ? '—' : formatPercent(summary.risk.maxDrawdownPct))}
+                  <span className="profitabilityCardLabel">{t('profitability.avgWin')}</span>
+                  <span className={`profitabilityCardValue ${Number(summary.winStats?.avgWin) >= 0 ? 'pos' : 'neg'}`}>
+                    {formatVal(hideValues, summary.winStats?.avgWin)}
                   </span>
                 </div>
-              </div>
-            </section>
-
-            {/* Benchmark comparison */}
-            <section className="profitabilitySection">
-              <h2 className="profitabilitySectionTitle">{t('profitability.benchmarkComparison')}</h2>
-              <p className="profitabilitySectionDesc">{t('profitability.vsSpyBtc')}</p>
-              <div className="profitabilityCards profitabilityBenchmarkCards">
-                {benchmarksObj?.spy && (
-                  <div className="profitabilityCard">
-                    <span className="profitabilityCardLabel">{t('profitability.spy')}</span>
-                    <span className="profitabilityCardValue">{formatVal(hideValues, benchmarksObj.spy.price)}</span>
-                    {benchmarksObj.spy.changePct != null && (
-                      <span className={`profitabilityCardSub ${benchmarksObj.spy.changePct >= 0 ? 'pos' : 'neg'}`}>
-                        {t('profitability.dailyChange')}: {formatPercent(benchmarksObj.spy.changePct)}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {benchmarksObj?.btc && (
-                  <div className="profitabilityCard">
-                    <span className="profitabilityCardLabel">{t('profitability.btc')}</span>
-                    <span className="profitabilityCardValue">{formatVal(hideValues, benchmarksObj.btc.price)}</span>
-                    {benchmarksObj.btc.changePct != null && (
-                      <span className={`profitabilityCardSub ${benchmarksObj.btc.changePct >= 0 ? 'pos' : 'neg'}`}>
-                        {t('profitability.dailyChange')}: {formatPercent(benchmarksObj.btc.changePct)}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {!benchmarksObj?.spy && !benchmarksObj?.btc && (
-                  <p className="profitabilityNoBenchmarks">{t('app.loading')}</p>
-                )}
+                <div className="profitabilityCard">
+                  <span className="profitabilityCardLabel">{t('profitability.avgLoss')}</span>
+                  <span className={`profitabilityCardValue ${Number(summary.winStats?.avgLoss) >= 0 ? 'pos' : 'neg'}`}>
+                    {formatVal(hideValues, summary.winStats?.avgLoss)}
+                  </span>
+                </div>
               </div>
             </section>
 
             {/* Performance over time */}
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.performanceOverTime')}</h2>
-              <p className="profitabilitySectionDesc">{t('profitability.stackedBarsTitle')}</p>
-              <div style={{ width: '100%', height: 260 }}>
-                <ResponsiveContainer>
-                  <BarChart data={monthlyStacked}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-                    <XAxis dataKey="month" tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="realizedPnl" stackId="pnl" name={t('profitability.realizedPl')} fill="#34d399" />
-                    <Bar dataKey="unrealizedPnlEst" stackId="pnl" name={t('profitability.unrealizedPl')} fill="#60a5fa" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
               <p className="profitabilitySectionDesc">{t('profitability.cumulativeRealized')}</p>
-              <div style={{ width: '100%', height: 220 }}>
+              <div className="profitabilityChartArea profitabilityChartArea--md">
                 <ResponsiveContainer>
                   <LineChart data={monthlyStacked}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
@@ -287,68 +250,93 @@ export default function ProfitabilityPage({ hideValues }) {
               </div>
             </section>
 
-            {/* Attribution */}
+            {/* Attribution (realized only) */}
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.attribution')}</h2>
-              <div className="profitabilityTableWrap">
-                <table className="profitabilityTable">
-                  <thead>
-                    <tr>
-                      <th>{t('profitability.byAssetClass')}</th>
-                      <th>{t('profitability.realizedPl')}</th>
-                      <th>{t('profitability.unrealizedPl')}</th>
-                      <th>{t('profitability.pl')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(attribution?.byAssetClass ?? []).map((r) => (
-                      <tr key={r.key}>
-                        <td>{r.key}</td>
-                        <td className={r.realizedPnl >= 0 ? 'pos' : 'neg'}>{formatVal(hideValues, r.realizedPnl)}</td>
-                        <td className={r.unrealizedPnl >= 0 ? 'pos' : 'neg'}>{formatVal(hideValues, r.unrealizedPnl)}</td>
-                        <td className={r.totalPnl >= 0 ? 'pos' : 'neg'}>{formatVal(hideValues, r.totalPnl)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <p className="profitabilitySectionDesc">{t('profitability.realizedPl')}</p>
+
+              <p className="profitabilitySectionDesc">{t('profitability.byAssetClass')}</p>
+              <div className="profitabilityChartArea profitabilityChartArea--md">
+                <ResponsiveContainer>
+                  <BarChart data={realizedAttribution?.byAssetClass ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
+                    <XAxis dataKey="key" tick={CHART_AXIS_TICK} />
+                    <YAxis tick={CHART_AXIS_TICK} />
+                    <Tooltip
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelStyle={{ color: '#f8fafc' }}
+                      itemStyle={{ color: '#e2e8f0' }}
+                      cursor={false}
+                    />
+                    <ReferenceLine y={0} stroke="#64748b" />
+                    <Bar dataKey="realizedPnl" name={t('profitability.realizedPl')} activeBar={<ActiveAttributionBar />}>
+                      {(realizedAttribution?.byAssetClass ?? []).map((entry, index) => (
+                        <Cell key={`cls-${entry.key}-${index}`} fill={entry.realizedPnl >= 0 ? POS_BAR : NEG_BAR} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
 
-              <div className="profitabilityTableWrap">
-                <table className="profitabilityTable">
-                  <thead>
-                    <tr>
-                      <th>{t('profitability.contributors')}</th>
-                      <th>{t('profitability.pl')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(attribution?.topContributors ?? []).map((r) => (
-                      <tr key={`c-${r.symbol}`}>
-                        <td>{r.name} ({r.symbol})</td>
-                        <td className={r.totalPnl >= 0 ? 'pos' : 'neg'}>{formatVal(hideValues, r.totalPnl)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="profitabilityTableWrap">
-                <table className="profitabilityTable">
-                  <thead>
-                    <tr>
-                      <th>{t('profitability.detractors')}</th>
-                      <th>{t('profitability.pl')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(attribution?.topDetractors ?? []).map((r) => (
-                      <tr key={`d-${r.symbol}`}>
-                        <td>{r.name} ({r.symbol})</td>
-                        <td className={r.totalPnl >= 0 ? 'pos' : 'neg'}>{formatVal(hideValues, r.totalPnl)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="profitabilityTwoCol">
+                <div>
+                  <p className="profitabilitySectionDesc">{t('profitability.contributors')}</p>
+                  <div className="profitabilityChartArea profitabilityChartArea--md">
+                    <ResponsiveContainer>
+                      <BarChart
+                        data={(realizedAttribution?.contributors ?? []).map((r) => ({
+                          ...r,
+                          label: `${r.symbol}`,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
+                        <XAxis dataKey="label" tick={CHART_AXIS_TICK} />
+                        <YAxis tick={CHART_AXIS_TICK} />
+                        <Tooltip
+                          contentStyle={CHART_TOOLTIP_STYLE}
+                          labelStyle={{ color: '#f8fafc' }}
+                          itemStyle={{ color: '#e2e8f0' }}
+                          cursor={false}
+                        />
+                        <ReferenceLine y={0} stroke="#64748b" />
+                        <Bar dataKey="realizedPnl" name={t('profitability.realizedPl')} activeBar={<ActiveAttributionBar />}>
+                          {(realizedAttribution?.contributors ?? []).map((entry, index) => (
+                            <Cell key={`contrib-${entry.symbol}-${index}`} fill={entry.realizedPnl >= 0 ? POS_BAR : NEG_BAR} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div>
+                  <p className="profitabilitySectionDesc">{t('profitability.detractors')}</p>
+                  <div className="profitabilityChartArea profitabilityChartArea--md">
+                    <ResponsiveContainer>
+                      <BarChart
+                        data={(realizedAttribution?.detractors ?? []).map((r) => ({
+                          ...r,
+                          label: `${r.symbol}`,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
+                        <XAxis dataKey="label" tick={CHART_AXIS_TICK} />
+                        <YAxis tick={CHART_AXIS_TICK} />
+                        <Tooltip
+                          contentStyle={CHART_TOOLTIP_STYLE}
+                          labelStyle={{ color: '#f8fafc' }}
+                          itemStyle={{ color: '#e2e8f0' }}
+                          cursor={false}
+                        />
+                        <ReferenceLine y={0} stroke="#64748b" />
+                        <Bar dataKey="realizedPnl" name={t('profitability.realizedPl')} activeBar={<ActiveAttributionBar />}>
+                          {(realizedAttribution?.detractors ?? []).map((entry, index) => (
+                            <Cell key={`detract-${entry.symbol}-${index}`} fill={entry.realizedPnl >= 0 ? POS_BAR : NEG_BAR} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -357,33 +345,25 @@ export default function ProfitabilityPage({ hideValues }) {
               <h2 className="profitabilitySectionTitle">{t('profitability.tradeAnalytics')}</h2>
 
               <p className="profitabilitySectionDesc">{t('profitability.tradeReturnDistribution')}</p>
-              <div style={{ width: '100%', height: 220 }}>
+              <div className="profitabilityChartArea profitabilityChartArea--md">
                 <ResponsiveContainer>
-                  <BarChart data={trades?.distributions?.tradeReturnHistogram ?? []}>
+                  <BarChart data={tradeReturnHistogram}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
                     <XAxis dataKey="bucket" tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 11 }} interval={2} />
                     <YAxis tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="count" name="count" fill="#a78bfa" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <p className="profitabilitySectionDesc">{t('profitability.holdingPeriodDistribution')}</p>
-              <div style={{ width: '100%', height: 200 }}>
-                <ResponsiveContainer>
-                  <BarChart data={trades?.distributions?.holdingPeriodHistogram ?? []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-                    <XAxis dataKey="bucket" tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="count" name="count" fill="#22d3ee" />
+                    <Tooltip
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelStyle={{ color: '#f8fafc' }}
+                      itemStyle={{ color: '#e2e8f0' }}
+                      cursor={false}
+                    />
+                    <Bar dataKey="count" name="count" fill="#a78bfa" activeBar={<ActiveAttributionBar />} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
 
               <div className="profitabilityTableWrap">
-                <table className="profitabilityTable">
+                <table className="profitabilityTable profitabilityTable--trades">
                   <thead>
                     <tr>
                       <th colSpan={7}>{t('profitability.bestTrades')}</th>
@@ -404,9 +384,9 @@ export default function ProfitabilityPage({ hideValues }) {
                         <td>{tr.txDate}</td>
                         <td>{tr.symbol}</td>
                         <td>{hideValues ? '—' : tr.qty}</td>
-                        <td>{formatVal(hideValues, tr.proceeds)}</td>
-                        <td>{formatVal(hideValues, tr.cost)}</td>
-                        <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatVal(hideValues, tr.pnl)}</td>
+                        <td>{formatValByCurrency(hideValues, tr.proceeds, tr.currency)}</td>
+                        <td>{formatValByCurrency(hideValues, tr.cost, tr.currency)}</td>
+                        <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatValByCurrency(hideValues, tr.pnl, tr.currency)}</td>
                         <td>{hideValues ? '—' : (tr.returnPct == null ? '—' : formatPercent(tr.returnPct))}</td>
                       </tr>
                     ))}
@@ -415,7 +395,7 @@ export default function ProfitabilityPage({ hideValues }) {
               </div>
 
               <div className="profitabilityTableWrap">
-                <table className="profitabilityTable">
+                <table className="profitabilityTable profitabilityTable--trades">
                   <thead>
                     <tr>
                       <th colSpan={7}>{t('profitability.worstTrades')}</th>
@@ -436,9 +416,9 @@ export default function ProfitabilityPage({ hideValues }) {
                         <td>{tr.txDate}</td>
                         <td>{tr.symbol}</td>
                         <td>{hideValues ? '—' : tr.qty}</td>
-                        <td>{formatVal(hideValues, tr.proceeds)}</td>
-                        <td>{formatVal(hideValues, tr.cost)}</td>
-                        <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatVal(hideValues, tr.pnl)}</td>
+                        <td>{formatValByCurrency(hideValues, tr.proceeds, tr.currency)}</td>
+                        <td>{formatValByCurrency(hideValues, tr.cost, tr.currency)}</td>
+                        <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatValByCurrency(hideValues, tr.pnl, tr.currency)}</td>
                         <td>{hideValues ? '—' : (tr.returnPct == null ? '—' : formatPercent(tr.returnPct))}</td>
                       </tr>
                     ))}
@@ -447,119 +427,6 @@ export default function ProfitabilityPage({ hideValues }) {
               </div>
             </section>
 
-            {/* Insights */}
-            <section className="profitabilitySection">
-              <h2 className="profitabilitySectionTitle">{t('profitability.actionableInsights')}</h2>
-              <ul className="profitabilityInsights">
-                {(insights || []).map((i) => (
-                  <li key={i.key}>{i.message}</li>
-                ))}
-              </ul>
-            </section>
-
-            {/* What-if: Rebalance */}
-            <section className="profitabilitySection">
-              <h2 className="profitabilitySectionTitle">{t('profitability.rebalance')}</h2>
-              <p className="profitabilitySectionDesc">{t('profitability.rebalanceDesc')}</p>
-              <div className="profitabilityTableWrap">
-                <table className="profitabilityTable">
-                  <thead>
-                    <tr>
-                      <th>{t('portfolio.asset')}</th>
-                      <th>{t('profitability.currentWeight')}</th>
-                      <th>{t('profitability.targetWeight')}</th>
-                      <th>{t('profitability.suggestedTrade')}</th>
-                      <th>{t('profitability.newWeight')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rebalanceRows.map((r) => (
-                      <tr key={r.symbol}>
-                        <td>{r.name ?? r.symbol}</td>
-                        <td>{formatPercent(r.currentWeight)}</td>
-                        <td>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.5"
-                            className="profitabilityInput"
-                            value={targetWeights[r.symbol] ?? ''}
-                            onChange={(e) => handleTargetWeightChange(r.symbol, e.target.value)}
-                            placeholder="0"
-                          />
-                          %
-                        </td>
-                        <td>
-                          {r.trade != null && (
-                            r.trade < -0.01
-                              ? `${t('profitability.sellAmount')} ${formatVal(-r.trade)}`
-                              : r.trade > 0.01
-                                ? `${t('profitability.buyAmount')} ${formatVal(r.trade)}`
-                                : '—'
-                          )}
-                        </td>
-                        <td>{r.newWeight != null ? formatPercent(r.newWeight) : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {rebalanceDirty && (
-                <button type="button" className="modalBtn secondary profitabilityResetBtn" onClick={handleResetRebalance}>
-                  {t('profitability.reset')}
-                </button>
-              )}
-            </section>
-
-            {/* What-if: Sell-down */}
-            <section className="profitabilitySection">
-              <h2 className="profitabilitySectionTitle">{t('profitability.sellDown')}</h2>
-              <p className="profitabilitySectionDesc">{t('profitability.sellDownDesc')}</p>
-              <div className="profitabilitySellDownRow">
-                <label>
-                  <span className="profitabilityLabel">{t('profitability.selectHolding')}</span>
-                  <select
-                    className="profitabilitySelect"
-                    value={sellDownSymbol}
-                    onChange={(e) => setSellDownSymbol(e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {portfolioRows.map((r) => (
-                      <option key={r.symbol} value={r.symbol}>{r.name ?? r.symbol}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="profitabilityLabel">{t('profitability.sellPct')}</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    step="5"
-                    className="profitabilityInput"
-                    value={sellDownPct}
-                    onChange={(e) => setSellDownPct(Number(e.target.value) || 0)}
-                  />
-                </label>
-              </div>
-              {sellDownResult && (
-                <div className="profitabilitySellDownResult">
-                  <div className="profitabilityCard">
-                    <span className="profitabilityCardLabel">{t('profitability.cashReceived')}</span>
-                    <span className="profitabilityCardValue">{formatVal(sellDownResult.sellValue)}</span>
-                  </div>
-                  <div className="profitabilityCard">
-                    <span className="profitabilityCardLabel">{t('profitability.remainingValue')}</span>
-                    <span className="profitabilityCardValue">{formatVal(sellDownResult.remaining)}</span>
-                  </div>
-                  <div className="profitabilityCard">
-                    <span className="profitabilityCardLabel">{t('profitability.newTotalValue')}</span>
-                    <span className="profitabilityCardValue">{formatVal(sellDownResult.newTotal)}</span>
-                  </div>
-                </div>
-              )}
-            </section>
           </>
         )}
       </div>

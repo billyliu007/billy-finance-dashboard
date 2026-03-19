@@ -461,7 +461,8 @@ export default function PortfolioPositionsTable({
                 sells.map((tx) => {
                   const qty = Number(tx.qty) || 0;
                   const sellPrice = Number(tx.avgCostPerUnit) || 0;
-                  const proceeds = qty * sellPrice;
+                  const feeFlat = Number(tx.feeFlat) || 0;
+                  const proceeds = qty * sellPrice - feeFlat;
                   const basisPerUnit = Number(tx.costBasisPerUnit) || 0;
                   const costSold = qty * basisPerUnit;
                   const realized = proceeds - costSold;
@@ -795,7 +796,8 @@ export default function PortfolioPositionsTable({
                             sells.map((tx) => {
                               const qty = Number(tx.qty) || 0;
                               const sellPrice = Number(tx.avgCostPerUnit) || 0;
-                              const proceeds = qty * sellPrice;
+                              const feeFlat = Number(tx.feeFlat) || 0;
+                              const proceeds = qty * sellPrice - feeFlat;
                               const basisPerUnit = Number(tx.costBasisPerUnit) || 0;
                               const costSold = qty * basisPerUnit;
                               const realized = proceeds - costSold;

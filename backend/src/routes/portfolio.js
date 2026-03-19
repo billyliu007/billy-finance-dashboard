@@ -100,6 +100,9 @@ router.post('/positions/:symbol/transactions', async (req, res, next) => {
     const txDate = String(req.body?.txDate || '').trim();
     const qty = Number(req.body?.qty);
     const avgCostPerUnit = Number(req.body?.avgCostPerUnit);
+    const feeFlat = req.body?.feeFlatTotal == null ? req.body?.feeFlat : req.body?.feeFlatTotal;
+    const feePerUnit = req.body?.feePerUnit == null ? null : Number(req.body?.feePerUnit); // legacy
+    const feeFlatTotal = feeFlat == null ? null : Number(feeFlat);
     const type = req.body?.type ?? 'BUY';
     const costBasisPerUnit = req.body?.costBasisPerUnit ?? null;
     const notes = req.body?.notes ?? null;
@@ -113,6 +116,8 @@ router.post('/positions/:symbol/transactions', async (req, res, next) => {
       avgCostPerUnit,
       type,
       costBasisPerUnit,
+      feeFlatTotal,
+      feePerUnit,
       notes,
       deductCashId,
       creditCashId,

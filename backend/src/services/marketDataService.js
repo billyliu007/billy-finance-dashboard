@@ -1,6 +1,6 @@
-import { fetchFinnhubQuotes } from '../lib/finnhub.js';
+import { fetchFinnhubDailyCloses, fetchFinnhubQuotes } from '../lib/finnhub.js';
 import { fetchFrankfurterFxRates } from '../lib/fx.js';
-import { fetchCoinbaseProductQuotes } from '../lib/crypto.js';
+import { fetchCoinbaseDailyCloses, fetchCoinbaseProductQuotes } from '../lib/crypto.js';
 
 const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
 const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'coinbase').trim().toLowerCase();
@@ -121,6 +121,19 @@ export async function getBenchmarkQuotes() {
           }
         : null,
   };
+}
+
+/**
+ * Fetch benchmark daily closes for SPY and BTC across a date range.
+ * @param {{ fromDate: string, toDate: string }} options
+ * @returns {Promise<{ spy: Array<{date:string, close:number}>, btc: Array<{date:string, close:number}> }>}
+ */
+export async function getBenchmarkHistory({ fromDate, toDate }) {
+  const [spy, btc] = await Promise.all([
+    fetchFinnhubDailyCloses({ symbol: 'SPY', fromDate, toDate }),
+    fetchCoinbaseDailyCloses({ productId: 'BTC-USD', fromDate, toDate }),
+  ]);
+  return { spy, btc };
 }
 
 export async function buildProviderDiagnosticsForPositions(positions) {

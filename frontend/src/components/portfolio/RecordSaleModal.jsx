@@ -19,6 +19,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
   const [qty, setQty] = useState('');
   const [sellPct, setSellPct] = useState(0);
   const [pricePerUnit, setPricePerUnit] = useState('');
+  const [feeFlatTotal, setFeeFlatTotal] = useState('');
   const [creditEnabled, setCreditEnabled] = useState(false);
   const [creditCashId, setCreditCashId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -33,6 +34,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     // When slider is at 100%, we want to sell the full available qty.
     setQty(available > 0 ? String(available) : '');
     setPricePerUnit('');
+    setFeeFlatTotal('');
     setCreditEnabled(false);
     setCreditCashId('');
   }, [open]);
@@ -102,10 +104,12 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
   const estimatedProceeds = useMemo(() => {
     const q = Number(qty);
     const p = Number(pricePerUnit);
+    const f = Number(feeFlatTotal);
     if (!Number.isFinite(q) || q <= 0) return 0;
     if (!Number.isFinite(p) || p < 0) return 0;
-    return q * p;
-  }, [qty, pricePerUnit]);
+    const fee = Number.isFinite(f) && f >= 0 ? f : 0;
+    return Math.max(0, q * p - fee);
+  }, [qty, pricePerUnit, feeFlatTotal]);
 
   useEffect(() => {
     if (!creditEnabled) return;
@@ -119,6 +123,10 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     setPricePerUnit(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
   }
 
+  function handleFeeFlatTotalChange(e) {
+    setFeeFlatTotal(sanitizeDecimalInput(e.target.value, { allowNegative: false }));
+  }
+
   async function handleSave() {
     setError('');
     if (!symbol) {
@@ -127,6 +135,8 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     }
     const qtyNum = Number(qty);
     const priceNum = Number(pricePerUnit);
+    const feeNumRaw = feeFlatTotal.trim() === '' ? null : Number(feeFlatTotal);
+    const feeNum = feeNumRaw == null ? null : feeNumRaw;
     if (!txDate) {
       setError(t('errors.dateRequired'));
       return;
@@ -137,6 +147,10 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     }
     if (!Number.isFinite(priceNum) || priceNum < 0) {
       setError(t('errors.sellPricePerUnitNonNegative'));
+      return;
+    }
+    if (feeNum != null && (!Number.isFinite(feeNum) || feeNum < 0)) {
+      setError(t('errors.feePerUnitNonNegative'));
       return;
     }
     if (creditEnabled && eligibleCash.length === 0) {
@@ -150,6 +164,7 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
         txDate,
         qty: qtyNum,
         avgCostPerUnit: priceNum,
+        feeFlatTotal: feeNum,
         creditCashId: creditEnabled ? creditCashId || null : null,
       });
       onSaved?.();
@@ -210,6 +225,17 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
                 autoComplete="off"
                 value={pricePerUnit}
                 onChange={handlePriceChange}
+                className="modalInput"
+              />
+            </label>
+            <label className="modalLabel">
+              {t('modals.feePerUnit')}
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={feeFlatTotal}
+                onChange={handleFeeFlatTotalChange}
                 className="modalInput"
               />
             </label>

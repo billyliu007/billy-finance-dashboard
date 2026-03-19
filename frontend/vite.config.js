@@ -7,6 +7,10 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    allowedHosts: [
+      '192.168.50.201.nip.io',
+      '192-168-50-201.nip.io',
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:4000',

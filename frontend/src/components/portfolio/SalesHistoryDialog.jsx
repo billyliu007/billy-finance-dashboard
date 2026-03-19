@@ -22,14 +22,18 @@ function parseDelimitedLines(raw) {
     }
     const parts = line.split(/[,\t]/).map((p) => p.trim());
     if (parts.length < 4) {
-      errors.push(`Line ${i + 1}: expected 4 fields (date, qty, sellPricePerUnit, costBasisPerUnit).`);
+      errors.push(`Line ${i + 1}: expected at least 4 fields (date, qty, sellPricePerUnit, costBasisPerUnit). Fee is optional.`);
       continue;
     }
-    const [txDate, qtyRaw, sellRaw, basisRaw, ...noteParts] = parts;
+    const [txDate, qtyRaw, sellRaw, basisRaw] = parts;
+    const feeCandidate = parts.length >= 5 ? Number(parts[4]) : null;
+    const hasFee = Number.isFinite(feeCandidate) && feeCandidate >= 0;
+    const notesParts = hasFee ? parts.slice(5) : parts.slice(4);
     const qty = Number(qtyRaw);
     const sellPricePerUnit = Number(sellRaw);
     const costBasisPerUnit = Number(basisRaw);
-    const notes = noteParts.length ? noteParts.join(' ').trim() : null;
+    const feeFlat = hasFee ? feeCandidate : null;
+    const notes = notesParts.length ? notesParts.join(' ').trim() : null;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate)) {
       errors.push(`Line ${i + 1}: invalid date "${txDate}" (use YYYY-MM-DD).`);
@@ -47,12 +51,17 @@ function parseDelimitedLines(raw) {
       errors.push(`Line ${i + 1}: costBasisPerUnit must be >= 0.`);
       continue;
     }
+    if (feeFlat != null && (!Number.isFinite(feeFlat) || feeFlat < 0)) {
+      errors.push(`Line ${i + 1}: feeFlat must be >= 0.`);
+      continue;
+    }
 
     rows.push({
       txDate,
       qty,
       sellPricePerUnit,
       costBasisPerUnit,
+      feeFlat,
       notes,
     });
   }
@@ -81,8 +90,9 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
       const qty = Number(row?.qty) || 0;
       const sellPrice = Number(row?.sellPricePerUnit) || 0;
       const basis = Number(row?.costBasisPerUnit) || 0;
+      const fee = Number(row?.feeFlat) || 0;
       qtySum += qty;
-      proceedsSum += qty * sellPrice;
+      proceedsSum += qty * sellPrice - fee;
       costSum += qty * basis;
     }
     const realizedSum = proceedsSum - costSum;
@@ -195,7 +205,7 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
           <p className="hintText" style={{ marginTop: 0 }}>
             {t('modals.importFormatTitle')}
             <br />
-            <code>YYYY-MM-DD, qty, sellPricePerUnit, costBasisPerUnit, notes(optional)</code>
+            <code>YYYY-MM-DD, qty, sellPricePerUnit, costBasisPerUnit, feeFlat(optional), notes(optional)</code>
           </p>
 
           <label className="modalLabel">
@@ -265,7 +275,8 @@ export default function SalesHistoryDialog({ open, onClose, symbol, hideValues, 
                       const qty = Number(row.qty) || 0;
                       const sellPrice = Number(row.sellPricePerUnit) || 0;
                       const basis = Number(row.costBasisPerUnit) || 0;
-                      const proceeds = qty * sellPrice;
+                      const feeFlat = Number(row.feeFlat) || 0;
+                      const proceeds = qty * sellPrice - feeFlat;
                       const costSold = qty * basis;
                       const realized = proceeds - costSold;
                       const realizedPct = costSold === 0 ? 0 : (realized / costSold) * 100;

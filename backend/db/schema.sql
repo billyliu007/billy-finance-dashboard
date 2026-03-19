@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS portfolio_position_transactions (
   tx_date DATE NOT NULL,
   qty NUMERIC(20, 8) NOT NULL,
   avg_cost_per_unit NUMERIC(20, 8) NOT NULL,
+  fee_per_unit NUMERIC(20, 8),
+  fee_flat_total NUMERIC(20, 8),
   cost_basis_per_unit NUMERIC(20, 8),
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

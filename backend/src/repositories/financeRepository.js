@@ -105,10 +105,18 @@ export async function listPositionTransactionAggregates(userId) {
             COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty ELSE 0 END)::float8, 0) AS "buyQty",
             COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "buyCost",
             COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "holdingSellQty",
-            COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "holdingSellProceeds",
+            (
+              COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0)
+              -
+              COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN COALESCE(fee_flat_total, COALESCE(fee_per_unit, 0) * qty) ELSE 0 END)::float8, 0)
+            ) AS "holdingSellProceeds",
             COALESCE(SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "holdingSellCost",
             COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty ELSE 0 END)::float8, 0) AS "realizedSellQty",
-            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0) AS "realizedSellProceeds",
+            (
+              COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * avg_cost_per_unit ELSE 0 END)::float8, 0)
+              -
+              COALESCE(SUM(CASE WHEN type = 'SELL' THEN COALESCE(fee_flat_total, COALESCE(fee_per_unit, 0) * qty) ELSE 0 END)::float8, 0)
+            ) AS "realizedSellProceeds",
             COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "realizedSellCost"
      FROM portfolio_position_transactions
      WHERE user_id = $1
@@ -127,6 +135,7 @@ export async function listPositionTransactions(userId, symbol) {
             to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
             qty::float8 AS qty,
             avg_cost_per_unit::float8 AS "avgCostPerUnit",
+            COALESCE(fee_flat_total::float8, (COALESCE(fee_per_unit, 0)::float8 * qty::float8)) AS "feeFlat",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
@@ -170,6 +179,7 @@ export async function listAllPositionTransactions(userId, { from = null, to = nu
             to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
             qty::float8 AS qty,
             avg_cost_per_unit::float8 AS "avgCostPerUnit",
+            COALESCE(fee_flat_total::float8, (COALESCE(fee_per_unit, 0)::float8 * qty::float8)) AS "feeFlat",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "createdAtUtc"
@@ -189,6 +199,8 @@ export async function createPositionTransaction({
   avgCostPerUnit,
   type = 'BUY',
   costBasisPerUnit = null,
+  feeFlatTotal = null,
+  feePerUnit = null, // legacy
   notes = null,
   deductCashId = null,
   creditCashId = null,
@@ -200,6 +212,14 @@ export async function createPositionTransaction({
   const cost = Number(avgCostPerUnit);
   const txType = String(type || 'BUY').trim().toUpperCase() || 'BUY';
   const basisOverride = costBasisPerUnit == null ? null : Number(costBasisPerUnit);
+  const feePerUnitNum = feePerUnit == null ? null : Number(feePerUnit);
+  const feeFlatNum = feeFlatTotal == null ? null : Number(feeFlatTotal);
+  const fee =
+    feeFlatNum != null
+      ? feeFlatNum
+      : feePerUnitNum != null
+        ? feePerUnitNum * q
+        : null;
   const memo = notes == null ? null : String(notes).trim() || null;
   const deductId = deductCashId ? String(deductCashId).trim() : null;
   const creditId = creditCashId ? String(creditCashId).trim() : null;
@@ -209,6 +229,7 @@ export async function createPositionTransaction({
   if (!date) throw new Error('Transaction date is required.');
   if (!Number.isFinite(q) || q <= 0) throw new Error('Quantity must be greater than 0.');
   if (!Number.isFinite(cost) || cost < 0) throw new Error('Average cost per unit must be 0 or greater.');
+  if (fee != null && (!Number.isFinite(fee) || fee < 0)) throw new Error('Fee must be 0 or greater.');
   if (txType !== 'BUY' && txType !== 'SELL') throw new Error('Transaction type must be BUY or SELL.');
   if (deductId && creditId) throw new Error('Choose either deductCashId or creditCashId, not both.');
   if (txType === 'SELL' && basisOverride != null && (!Number.isFinite(basisOverride) || basisOverride < 0)) {
@@ -219,12 +240,13 @@ export async function createPositionTransaction({
   }
 
   const total = q * cost;
+  const totalFee = fee == null ? 0 : fee;
 
   await withDbClient(async (client) => {
     await client.query('BEGIN');
     try {
       const positionRow = await client.query(
-        `SELECT category, qty::float8 AS qty, purchase_price::float8 AS "purchasePrice"
+        `SELECT category, upper(currency) AS currency, qty::float8 AS qty, purchase_price::float8 AS "purchasePrice"
          FROM portfolio_positions
          WHERE user_id = $1 AND symbol = $2`,
         [resolvedUserId, sym],
@@ -234,6 +256,7 @@ export async function createPositionTransaction({
       }
       const positionCategory = String(positionRow.rows[0].category || '');
       const isCrypto = /crypto/i.test(positionCategory);
+      const positionCurrency = String(positionRow.rows[0].currency || 'USD').toUpperCase();
       const baseQty = Number(positionRow.rows[0].qty) || 0;
       const baseAvg = Number(positionRow.rows[0].purchasePrice) || 0;
       const baseCost = baseQty * baseAvg;
@@ -265,8 +288,8 @@ export async function createPositionTransaction({
       const sellBasisPerUnit = txType === 'SELL' ? currentAvgCost : null;
 
       const inserted = await client.query(
-        `INSERT INTO portfolio_position_transactions (user_id, symbol, type, tx_date, qty, avg_cost_per_unit, cost_basis_per_unit, notes)
-         VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8)
+        `INSERT INTO portfolio_position_transactions (user_id, symbol, type, tx_date, qty, avg_cost_per_unit, fee_per_unit, fee_flat_total, cost_basis_per_unit, notes)
+         VALUES ($1, $2, $3, $4::date, $5, $6, NULL, $7, $8, $9)
          RETURNING id`,
         [
           resolvedUserId,
@@ -275,13 +298,14 @@ export async function createPositionTransaction({
           date,
           q,
           cost,
+          fee,
           sellBasisPerUnit,
           memo,
         ],
       );
 
       const cashId = deductId || creditId;
-      const cashDelta = txType === 'BUY' ? -total : total;
+      const cashDelta = txType === 'BUY' ? -(total + totalFee) : total - totalFee;
       if (cashId) {
         const cashRow = await client.query(
           `SELECT id, upper(currency) AS currency, balance
@@ -294,16 +318,14 @@ export async function createPositionTransaction({
           throw new Error('Selected cash item not found.');
         }
         const curr = String(cashRow.rows[0].currency || '').toUpperCase();
-        if (isCrypto) {
-          // For crypto transactions: only allow stablecoin cash buckets, not USD.
+        // Validate linked cash currency against the position's transaction currency.
+        // Stablecoin exception: USDT and USDC are interchangeable for linking.
+        if ((positionCurrency === 'USDT' || positionCurrency === 'USDC')) {
           if (curr !== 'USDT' && curr !== 'USDC') {
-            throw new Error('For crypto transactions, the cash item must be USDT or USDC.');
+            throw new Error('This asset is USDT/USDC-based, so the cash item must be USDT or USDC.');
           }
-        } else {
-          // For non-crypto transactions: allow only USD cash (stocks are USD).
-          if (curr !== 'USD') {
-            throw new Error('For non-crypto transactions, the cash item must be USD.');
-          }
+        } else if (curr !== positionCurrency) {
+          throw new Error(`Cash currency mismatch: expected ${positionCurrency} for ${sym}.`);
         }
         await client.query(
           `UPDATE cash
@@ -348,6 +370,7 @@ export async function listHistoricalSaleTransactions(userId, symbol) {
             to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
             qty::float8 AS qty,
             avg_cost_per_unit::float8 AS "sellPricePerUnit",
+            COALESCE(fee_flat_total::float8, (COALESCE(fee_per_unit, 0)::float8 * qty::float8)) AS "feeFlat",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
@@ -387,6 +410,9 @@ export async function importHistoricalSaleTransactions({ userId, symbol, rows })
         const txDate = String(raw?.txDate || '').trim();
         const qty = Number(raw?.qty);
         const sellPricePerUnit = Number(raw?.sellPricePerUnit);
+        const feeFlatRaw = raw?.feeFlatTotal ?? raw?.feeFlat ?? null;
+        const feePerUnitRaw = raw?.feePerUnit == null ? null : Number(raw?.feePerUnit);
+        const feeFlat = feeFlatRaw == null ? (feePerUnitRaw == null ? null : feePerUnitRaw * qty) : Number(feeFlatRaw);
         const costBasisPerUnit = Number(raw?.costBasisPerUnit);
         const notes = raw?.notes == null ? null : String(raw.notes).trim() || null;
 
@@ -398,6 +424,9 @@ export async function importHistoricalSaleTransactions({ userId, symbol, rows })
         if (!Number.isFinite(costBasisPerUnit) || costBasisPerUnit < 0) {
           throw new Error(`Row ${index + 1}: costBasisPerUnit must be >= 0.`);
         }
+        if (feeFlat != null && (!Number.isFinite(feeFlat) || feeFlat < 0)) {
+          throw new Error(`Row ${index + 1}: feeFlat must be >= 0.`);
+        }
 
         await client.query(
           `INSERT INTO portfolio_position_transactions (
@@ -408,11 +437,13 @@ export async function importHistoricalSaleTransactions({ userId, symbol, rows })
             tx_date,
             qty,
             avg_cost_per_unit,
+            fee_per_unit,
+            fee_flat_total,
             cost_basis_per_unit,
             notes
           )
-          VALUES ($1, $2, 'SELL', FALSE, $3::date, $4, $5, $6, $7)`,
-          [resolvedUserId, sym, txDate, qty, sellPricePerUnit, costBasisPerUnit, notes],
+          VALUES ($1, $2, 'SELL', FALSE, $3::date, $4, $5, NULL, $6, $7, $8)`,
+          [resolvedUserId, sym, txDate, qty, sellPricePerUnit, feeFlat, costBasisPerUnit, notes],
         );
       }
 
