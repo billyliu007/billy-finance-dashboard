@@ -11,7 +11,11 @@ router.get('/', async (req, res, next) => {
   try {
     const baseCurrency = req.auth.user.baseCurrency || 'USD';
     const payload = await resolveDashboardPayload(req.auth.user.userId, baseCurrency);
-    return res.json({ netWorth: payload.netWorth, portfolio: payload.portfolio });
+    return res.json({
+      netWorth: payload.netWorth,
+      portfolio: payload.portfolio,
+      benchmarks: payload.benchmarks ?? null,
+    });
   } catch (error) {
     next(new ApiError(getErrorMessage(error), 500));
   }

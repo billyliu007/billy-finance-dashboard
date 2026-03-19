@@ -9,6 +9,7 @@ import { DashboardProvider } from './contexts/DashboardContext.jsx';
 import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
 import NetWorthPage from './pages/NetWorthPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
+import ProfitabilityPage from './pages/ProfitabilityPage.jsx';
 import DevelopmentPage from './pages/DevelopmentPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import OnboardingPage from './pages/OnboardingPage.jsx';
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="/net-worth" element={<NetWorthPage hideValues={hideValues} />} />
             <Route path="/overview" element={<Navigate to="/net-worth" replace />} />
             <Route path="/portfolio" element={<PortfolioPage hideValues={hideValues} />} />
+            <Route path="/profitability" element={<ProfitabilityPage hideValues={hideValues} />} />
             {SHOW_DEVELOPMENT_PAGE && (
               <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />
             )}

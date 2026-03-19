@@ -1,6 +1,6 @@
 import { fetchFinnhubQuotes } from '../lib/finnhub.js';
 import { fetchFrankfurterFxRates } from '../lib/fx.js';
-import { fetchBinanceUsdtQuotes, fetchCoingeckoUsdQuotes, fetchCoinbaseProductQuotes } from '../lib/crypto.js';
+import { fetchCoinbaseProductQuotes } from '../lib/crypto.js';
 
 const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
 const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'coinbase').trim().toLowerCase();
@@ -88,6 +88,39 @@ export async function getLiveFxRates(currenciesFromCash = []) {
     return fetchFrankfurterFxRates(normalized);
   }
   return {};
+}
+
+/**
+ * Fetch SPY (stock) and BTC (crypto) quotes for benchmark comparison.
+ * @returns {Promise<{ spy: { symbol: string, price: number, changePct: number | null } | null, btc: { symbol: string, price: number, changePct: number | null } | null }>}
+ */
+export async function getBenchmarkQuotes() {
+  const [stockQuotes, cryptoQuotes] = await Promise.all([
+    getStockQuoteMapForPositions([{ symbol: 'SPY', category: 'US Stock Assets' }]),
+    fetchCoinbaseProductQuotes([{ assetSymbol: 'BTC', providerSymbol: 'BTC-USD' }]),
+  ]);
+
+  const spyQuote = stockQuotes?.SPY;
+  const btcQuote = cryptoQuotes?.BTC;
+
+  return {
+    spy:
+      spyQuote && Number.isFinite(spyQuote.price)
+        ? {
+            symbol: 'SPY',
+            price: spyQuote.price,
+            changePct: spyQuote.changePct ?? null,
+          }
+        : null,
+    btc:
+      btcQuote && Number.isFinite(btcQuote.price)
+        ? {
+            symbol: 'BTC',
+            price: btcQuote.price,
+            changePct: btcQuote.changePct ?? null,
+          }
+        : null,
+  };
 }
 
 export async function buildProviderDiagnosticsForPositions(positions) {

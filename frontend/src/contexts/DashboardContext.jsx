@@ -98,6 +98,7 @@ export function DashboardProvider({ children }) {
   const value = {
     netWorth: data?.netWorth ?? null,
     portfolio: data?.portfolio ?? null,
+    benchmarks: data?.benchmarks ?? null,
     isLoading,
     isRefreshing,
     error,

@@ -905,6 +905,177 @@ h1 {
   gap: 16px;
 }
 
+/* --- Profitability page --- */
+.profitabilitySection {
+  margin-bottom: 24px;
+}
+
+.profitabilitySection:last-child {
+  margin-bottom: 0;
+}
+
+.profitabilitySectionTitle {
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: #e2e8f0;
+  margin: 0 0 8px;
+}
+
+.profitabilitySectionDesc {
+  font-size: 0.88rem;
+  color: #94a3b8;
+  margin: 0 0 12px;
+}
+
+.profitabilityCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.profitabilityBenchmarkCards {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.profitabilityCard {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  display: grid;
+  gap: 4px;
+}
+
+.profitabilityCardLabel {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.profitabilityCardValue {
+  font-size: 1.1rem;
+  font-weight: 650;
+  color: #e2e8f0;
+}
+
+.profitabilityCardValue.pos {
+  color: #34d399;
+}
+
+.profitabilityCardValue.neg {
+  color: #f87171;
+}
+
+.profitabilityCardSub {
+  font-size: 0.78rem;
+}
+
+.profitabilityCardSub.pos {
+  color: #34d399;
+}
+
+.profitabilityCardSub.neg {
+  color: #f87171;
+}
+
+.profitabilityNoBenchmarks {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.profitabilityTableWrap {
+  overflow-x: auto;
+  margin-bottom: 10px;
+}
+
+.profitabilityTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.profitabilityTable th,
+.profitabilityTable td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.profitabilityTable th {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.profitabilityTable td {
+  color: #e2e8f0;
+}
+
+.profitabilityInput {
+  width: 72px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 0.88rem;
+}
+
+.profitabilityResetBtn {
+  margin-top: 4px;
+}
+
+.profitabilityLabel {
+  display: block;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.profitabilitySelect {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  min-width: 160px;
+}
+
+.profitabilitySellDownRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.profitabilitySellDownRow label {
+  display: grid;
+  gap: 4px;
+}
+
+.profitabilitySellDownResult {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.profitabilityInsights {
+  margin: 0;
+  padding-left: 18px;
+  color: #e2e8f0;
+  display: grid;
+  gap: 8px;
+}
+
+.profitabilityTable td.pos {
+  color: #34d399;
+}
+
+.profitabilityTable td.neg {
+  color: #f87171;
+}
+
 .tableHeaderRow {
   display: flex;
   align-items: center;

@@ -16,6 +16,7 @@ function toSymbolList(symbols = []) {
 function toQuoteResult(symbol, body) {
   const price = Number(body?.c);
   const timestampSeconds = Number(body?.t);
+  const changePct = body?.dp != null && Number.isFinite(Number(body.dp)) ? Number(body.dp) : null;
 
   if (!Number.isFinite(price) || price <= 0) {
     return null;
@@ -24,6 +25,7 @@ function toQuoteResult(symbol, body) {
   return {
     symbol,
     price,
+    changePct,
     timestamp: Number.isFinite(timestampSeconds) && timestampSeconds > 0 ? timestampSeconds * 1000 : null,
     source: 'finnhub',
   };

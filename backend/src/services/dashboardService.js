@@ -5,6 +5,7 @@
 import { buildNetWorthPayload } from './netWorthService.js';
 import { buildPortfolioPayload } from './portfolioService.js';
 import {
+  getBenchmarkQuotes,
   getCryptoQuoteMapForPositions,
   getLiveFxRates,
   getStockQuoteMapForPositions,
@@ -130,5 +131,7 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
     cryptoQuotes,
   });
 
-  return { netWorth, portfolio, fxRates, positions: effectivePositions };
+  const benchmarks = await getBenchmarkQuotes();
+
+  return { netWorth, portfolio, fxRates, positions: effectivePositions, benchmarks };
 }

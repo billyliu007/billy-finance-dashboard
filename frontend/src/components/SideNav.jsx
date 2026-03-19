@@ -23,6 +23,12 @@ export default function SideNav() {
         >
           {t('nav.portfolioHoldings')}
         </NavLink>
+        <NavLink
+          to="/profitability"
+          className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
+        >
+          {t('nav.profitability')}
+        </NavLink>
         {SHOW_DEVELOPMENT_PAGE && (
           <NavLink
             to="/development"

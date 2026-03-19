@@ -138,6 +138,49 @@ export async function listPositionTransactions(userId, symbol) {
   return result.rows;
 }
 
+/**
+ * List all position transactions for a user (BUY/SELL, including imported sells).
+ * @param {string} userId
+ * @param {{ from?: string|null, to?: string|null }} [options]
+ * @returns {Promise<object[]>}
+ */
+export async function listAllPositionTransactions(userId, { from = null, to = null } = {}) {
+  const resolvedUserId = String(userId || '').trim();
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  const fromDate = from ? String(from).trim() : '';
+  const toDate = to ? String(to).trim() : '';
+
+  const filters = ['user_id = $1'];
+  const params = [resolvedUserId];
+
+  if (fromDate) {
+    params.push(fromDate);
+    filters.push(`tx_date >= $${params.length}::date`);
+  }
+  if (toDate) {
+    params.push(toDate);
+    filters.push(`tx_date <= $${params.length}::date`);
+  }
+
+  const result = await query(
+    `SELECT id,
+            upper(symbol) AS symbol,
+            upper(type) AS type,
+            affects_holdings AS "affectsHoldings",
+            to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
+            qty::float8 AS qty,
+            avg_cost_per_unit::float8 AS "avgCostPerUnit",
+            cost_basis_per_unit::float8 AS "costBasisPerUnit",
+            notes,
+            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "createdAtUtc"
+     FROM portfolio_position_transactions
+     WHERE ${filters.join(' AND ')}
+     ORDER BY tx_date ASC, created_at ASC`,
+    params,
+  );
+  return result.rows;
+}
+
 export async function createPositionTransaction({
   userId,
   symbol,
