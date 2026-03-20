@@ -2,6 +2,7 @@ import { useState } from 'react';
 import CashTableCard from '../components/networth/CashTableCard.jsx';
 import NetWorthSummaryCard from '../components/networth/NetWorthSummaryCard.jsx';
 import AddCashModal from '../components/networth/AddCashModal.jsx';
+import TransferCashModal from '../components/networth/TransferCashModal.jsx';
 import EditCashModal from '../components/networth/EditCashModal.jsx';
 import DeleteCashConfirmModal from '../components/networth/DeleteCashConfirmModal.jsx';
 import PerformanceCharts from '../components/networth/PerformanceCharts.jsx';
@@ -13,6 +14,7 @@ import { putJson } from '../utils/api.js';
 function OverviewPanel({ hideValues, overview, isLoading, error, refresh, mutate }) {
   const { t } = useLanguage();
   const [isAddCashOpen, setIsAddCashOpen] = useState(false);
+  const [isTransferCashOpen, setIsTransferCashOpen] = useState(false);
   const [editCash, setEditCash] = useState(null);
   const [cashToDelete, setCashToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -96,6 +98,9 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh, mutate
               rows={cashRows}
               baseCurrency={overview?.baseCurrency ?? 'USD'}
               onAdd={() => setIsAddCashOpen(true)}
+              onTransfer={
+                cashComponents.length >= 2 ? () => setIsTransferCashOpen(true) : undefined
+              }
               onEdit={(row) => setEditCash(getCashByRow(row) ?? null)}
               onDelete={handleDeleteClick}
             />
@@ -107,6 +112,12 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh, mutate
           onClose={() => setIsAddCashOpen(false)}
           onSaved={() => { refresh?.({ mode: 'silent' }); setIsAddCashOpen(false); }}
           existingComponents={cashComponents}
+        />
+        <TransferCashModal
+          open={isTransferCashOpen}
+          onClose={() => setIsTransferCashOpen(false)}
+          onSaved={() => { refresh?.({ mode: 'silent' }); setIsTransferCashOpen(false); }}
+          cashComponents={cashComponents}
         />
         <EditCashModal
           open={Boolean(editCash)}

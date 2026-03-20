@@ -2,10 +2,51 @@ import { Router } from 'express';
 import { ApiError } from '../lib/ApiError.js';
 import { getErrorMessage } from '../lib/requestHelpers.js';
 import { replaceCashComponents } from '../repositories/financeRepository.js';
+import { getCrossFxRate, runCashTransfer } from '../services/cashTransferService.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 router.use(requireAuth);
+
+/** Cross rate: destination_amount = source_amount * rate */
+router.get('/fx-rate', async (req, res, next) => {
+  try {
+    const fromCur = String(req.query.from || '').trim();
+    const toCur = String(req.query.to || '').trim();
+    if (!fromCur || !toCur) {
+      return res.status(400).json({ message: 'Query parameters "from" and "to" (currency codes) are required.' });
+    }
+    const { rate, from, to } = await getCrossFxRate(fromCur, toCur);
+    return res.json({ from, to, rate });
+  } catch (error) {
+    next(new ApiError(getErrorMessage(error), 500));
+  }
+});
+
+router.post('/transfer', async (req, res, next) => {
+  try {
+    const fromCashId = String(req.body?.fromCashId || '').trim();
+    const toCashId = String(req.body?.toCashId || '').trim();
+    const amount = Number(req.body?.amount);
+    const rawOverride = req.body?.fxRateOverride;
+    const fxRateOverride =
+      rawOverride === null || rawOverride === undefined || rawOverride === ''
+        ? null
+        : Number(rawOverride);
+    if (!fromCashId || !toCashId) {
+      return res.status(400).json({ message: 'fromCashId and toCashId are required.' });
+    }
+    const result = await runCashTransfer(req.auth.user.userId, {
+      fromCashId,
+      toCashId,
+      amount,
+      fxRateOverride,
+    });
+    return res.status(200).json({ ok: true, ...result });
+  } catch (error) {
+    next(new ApiError(getErrorMessage(error), 400));
+  }
+});
 
 router.put('/', async (req, res, next) => {
   try {

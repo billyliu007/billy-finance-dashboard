@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { API_BASE_URL } from '../constants.js';
-import { postJson } from '../utils/api.js';
+import { fetchJson, postJson } from '../utils/api.js';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 
 function resolveMessage(search) {
@@ -9,13 +9,35 @@ function resolveMessage(search) {
   return message ? decodeURIComponent(message) : '';
 }
 
+function parseProviders(data) {
+  const list = Array.isArray(data?.providers) ? data.providers : [];
+  const map = Object.fromEntries(list.map((p) => [p.key, Boolean(p.enabled)]));
+  return { google: map.google === true, apple: map.apple === true };
+}
+
 export default function LoginPage() {
   const { language, setLanguage, t } = useLanguage();
   const [isLoggingInDemo, setIsLoggingInDemo] = useState(false);
   const [demoError, setDemoError] = useState('');
+  const [providers, setProviders] = useState(null);
   const message = useMemo(() => resolveMessage(window.location.search), []);
   const apiBase = String(API_BASE_URL || '').replace(/\/$/, '');
   const authHref = (provider) => `${apiBase}/api/auth/${provider}/start`;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchJson('/api/auth/providers');
+        if (!cancelled) setProviders(parseProviders(data));
+      } catch {
+        if (!cancelled) setProviders({ google: false, apple: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleDemoLogin() {
     try {
@@ -56,28 +78,37 @@ export default function LoginPage() {
         <p className="authIntro">{t('login.signInDesc')}</p>
 
         <div className="authSections">
-          <section className="authSection">
-            <p className="authSectionTitle">
-              {language === 'zh' ? '使用账号登录' : 'Sign in with your account'}
-            </p>
-            <div className="authActions authActionsOAuth">
-              <a href={authHref('google')} className="authBtn authBtnProvider authBtnGoogle">
-                <span className="authBtnIcon" aria-hidden="true">
-                  <img
-                    src="https://www.gstatic.com/images/branding/product/1x/gsa_64dp.png"
-                    alt=""
-                  />
-                </span>
-                <span className="authBtnLabel">{t('login.continueGoogle')}</span>
-              </a>
-              <a href={authHref('apple')} className="authBtn authBtnProvider authBtnApple authAppleHidden" aria-hidden="true">
-                <span className="authBtnIcon authBtnAppleIcon" aria-hidden="true">
-                  <span className="authAppleGlyph"></span>
-                </span>
-                <span className="authBtnLabel">{t('login.continueApple')}</span>
-              </a>
-            </div>
-          </section>
+          {providers && (providers.google || providers.apple) ? (
+            <section className="authSection">
+              <p className="authSectionTitle">
+                {language === 'zh' ? '使用账号登录' : 'Sign in with your account'}
+              </p>
+              <div className="authActions authActionsOAuth">
+                {providers.google ? (
+                  <a href={authHref('google')} className="authBtn authBtnProvider authBtnGoogle">
+                    <span className="authBtnIcon" aria-hidden="true">
+                      <img
+                        src="https://www.gstatic.com/images/branding/product/1x/gsa_64dp.png"
+                        alt=""
+                      />
+                    </span>
+                    <span className="authBtnLabel">{t('login.continueGoogle')}</span>
+                  </a>
+                ) : null}
+                {providers.apple ? (
+                  <a href={authHref('apple')} className="authBtn authBtnProvider authBtnApple">
+                    <span className="authBtnIcon authBtnAppleIcon" aria-hidden="true">
+                      <span className="authAppleGlyph"></span>
+                    </span>
+                    <span className="authBtnLabel">{t('login.continueApple')}</span>
+                  </a>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+          {providers && !providers.google && !providers.apple ? (
+            <p className="authHint authOauthHint">{t('login.oauthNoneHint')}</p>
+          ) : null}
 
           <section className="authSection authSectionDemo">
             <p className="authSectionTitle">

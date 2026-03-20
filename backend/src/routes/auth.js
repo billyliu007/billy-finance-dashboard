@@ -23,11 +23,12 @@ router.get('/providers', (_req, res) => {
   });
 });
 
-router.get('/google/start', (_req, res, next) => {
+router.get('/google/start', (_req, res) => {
   try {
     return res.redirect(buildGoogleAuthUrl());
   } catch (error) {
-    next(new ApiError(getErrorMessage(error), 400));
+    // Full-page <a href> navigation: avoid raw 400 JSON (Chrome "HTTP ERROR 400").
+    return redirectToFrontend(res, '/login', getErrorMessage(error));
   }
 });
 
@@ -45,11 +46,11 @@ router.get('/google/callback', async (req, res) => {
   }
 });
 
-router.get('/apple/start', (_req, res, next) => {
+router.get('/apple/start', (_req, res) => {
   try {
     return res.redirect(buildAppleAuthUrl());
   } catch (error) {
-    next(new ApiError(getErrorMessage(error), 400));
+    return redirectToFrontend(res, '/login', getErrorMessage(error));
   }
 });
 

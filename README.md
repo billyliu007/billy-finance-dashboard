@@ -40,7 +40,7 @@ Set required backend values in `backend/.env`:
 - `DATABASE_URL`
 - `FRONTEND_BASE_URL`
 - OAuth credentials:
-  - `GOOGLE_OAUTH_*`
+  - `GOOGLE_OAUTH_*` — step-by-step: [`docs/GOOGLE_OAUTH.md`](docs/GOOGLE_OAUTH.md)
   - `APPLE_*`
 - market data keys/settings:
   - `FINNHUB_API_KEY`

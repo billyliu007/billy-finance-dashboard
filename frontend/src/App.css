@@ -1228,6 +1228,11 @@ h1 {
   position: relative;
 }
 
+.headerTransferBtn {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
 .addMenuToggle {
   display: inline-flex;
 }
@@ -1784,6 +1789,78 @@ h1 {
   gap: 6px;
   color: #cbd5e1;
   font-size: 0.9rem;
+}
+
+.modalLabelInlineCheck {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.modalLabelInlineCheck input {
+  width: auto;
+  margin: 0;
+}
+
+.transferFxBlock {
+  padding: 4px 0 2px;
+}
+
+.transferFxLine {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 0.88rem;
+  color: #cbd5e1;
+}
+
+.transferFxRate {
+  font-variant-numeric: tabular-nums;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.transferFxError {
+  margin-top: -2px;
+  font-size: 0.85rem;
+}
+
+.transferCreditEst {
+  margin-top: 2px;
+}
+
+.transferFxMatch {
+  margin-top: 4px;
+}
+
+.transferFxCompare {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(94, 234, 212, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  font-size: 0.86rem;
+  color: #cbd5e1;
+}
+
+.transferFxCompareTitle {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: #e2efff;
+  font-size: 0.88rem;
+}
+
+.transferFxCompareLine {
+  margin: 0 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.transferFxCompareDiff {
+  margin: 8px 0 0;
+  color: #fde68a;
+  font-weight: 600;
 }
 
 .modalInput,

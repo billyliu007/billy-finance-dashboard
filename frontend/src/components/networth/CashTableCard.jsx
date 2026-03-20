@@ -7,6 +7,7 @@ export default function CashTableCard({
   rows,
   baseCurrency = 'USD',
   onAdd,
+  onTransfer,
   onEdit,
   onDelete,
 }) {
@@ -34,6 +35,20 @@ export default function CashTableCard({
       <div className="tableHeaderRow">
         <h2>{t('netWorth.cashAndDebt')}</h2>
         <div className="tableHeaderActions">
+          {onTransfer && (
+            <button
+              type="button"
+              className="headerIconBtn headerTransferBtn"
+              onClick={() => {
+                setShowAddMenu(false);
+                onTransfer();
+              }}
+              aria-label={t('netWorth.transferCash')}
+              title={t('netWorth.transferCashShort')}
+            >
+              ⇄
+            </button>
+          )}
           {onAdd && (
             <button
               type="button"
