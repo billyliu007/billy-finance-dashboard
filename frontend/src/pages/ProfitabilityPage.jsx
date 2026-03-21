@@ -246,8 +246,25 @@ export default function ProfitabilityPage({ hideValues }) {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
                     <XAxis dataKey="month" tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
                     <YAxis tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="cumulativeRealized" name={t('profitability.cumulativeRealized')} stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    <Tooltip
+                      formatter={(value) => [
+                        formatVal(hideValues, Number(value) || 0),
+                        t('profitability.cumulativeRealized'),
+                      ]}
+                      labelFormatter={(label) => String(label ?? '')}
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelStyle={{ color: '#f8fafc' }}
+                      itemStyle={{ color: '#e2e8f0' }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cumulativeRealized"
+                      name={t('profitability.cumulativeRealized')}
+                      stroke="#f59e0b"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 5, fill: '#f59e0b', stroke: '#0b1220', strokeWidth: 2 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
