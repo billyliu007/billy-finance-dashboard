@@ -7,6 +7,26 @@ function todayUtcDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function hasMeaningfulHoldings(cashComponents, positions) {
+  const cash = (cashComponents || []).some((c) => Number(c?.balance) !== 0);
+  const pos = (positions || []).some((p) => Number(p?.qty) > 0);
+  return cash || pos;
+}
+
+function fxLooksUsable(fxRates) {
+  const usd = Number(fxRates?.USD);
+  return Number.isFinite(usd) && usd > 0;
+}
+
+async function fetchFxWithRetry(currenciesFromCash) {
+  let fxRates = await getLiveFxRates(currenciesFromCash);
+  if (!fxLooksUsable(fxRates)) {
+    await new Promise((r) => setTimeout(r, 750));
+    fxRates = await getLiveFxRates(currenciesFromCash);
+  }
+  return fxRates;
+}
+
 export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
   const users = await listUsersForSnapshots();
   const results = [];
@@ -23,7 +43,7 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
       const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
         getStockQuoteMapForPositions(positions),
         getCryptoQuoteMapForPositions(positions),
-        getLiveFxRates(currenciesFromCash),
+        fetchFxWithRetry(currenciesFromCash),
       ]);
       const payloadCny = buildNetWorthPayload({
         cashComponents,
@@ -35,6 +55,16 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
         baseCurrency: 'CNY',
       });
       const totalCny = payloadCny.overview.totalNetWorth;
+      const holdings = hasMeaningfulHoldings(cashComponents, positions);
+      if (holdings && (!Number.isFinite(totalCny) || Math.abs(totalCny) < 1e-9)) {
+        results.push({
+          userId: user.id,
+          status: 'skipped',
+          message:
+            'Net worth computed as zero while holdings exist (missing FX or prices). Snapshot not written.',
+        });
+        continue;
+      }
       const usdRate = Number(fxRates.USD);
       const totalUsd =
         Number.isFinite(usdRate) && usdRate > 0 ? totalCny / usdRate : null;

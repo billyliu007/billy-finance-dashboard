@@ -11,7 +11,8 @@
     "db:sync-coinbase-products": "node src/scripts/syncCoinbaseProducts.js",
     "db:sync-us-stock-symbols": "node src/scripts/syncUsStockSymbols.js",
     "cron:daily-snapshot": "node src/scripts/runDailySnapshot.js",
-    "admin:reset-demo": "node src/scripts/resetDemoAccount.js"
+    "admin:reset-demo": "node src/scripts/resetDemoAccount.js",
+    "admin:delete-incomplete-onboarding": "node src/scripts/deleteIncompleteOnboardingUsers.js"
   },
   "dependencies": {
     "cookie": "^1.0.2",

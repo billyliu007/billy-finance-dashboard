@@ -2,7 +2,8 @@ import 'dotenv/config';
 import { runDailySnapshots } from '../services/snapshotService.js';
 
 async function run() {
-  const results = await runDailySnapshots();
+  const dateUtc = String(process.env.SNAPSHOT_DATE_UTC || '').trim();
+  const results = await runDailySnapshots(dateUtc ? { dateUtc } : {});
   // eslint-disable-next-line no-console
   console.log(JSON.stringify({ ok: true, results }, null, 2));
 }

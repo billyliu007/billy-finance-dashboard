@@ -340,7 +340,31 @@ export function buildNetWorthPayload({
   const missingInputs = componentValuesAll
     .filter((item) => !item.found)
     .map((item) => `${item.name}: ${item.reason || 'Missing data'}`);
-  const totalNetWorth = componentValuesAll.reduce((sum, component) => sum + (component.value ?? 0), 0);
+  let totalNetWorth = componentValuesAll.reduce((sum, component) => sum + (component.value ?? 0), 0);
+
+  /**
+   * When USD/CNY (and cross rates) are missing, component `value` is null everywhere and the sum is 0
+   * even though CNY-denominated cash still has valid cnyValue. Snapshots and charts then store 0 incorrectly.
+   * For base CNY, recover total from sum(cnyValue) + positions in CNY when USD rate exists for positions.
+   */
+  if (String(base).toUpperCase() === 'CNY') {
+    const cashCnySum = visibleDetailRows.reduce(
+      (sum, row) =>
+        sum + (row.cnyValue != null && Number.isFinite(row.cnyValue) ? row.cnyValue : 0),
+      0,
+    );
+    const positionsNeedFx = usdPositionsTotal > 0;
+    const canValuePositions = Number.isFinite(usdToCny) && usdToCny > 0;
+    const positionsCny =
+      positionsNeedFx && canValuePositions ? usdPositionsTotal * usdToCny : 0;
+    const fallbackTotalCny = cashCnySum + positionsCny;
+    const componentsEffectivelyZero =
+      !Number.isFinite(totalNetWorth) || Math.abs(totalNetWorth) < 1e-9;
+    const blockedByMissingUsdForPositions = positionsNeedFx && !canValuePositions;
+    if (componentsEffectivelyZero && !blockedByMissingUsdForPositions && Number.isFinite(fallbackTotalCny)) {
+      totalNetWorth = fallbackTotalCny;
+    }
+  }
   // Exclude zero-value components from breakdown so it matches the cash table (which hides 0-balance rows)
   const componentValues = componentValuesAll.filter(
     (c) => c.value == null || !Number.isFinite(c.value) || Math.abs(c.value) >= 1e-9

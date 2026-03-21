@@ -97,6 +97,17 @@ Ensure `FRONTEND_BASE_URL` and `VITE_API_BASE_URL` match the URLs you use (see `
 - **Schedule:** `0 0 * * *` (UTC midnight).
 - **Command:** `npm run cron:daily-snapshot --prefix backend` (writes net worth history to the shared DB).
 
+**Re-run / repair a bad row (e.g. `total_cny = 0` when FX failed):**
+
+1. Deploy or run locally with valid `DATABASE_URL` and market env (so Frankfurter/Finnhub can succeed).
+2. Run the same command again. Today’s `daily` snapshot is **replaced** (delete by `user_id` + `date_utc` + `source = daily'`, then insert).
+3. To fix a **specific UTC date** (not today), set `SNAPSHOT_DATE_UTC=YYYY-MM-DD` when running:
+   ```bash
+   SNAPSHOT_DATE_UTC=2026-03-07 npm run cron:daily-snapshot --prefix backend
+   ```
+
+Snapshots are **skipped** (not written) when you still hold cash/positions but net worth would compute as zero—usually missing FX or missing quotes—so a bad zero row is less likely than before.
+
 No pre-deploy command is configured; the database is shared with local dev and is not migrated on deploy.
 
 ## 7. Performance (production load)

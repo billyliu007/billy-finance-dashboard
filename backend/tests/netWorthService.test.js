@@ -81,3 +81,34 @@ test('buildNetWorthPayload handles empty history', () => {
   assert.strictEqual(payload.performance.summary.latestPeriodChangePct, 0);
   assert.strictEqual(payload.performance.cashflowData.length, 0);
 });
+
+test('buildNetWorthPayload CNY base: fallback when USD/CNY FX missing but CNY cash is valued', () => {
+  const payload = buildNetWorthPayload({
+    cashComponents: [
+      { id: 'a', currency: 'CNY', name: 'CNY Cash', balance: 100_000 },
+      { id: 'b', currency: 'USD', name: 'USD Cash', balance: 1000 },
+    ],
+    positions: [],
+    history: [],
+    stockQuotes: {},
+    cryptoQuotes: {},
+    fxRatesOverride: {},
+    baseCurrency: 'CNY',
+  });
+
+  assert.strictEqual(payload.overview.totalNetWorth, 100_000);
+});
+
+test('buildNetWorthPayload CNY base: stays zero when only USD cash and FX missing', () => {
+  const payload = buildNetWorthPayload({
+    cashComponents: [{ id: 'b', currency: 'USD', name: 'USD Cash', balance: 1000 }],
+    positions: [],
+    history: [],
+    stockQuotes: {},
+    cryptoQuotes: {},
+    fxRatesOverride: {},
+    baseCurrency: 'CNY',
+  });
+
+  assert.ok(Math.abs(payload.overview.totalNetWorth) < 1e-9);
+});
