@@ -3,9 +3,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
-  ReferenceDot,
   ReferenceLine,
   Rectangle,
   ResponsiveContainer,
@@ -13,86 +10,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { useEffect, useState } from 'react';
 import { formatBaseCurrency, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
+import TrendLineChartWithMarkers, { formatTrendXAxisLabel } from '../charts/TrendLineChartWithMarkers.jsx';
 
 const NET_WORTH_X_KEY = 'dateTimeLabel';
-
-function formatDateOnlyLabel(rawValue) {
-  const raw = String(rawValue || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  if (raw.includes('T')) {
-    return raw.split('T')[0];
-  }
-
-  if (raw.includes(' ')) {
-    return raw.split(' ')[0];
-  }
-
-  return raw;
-}
-
-function MarkerLabel({ viewBox, value, color, side = 'top', offsetY = 0 }) {
-  if (!viewBox || !value) {
-    return null;
-  }
-
-  const labelText = String(value);
-  const approxCharWidth = 6.5;
-  const boxWidth = Math.max(68, Math.round(labelText.length * approxCharWidth + 12));
-  const boxHeight = 20;
-  let x = viewBox.x - boxWidth / 2;
-  let y = viewBox.y - 30 + offsetY;
-
-  if (side === 'left') {
-    x = viewBox.x - boxWidth - 10;
-    y = viewBox.y - boxHeight / 2 + offsetY;
-  } else if (side === 'right') {
-    x = viewBox.x + 10;
-    y = viewBox.y - boxHeight / 2 + offsetY;
-  } else if (side === 'bottom') {
-    x = viewBox.x - boxWidth / 2;
-    y = viewBox.y + 10 + offsetY;
-  }
-
-  const padding = 4;
-  const minX = padding;
-  const minY = padding;
-  const maxX = (viewBox.x ?? 0) + (viewBox.width ?? 0) - boxWidth - padding;
-  const maxY = (viewBox.y ?? 0) + (viewBox.height ?? 0) - boxHeight - padding;
-
-  x = Math.min(Math.max(minX, x), Number.isFinite(maxX) ? maxX : x);
-  y = Math.min(Math.max(minY, y), Number.isFinite(maxY) ? maxY : y);
-
-  return (
-    <g>
-      <rect
-        x={x}
-        y={y}
-        width={boxWidth}
-        height={boxHeight}
-        rx={6}
-        fill="rgba(2, 6, 23, 0.88)"
-        stroke={color}
-        strokeWidth={1}
-      />
-      <text
-        x={x + boxWidth / 2}
-        y={y + 13}
-        textAnchor="middle"
-        fill="#e2e8f0"
-        fontSize={11}
-        fontWeight={600}
-      >
-        {labelText}
-      </text>
-    </g>
-  );
-}
 
 function ActivePeriodBar(props) {
   const {
@@ -162,152 +84,26 @@ function PeriodReturnTooltip({ active, payload, hideValues, baseCurrency = 'USD'
 }
 
 export default function PerformanceCharts({ hideValues, cashflowData, derivedSeries, netWorthDomain, baseCurrency = 'USD' }) {
-  const [isSmallScreen, setIsSmallScreen] = useState(false);
   const { t } = useLanguage();
   const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 980px)');
-    const update = () => setIsSmallScreen(mediaQuery.matches);
-
-    update();
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', update);
-      return () => mediaQuery.removeEventListener('change', update);
-    }
-
-    mediaQuery.addListener(update);
-    return () => mediaQuery.removeListener(update);
-  }, []);
-
-  const latestPoint = cashflowData.length > 0 ? cashflowData[cashflowData.length - 1] : null;
-  const highPoint = cashflowData.length > 0
-    ? cashflowData.reduce((acc, item) => (item.netWorth > acc.netWorth ? item : acc), cashflowData[0])
-    : null;
-  const lowPoint = cashflowData.length > 0
-    ? cashflowData.reduce((acc, item) => (item.netWorth < acc.netWorth ? item : acc), cashflowData[0])
-    : null;
-
-  const markerByPoint = new Map();
-  [
-    { point: latestPoint, label: 'Latest', color: '#22d3ee' },
-    { point: highPoint, label: 'High', color: '#22c55e' },
-    { point: lowPoint, label: 'Low', color: '#fb7185' },
-  ].forEach(({ point, label, color }) => {
-    if (!point) {
-      return;
-    }
-
-    const xValue = point?.[NET_WORTH_X_KEY] || point.date;
-    const key = `${xValue}|${point.netWorth}`;
-    const existing = markerByPoint.get(key);
-    if (!existing) {
-      markerByPoint.set(key, { point, labels: [label], color });
-      return;
-    }
-
-    existing.labels.push(label);
-  });
-
-  const dateIndexByDate = new Map(cashflowData.map((item, index) => [item?.[NET_WORTH_X_KEY] || item.date, index]));
-  const markerEntries = Array.from(markerByPoint.values()).map((marker) => {
-    const isHigh = marker.labels.includes('High');
-    const positionIndex = dateIndexByDate.get(marker.point?.[NET_WORTH_X_KEY] || marker.point.date) ?? 0;
-    const side = isHigh
-      ? 'top'
-      : positionIndex > cashflowData.length * 0.65
-        ? 'left'
-        : 'right';
-
-    return {
-      ...marker,
-      side,
-      offsetY: 0,
-    };
-  });
-
-  const latestMarker = markerEntries.find((item) => item.labels.includes('Latest'));
-  const lowMarker = markerEntries.find((item) => item.labels.includes('Low'));
-  const netWorthSpan = Math.max(
-    1,
-    (highPoint?.netWorth ?? 0) - (lowPoint?.netWorth ?? 0),
-  );
-  const isLatestLowTooClose = latestMarker
-    && lowMarker
-    && latestMarker !== lowMarker
-    && Math.abs(latestMarker.point.netWorth - lowMarker.point.netWorth) < netWorthSpan * 0.09;
-
-  if (isLatestLowTooClose) {
-    latestMarker.offsetY = -16;
-    lowMarker.offsetY = 16;
-  }
 
   return (
     <div className="portfolioCharts">
       <article className="chartCard">
         <h2>{t('netWorth.netWorthTrend')}</h2>
         <div className="chartArea compact">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cashflowData} margin={{ top: 28, right: 12, left: isSmallScreen ? 6 : 24, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey={NET_WORTH_X_KEY} tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-              <YAxis
-                domain={netWorthDomain}
-                tick={isSmallScreen ? false : { fill: '#94a3b8', fontSize: 12 }}
-                tickLine={!isSmallScreen}
-                tickFormatter={isSmallScreen ? undefined : (value) => formatMaybeHidden(hideValues, formatValue, Number(value) || 0, '')}
-                width={isSmallScreen ? 8 : 120}
-                tickMargin={isSmallScreen ? 0 : 6}
-              />
-              <Tooltip
-                formatter={(value) => [
-                  formatMaybeHidden(hideValues, formatValue, Number(value) || 0, t('app.hidden')),
-                  t('netWorth.tooltipNetWorth'),
-                ]}
-                labelFormatter={(label, payload) => {
-                  const point = payload?.[0]?.payload;
-                  return formatLocalDateTime(point?.recordedAtUtc || point?.dateTimeLabel || label);
-                }}
-                contentStyle={{
-                  backgroundColor: '#0b1220',
-                  border: '1px solid #334155',
-                  borderRadius: '10px',
-                  color: '#e2e8f0',
-                }}
-                labelStyle={{ color: '#f8fafc' }}
-                itemStyle={{ color: '#e2e8f0' }}
-              />
-              <Line type="monotone" dataKey="netWorth" stroke="#22d3ee" strokeWidth={2.5} dot={false} />
-              {markerEntries.map((marker) => (
-                <ReferenceDot
-                  key={`${marker.point?.[NET_WORTH_X_KEY] || marker.point.date}-${marker.point.netWorth}`}
-                  x={marker.point?.[NET_WORTH_X_KEY] || marker.point.date}
-                  y={marker.point.netWorth}
-                  r={5}
-                  fill={marker.color}
-                  stroke="#0b1220"
-                  strokeWidth={2}
-                  className={marker.labels.includes('Latest') ? 'trendDot trendDotLatest' : 'trendDot'}
-                  label={(props) => (
-                    <MarkerLabel
-                      viewBox={props.viewBox}
-                      color={marker.color}
-                      side={marker.side}
-                      offsetY={marker.offsetY}
-                      value={`${marker.labels
-                        .map((lbl) => {
-                          if (lbl === 'Latest') return t('netWorth.chartMarkerLatest');
-                          if (lbl === 'High') return t('netWorth.chartMarkerHigh');
-                          if (lbl === 'Low') return t('netWorth.chartMarkerLow');
-                          return lbl;
-                        })
-                        .join('/')} ${formatMaybeHidden(hideValues, formatValue, marker.point.netWorth, t('app.hidden'))}`}
-                    />
-                  )}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          <TrendLineChartWithMarkers
+            data={cashflowData}
+            xDataKey={NET_WORTH_X_KEY}
+            yDataKey="netWorth"
+            hideValues={hideValues}
+            formatDisplayValue={(v) => formatValue(v)}
+            tooltipSeriesName={t('netWorth.tooltipNetWorth')}
+            stroke="#22d3ee"
+            strokeWidth={2.5}
+            yDomain={netWorthDomain}
+            tooltipUseDateTime
+          />
         </div>
       </article>
 
@@ -317,7 +113,7 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={derivedSeries} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="date" tickFormatter={formatDateOnlyLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+              <XAxis dataKey="date" tickFormatter={formatTrendXAxisLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <YAxis tickFormatter={(value) => `${value}%`} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <Tooltip
                 content={<PeriodReturnTooltip hideValues={hideValues} baseCurrency={baseCurrency} t={t} />}

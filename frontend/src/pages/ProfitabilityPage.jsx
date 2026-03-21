@@ -4,8 +4,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Rectangle,
   ReferenceLine,
   ResponsiveContainer,
@@ -13,10 +11,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import TrendLineChartWithMarkers from '../components/charts/TrendLineChartWithMarkers.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import useApiData from '../hooks/useApiData.js';
-import { formatCurrencyValue, formatMoney, formatPercent } from '../utils/formatters.js';
+import { formatBaseCurrency, formatCurrencyValue, formatMaybeHidden, formatPercent } from '../utils/formatters.js';
 
 function todayDateOnly() {
   return new Date().toISOString().slice(0, 10);
@@ -33,9 +32,8 @@ function subtractMonthsDateOnly(dateOnly, months) {
   return d.toISOString().slice(0, 10);
 }
 
-function formatVal(hideValues, v) {
-  if (hideValues) return '—';
-  return formatMoney(v);
+function formatValBase(hideValues, v, baseCurrency) {
+  return formatMaybeHidden(hideValues, (x) => formatBaseCurrency(x, baseCurrency), Number(v) || 0);
 }
 
 function formatValByCurrency(hideValues, v, currency) {
@@ -79,7 +77,8 @@ const NEG_BAR = '#fb7185';
 
 export default function ProfitabilityPage({ hideValues }) {
   const { t } = useLanguage();
-  const { portfolio: portfolioSnapshot, isLoading: isDashboardLoading, error: dashboardError } = useDashboard();
+  const { portfolio: portfolioSnapshot, netWorth, isLoading: isDashboardLoading, error: dashboardError } = useDashboard();
+  const baseCurrency = netWorth?.overview?.baseCurrency ?? 'USD';
 
   const [timeframe, setTimeframe] = useState('since'); // since | ytd | 1m | 3m | 1y | custom
   const [customFrom, setCustomFrom] = useState('');
@@ -173,102 +172,85 @@ export default function ProfitabilityPage({ hideValues }) {
           <>
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.yourPortfolio')}</h2>
-              <div className="profitabilityCards">
-                <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.realizedPl')}</span>
-                      <span className={`profitabilityCardValue ${Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}`}>
-                    {formatVal(hideValues, summary.realized?.pnl)}
-                  </span>
-                      <span className={`profitabilityCardSub ${Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatPercent(summary.realized?.pct ?? 0)}
-                      </span>
-                </div>
-                <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.winRate')}</span>
-                  <span className="profitabilityValueWithInfo">
-                    <span className="profitabilityCardValue">{hideValues ? '—' : formatPercent(summary.winStats?.winRate ?? 0)}</span>
+              <div className="kpiRow kpiRow--items-5">
+                <article className="miniKpi">
+                  <p>{t('profitability.realizedPl')}</p>
+                  <h3 className={Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}>
+                    {formatValBase(hideValues, summary.realized?.pnl, baseCurrency)}
+                  </h3>
+                  <small className={Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}>
+                    {hideValues ? t('app.hidden') : formatPercent(summary.realized?.pct ?? 0)}
+                  </small>
+                </article>
+                <article className="miniKpi">
+                  <p className="miniKpiLabelRow">
+                    <span>{t('profitability.winRate')}</span>
                     <span className="profitabilityInfoWrap">
-                      <button
-                        type="button"
-                        className="profitabilityInfoDot"
-                        aria-label={t('profitability.winRateHelp')}
-                      >
+                      <button type="button" className="profitabilityInfoDot" aria-label={t('profitability.winRateHelp')}>
                         ⓘ
                       </button>
                       <span className="profitabilityTooltip" role="tooltip">
                         {t('profitability.winRateHelp')}
                       </span>
                     </span>
-                  </span>
-                </div>
-                <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.profitFactor')}</span>
-                  <span className="profitabilityValueWithInfo">
-                    <span className="profitabilityCardValue">
-                      {hideValues ? '—' : (summary.winStats?.profitFactor == null ? '—' : Number(summary.winStats.profitFactor).toFixed(2))}
-                    </span>
+                  </p>
+                  <h3>
+                    {formatMaybeHidden(hideValues, (x) => formatPercent(x), Number(summary.winStats?.winRate) || 0, t('app.hidden'))}
+                  </h3>
+                </article>
+                <article className="miniKpi">
+                  <p className="miniKpiLabelRow">
+                    <span>{t('profitability.profitFactor')}</span>
                     <span className="profitabilityInfoWrap">
-                      <button
-                        type="button"
-                        className="profitabilityInfoDot"
-                        aria-label={t('profitability.profitFactorHelp')}
-                      >
+                      <button type="button" className="profitabilityInfoDot" aria-label={t('profitability.profitFactorHelp')}>
                         ⓘ
                       </button>
                       <span className="profitabilityTooltip" role="tooltip">
                         {t('profitability.profitFactorHelp')}
                       </span>
                     </span>
-                  </span>
-                </div>
-                <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.avgWin')}</span>
-                  <span className={`profitabilityCardValue ${Number(summary.winStats?.avgWin) >= 0 ? 'pos' : 'neg'}`}>
-                    {formatVal(hideValues, summary.winStats?.avgWin)}
-                  </span>
-                </div>
-                <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">{t('profitability.avgLoss')}</span>
-                  <span className={`profitabilityCardValue ${Number(summary.winStats?.avgLoss) >= 0 ? 'pos' : 'neg'}`}>
-                    {formatVal(hideValues, summary.winStats?.avgLoss)}
-                  </span>
-                </div>
+                  </p>
+                  <h3>
+                    {hideValues
+                      ? t('app.hidden')
+                      : summary.winStats?.profitFactor == null
+                        ? '—'
+                        : Number(summary.winStats.profitFactor).toFixed(2)}
+                  </h3>
+                </article>
+                <article className="miniKpi">
+                  <p>{t('profitability.avgWin')}</p>
+                  <h3 className={Number(summary.winStats?.avgWin) >= 0 ? 'pos' : 'neg'}>
+                    {formatValBase(hideValues, summary.winStats?.avgWin, baseCurrency)}
+                  </h3>
+                </article>
+                <article className="miniKpi">
+                  <p>{t('profitability.avgLoss')}</p>
+                  <h3 className={Number(summary.winStats?.avgLoss) >= 0 ? 'pos' : 'neg'}>
+                    {formatValBase(hideValues, summary.winStats?.avgLoss, baseCurrency)}
+                  </h3>
+                </article>
               </div>
             </section>
 
-            {/* Performance over time */}
-            <section className="profitabilitySection">
-              <h2 className="profitabilitySectionTitle">{t('profitability.performanceOverTime')}</h2>
-              <p className="profitabilitySectionDesc">{t('profitability.cumulativeRealized')}</p>
-              <div className="profitabilityChartArea profitabilityChartArea--md">
-                <ResponsiveContainer>
-                  <LineChart data={monthlyStacked}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-                    <XAxis dataKey="month" tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value) => [
-                        formatVal(hideValues, Number(value) || 0),
-                        t('profitability.cumulativeRealized'),
-                      ]}
-                      labelFormatter={(label) => String(label ?? '')}
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      labelStyle={{ color: '#f8fafc' }}
-                      itemStyle={{ color: '#e2e8f0' }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="cumulativeRealized"
-                      name={t('profitability.cumulativeRealized')}
-                      stroke="#f59e0b"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 5, fill: '#f59e0b', stroke: '#0b1220', strokeWidth: 2 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
+            <div className="portfolioCharts portfolioCharts--single">
+              <article className="chartCard">
+                <h2>{t('profitability.performanceOverTime')}</h2>
+                <p className="chartCardSubtitle">{t('profitability.cumulativeRealized')}</p>
+                <div className="chartArea compact">
+                  <TrendLineChartWithMarkers
+                    data={monthlyStacked}
+                    xDataKey="month"
+                    yDataKey="cumulativeRealized"
+                    hideValues={hideValues}
+                    formatDisplayValue={(v) => formatBaseCurrency(v, baseCurrency)}
+                    tooltipSeriesName={t('profitability.cumulativeRealized')}
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                  />
+                </div>
+              </article>
+            </div>
 
             {/* Attribution (realized only) */}
             <section className="profitabilitySection">
