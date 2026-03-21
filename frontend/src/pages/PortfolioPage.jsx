@@ -8,10 +8,12 @@ import AddStockPositionModal from '../components/portfolio/AddStockPositionModal
 import EditCryptoPositionModal from '../components/portfolio/EditCryptoPositionModal.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
+import { useToast } from '../contexts/ToastContext.jsx';
 import { deleteJson } from '../utils/api.js';
 
 export default function PortfolioPage({ hideValues }) {
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const { portfolio: data, netWorth, isLoading, error, refresh, mutate } = useDashboard();
   const [isAddCryptoOpen, setIsAddCryptoOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
@@ -128,7 +130,7 @@ export default function PortfolioPage({ hideValues }) {
                       await deleteJson(`/api/portfolio/positions/${encodeURIComponent(position.symbol)}`);
                       refresh?.({ mode: 'silent' });
                     } catch (err) {
-                      window.alert(err?.message || t('errors.failedDeletePosition'));
+                      showToast(err?.message || t('errors.failedDeletePosition'));
                       refresh?.({ mode: 'silent' });
                     } finally {
                       setIsDeletingHolding(false);

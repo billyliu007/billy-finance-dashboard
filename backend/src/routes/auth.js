@@ -1,6 +1,6 @@
 import { Router } from 'express';
+import { asyncHandler } from '../lib/asyncHandler.js';
 import { getErrorMessage, redirectToFrontend } from '../lib/requestHelpers.js';
-import { ApiError } from '../lib/ApiError.js';
 import {
   buildAppleAuthUrl,
   buildGoogleAuthUrl,
@@ -90,8 +90,9 @@ router.post('/logout', async (_req, res) => {
   return res.status(200).json({ ok: true });
 });
 
-router.post('/demo', async (_req, res, next) => {
-  try {
+router.post(
+  '/demo',
+  asyncHandler(async (_req, res) => {
     const demoUser = await resolveOrCreateDemoUser();
     const sessionToken = await createUserSession(demoUser.id);
     res.setHeader('Set-Cookie', buildSessionCookie(sessionToken));
@@ -106,9 +107,7 @@ router.post('/demo', async (_req, res, next) => {
         baseCurrency: demoUser.baseCurrency || 'USD',
       },
     });
-  } catch (error) {
-    next(new ApiError(getErrorMessage(error), 500));
-  }
-});
+  }),
+);
 
 export default router;

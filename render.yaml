@@ -3,6 +3,10 @@
 # Backend and local dev use the same database (schema and data already in place).
 # Migrations are manual: run `npm run db:migrate` from repo root (with DATABASE_URL set)
 # when you add or change migrations; no pre-deploy migration step.
+#
+# Postgres / Neon: use a pooled connection string when available; optional PGPOOL_MAX in
+# the env group caps concurrent clients (see docs/ARCHITECTURE.md). Repositories use
+# withTransaction() / query() from backend/src/db/client.js for DRY connection handling.
 
 services:
   # Backend API (Node)
@@ -21,6 +25,9 @@ services:
         sync: false
       - key: DATABASE_SSL
         value: "true"
+      # Optional: cap pg pool size per instance (Neon / small max_connections)
+      # - key: PGPOOL_MAX
+      #   value: "5"
 
       # App & auth
       - key: FRONTEND_BASE_URL
@@ -86,6 +93,9 @@ services:
         sync: false
       - key: DATABASE_SSL
         value: "true"
+      # Optional: cap pg pool size per instance (Neon / small max_connections)
+      # - key: PGPOOL_MAX
+      #   value: "5"
       - key: FINNHUB_API_KEY
         sync: false
       - key: FX_PROVIDER

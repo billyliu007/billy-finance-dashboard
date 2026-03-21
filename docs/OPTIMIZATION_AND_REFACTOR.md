@@ -2,6 +2,8 @@
 
 Based on the current logic, these are the main areas that could be improved. None are urgent; the app works. Prioritise by impact and time.
 
+For **layering, Neon vs `pg` Pool, dashboard state, and YAML/CI alignment**, see **[`ARCHITECTURE.md`](./ARCHITECTURE.md)**.
+
 ---
 
 ## Backend
@@ -36,31 +38,15 @@ Both depend on `isStockAsset` / `isCryptoAsset` and the same quote maps. Behavio
 
 ---
 
-### 3. **Large `financeRepository.js`**
+### 3. **Large `financeRepository.js`** — done
 
-The file holds cash, portfolio, net worth history, currencies, Coinbase products, and US stock symbols. It’s a lot of concerns in one module.
-
-**Suggestion:** Split by domain (when you touch that area):
-
-- `cashRepository.js` – cash CRUD, list.
-- `portfolioRepository.js` – positions, create/update/delete, Coinbase product lookup.
-- `netWorthRepository.js` – net worth history list/replace.
-- Keep shared helpers (e.g. `query`, `withDbClient`) in `db/client.js` or a thin `repositories/common.js` if needed.
-
-**Impact:** Easier to navigate and test. No behaviour change. Medium effort.
+Split into `currencyRepository.js`, `cashRepository.js`, `netWorthHistoryRepository.js`, `marketReferenceRepository.js`, and `portfolioRepository.js`. `financeRepository.js` re-exports all for a stable import path.
 
 ---
 
-### 4. **Repeated error handling in `app.js`**
+### 4. **Repeated error handling in routes** — done
 
-Many routes do the same thing: `try { ... } catch (error) { return res.status(500).json({ message: getErrorMessage(error) }); }` (or 400/409).
-
-**Suggestion:** Use a central error middleware and throw or pass errors from route handlers:
-
-- Middleware that reads `err.statusCode` (or a custom property) and `getErrorMessage(err)` and sends the right JSON.
-- Route handlers `throw` or `next(err)` instead of repeating `res.status(...).json(...)`.
-
-**Impact:** Less boilerplate; consistent error responses. Low–medium effort.
+`asyncHandler` in `lib/asyncHandler.js` wraps async handlers so rejections reach the global error middleware. Portfolio-style status mapping uses `lib/mapRouteErrors.js`.
 
 ---
 
@@ -89,11 +75,9 @@ Not necessary at current scale.
 
 ---
 
-### 7. **Error feedback after mutations**
+### 7. **Error feedback after mutations** — done
 
-Some flows use `window.alert(err?.message)` (e.g. delete cash, delete position). Works but is not ideal for accessibility or consistency.
-
-**Suggestion:** Use a small toast or inline error state (e.g. context or a shared hook) so success/error messages are consistent and non-blocking. Low priority.
+Delete cash / position / transaction errors use `ToastProvider` + `useToast()` (`frontend/src/contexts/ToastContext.jsx`) instead of `window.alert`.
 
 ---
 
@@ -105,6 +89,12 @@ Some flows use `window.alert(err?.message)` (e.g. delete cash, delete position).
 ---
 
 ## Database
+
+### 8b. **Connection pool (Postgres / Neon)**
+
+- The app uses **`pg` `Pool`** with a configurable max via **`PGPOOL_MAX`** (default `10`), plus idle and connection timeouts in `backend/src/db/client.js`.
+- On **Neon** or other hosted Postgres with low `max_connections`, use a **pooled** connection URL and set **`PGPOOL_MAX`** low enough that `(web instances + cron) × PGPOOL_MAX` stays under the database limit.
+- **`@neondatabase/serverless`** is for edge/serverless workers without a long-lived pool; the Render backend should keep using **`pg`** (see `ARCHITECTURE.md`).
 
 ### 9. **Indexes**
 
@@ -128,14 +118,12 @@ No extra indexes are required for current query patterns. If you add queries tha
 
 | Area        | Change                                      | Impact              | Effort   |
 |------------|---------------------------------------------|---------------------|----------|
-| Backend    | Batch Coinbase product lookup in replace    | Fewer DB round-trips| Low      |
-| Backend    | Shared position price-resolution helper      | Less duplication    | Medium   |
-| Backend    | Split financeRepository by domain            | Clarity, testability| Medium   |
-| Backend    | Central error middleware in app.js           | Less boilerplate    | Low–Med  |
-| Frontend   | Toast / shared error state for mutations    | Better UX           | Low      |
+| Backend    | Batch Coinbase product lookup in replace    | Fewer DB round-trips| Low ✓    |
+| Backend    | Shared position price-resolution helper      | Less duplication    | Medium ✓ |
+| Backend    | Split financeRepository by domain            | Clarity, testability| Medium ✓ |
+| Backend    | `asyncHandler` + global error middleware     | Less boilerplate    | Low ✓    |
+| Frontend   | Toast / shared error state for mutations    | Better UX           | Low ✓    |
 | DB         | No change needed for current usage          | –                   | –        |
-
-Recommended order if you do them: (1) N+1 fix, (4) error middleware, (2) shared price resolution, then (3) repository split when you next work in that code.
 
 ---
 
@@ -144,5 +132,10 @@ Recommended order if you do them: (1) N+1 fix, (4) error middleware, (2) shared 
 - **N+1 fix:** `findCoinbaseQuoteCurrenciesByIds` added; `replacePortfolioPositions` batches Coinbase product lookup.
 - **Error middleware:** Central `app.use((err, _req, res, _next) => ...)`; routes use `next(error)` and `error.statusCode` (400/404/409/500).
 - **Shared price resolution:** `lib/priceResolution.js` exports `resolvePositionPrice(asset, stockQuotes, cryptoQuotes)`; `portfolioService` and `netWorthService` use it.
+- **`withTransaction` (DRY):** `backend/src/db/client.js` exposes `withTransaction` for `BEGIN`/`COMMIT`/`ROLLBACK`; domain repositories (via `financeRepository.js` barrel) and DB scripts use it instead of duplicated try/catch blocks.
+- **Repository split:** `currencyRepository.js`, `cashRepository.js`, `netWorthHistoryRepository.js`, `marketReferenceRepository.js`, `portfolioRepository.js`; `financeRepository.js` re-exports all.
+- **Routes:** `lib/asyncHandler.js` + `lib/mapRouteErrors.js` for consistent `ApiError` status codes.
+- **Frontend toasts:** `contexts/ToastContext.jsx` for mutation errors (replaces `window.alert` on key delete flows).
+- **CI:** `.github/workflows/ci.yml` runs `npm test --prefix backend` before the frontend build.
 
 **Revert if needed:** `git reset --hard pre-refactor-optimization` (discards refactor commit(s)) or `git revert <commit>` to undo the refactor while keeping history.

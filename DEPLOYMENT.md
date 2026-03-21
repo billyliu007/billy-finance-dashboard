@@ -39,8 +39,9 @@ Set secrets in a **Render Environment Group** (e.g. `netpulse-secrets`) and atta
 | Variable | Required | Description |
 |----------|----------|-------------|
 | **Database** | | |
-| `DATABASE_URL` | Yes | Postgres connection string (same as local dev). |
+| `DATABASE_URL` | Yes | Postgres connection string (same as local dev). Prefer Neon **pooled** host when using Neon. |
 | `DATABASE_SSL` | No | `true` (default) or `false`. Use `true` for Neon/cloud Postgres. |
+| `PGPOOL_MAX` | No | Max clients per process in the `pg` pool (default `10`). Lower on Neon free tier or when running many instances—see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). |
 | **App & auth** | | |
 | `DATA_SOURCE` | No | `db` (default). Leave as in `render.yaml`. |
 | `FRONTEND_BASE_URL` | Yes | Frontend origin for CORS and redirects, e.g. `https://app.myworthtrack.com` (no trailing slash). |

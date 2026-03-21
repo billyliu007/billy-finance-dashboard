@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { withDbClient } from '../db/client.js';
+import { withTransaction } from '../db/client.js';
 
 const COINBASE_PRODUCTS_URL = 'https://api.exchange.coinbase.com/products';
 
@@ -50,15 +50,13 @@ async function upsertProducts(products) {
     );
   const now = new Date().toISOString();
 
-  await withDbClient(async (client) => {
-    await client.query('BEGIN');
-    try {
-      // Always keep only USD/USDT-quoted products in the table.
-      await client.query(
-        `DELETE FROM coinbase_products
-         WHERE quote_currency NOT IN ('USDC', 'USDT')`,
-      );
-      const sql = `
+  await withTransaction(async (client) => {
+    // Always keep only USD/USDT-quoted products in the table.
+    await client.query(
+      `DELETE FROM coinbase_products
+       WHERE quote_currency NOT IN ('USDC', 'USDT')`,
+    );
+    const sql = `
         INSERT INTO coinbase_products (
           product_id,
           base_currency,
@@ -77,21 +75,15 @@ async function upsertProducts(products) {
           updated_at = EXCLUDED.updated_at;
       `;
 
-      for (const row of rows) {
-        await client.query(sql, [
-          row.productId,
-          row.baseCurrency,
-          row.quoteCurrency,
-          row.status,
-          JSON.stringify(row.raw ?? {}),
-          now,
-        ]);
-      }
-
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
+    for (const row of rows) {
+      await client.query(sql, [
+        row.productId,
+        row.baseCurrency,
+        row.quoteCurrency,
+        row.status,
+        JSON.stringify(row.raw ?? {}),
+        now,
+      ]);
     }
   });
 

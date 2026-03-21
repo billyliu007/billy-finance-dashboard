@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Router } from 'express';
-import { ApiError } from '../lib/ApiError.js';
-import { getErrorMessage } from '../lib/requestHelpers.js';
+import { asyncHandler } from '../lib/asyncHandler.js';
 import { listPortfolioPositions } from '../repositories/financeRepository.js';
 import { buildProviderDiagnosticsForPositions } from '../services/marketDataService.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -19,8 +18,9 @@ function resolveBackendVersion() {
 const router = Router();
 router.use(requireAuth);
 
-router.get('/status', async (req, res, next) => {
-  try {
+router.get(
+  '/status',
+  asyncHandler(async (req, res) => {
     const positions = await listPortfolioPositions(req.auth.user.userId);
     const providerDiagnostics = await buildProviderDiagnosticsForPositions(positions);
     res.json({
@@ -38,9 +38,7 @@ router.get('/status', async (req, res, next) => {
       },
       providerDiagnostics,
     });
-  } catch (error) {
-    next(new ApiError(getErrorMessage(error), 500));
-  }
-});
+  }),
+);
 
 export default router;

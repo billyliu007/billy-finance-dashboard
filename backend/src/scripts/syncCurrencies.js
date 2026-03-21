@@ -3,7 +3,7 @@
  * Run: node src/scripts/syncCurrencies.js (from backend directory)
  */
 import 'dotenv/config';
-import { withDbClient } from '../db/client.js';
+import { withTransaction } from '../db/client.js';
 
 const FRANKFURTER_CURRENCIES_URL = 'https://api.frankfurter.app/currencies';
 
@@ -19,7 +19,7 @@ async function run() {
     ([code, name]) => typeof code === 'string' && code.length === 3 && typeof name === 'string',
   );
 
-  await withDbClient(async (client) => {
+  await withTransaction(async (client) => {
     for (const [code, name] of entries) {
       await client.query(
         `INSERT INTO currencies (code, name, active, updated_at)

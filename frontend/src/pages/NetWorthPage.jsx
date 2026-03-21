@@ -9,10 +9,12 @@ import PerformanceCharts from '../components/networth/PerformanceCharts.jsx';
 import PerformanceKpis from '../components/networth/PerformanceKpis.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
+import { useToast } from '../contexts/ToastContext.jsx';
 import { putJson } from '../utils/api.js';
 
 function OverviewPanel({ hideValues, overview, isLoading, error, refresh, mutate }) {
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const [isAddCashOpen, setIsAddCashOpen] = useState(false);
   const [isTransferCashOpen, setIsTransferCashOpen] = useState(false);
   const [editCash, setEditCash] = useState(null);
@@ -63,7 +65,7 @@ function OverviewPanel({ hideValues, overview, isLoading, error, refresh, mutate
       setCashToDelete(null);
       refresh?.({ mode: 'silent' });
     } catch (err) {
-      window.alert(err?.message || t('errors.failedDelete'));
+      showToast(err?.message || t('errors.failedDelete'));
     } finally {
       setIsDeleting(false);
     }

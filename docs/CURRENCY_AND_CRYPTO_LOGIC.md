@@ -11,7 +11,7 @@ Summary of how **cash**, **currencies**, and **crypto assets** (including USDT/U
 - **Table:** `cash`
 - **Columns:** `id`, `user_id`, `currency`, `name`, `balance`, `updated_at`
 - **Currency:** Stored as **uppercase** (e.g. `USD`, `CNY`). No separate “quote” or “stablecoin” flag.
-- **Source:** `backend/src/repositories/financeRepository.js` – `listCashComponents`, `replaceCashComponents`
+- **Source:** `backend/src/repositories/cashRepository.js` – `listCashComponents`, `replaceCashComponents` (also re-exported from `financeRepository.js`)
 
 ### Currencies available for cash
 
@@ -50,7 +50,7 @@ Summary of how **cash**, **currencies**, and **crypto assets** (including USDT/U
 ### How crypto is chosen (USDT/USDC only)
 
 - **Add crypto:** User picks a **Coinbase product** from `GET /api/market/coinbase-products?q=...`.
-- **Backend:** `listCoinbaseProducts()` in `financeRepository.js` filters:
+- **Backend:** `listCoinbaseProducts()` in `marketReferenceRepository.js` filters:
   - `WHERE quote_currency IN ('USDC', 'USDT')`
 - So **only USDC/USDT‑quoted pairs** are allowed (e.g. BTC-USDT, ETH-USDC). No “raw” BTC or USD-only product.
 - **Create position:** `createCryptoPositionFromCoinbaseProduct()` – checks `product.quoteCurrency` is USDC or USDT; stores `symbol = product.baseCurrency` (e.g. `BTC`), `market_instrument_id = product.productId` (e.g. `BTC-USDT`).
@@ -107,11 +107,11 @@ Summary of how **cash**, **currencies**, and **crypto assets** (including USDT/U
 
 | Concern | Files |
 |--------|--------|
-| Cash CRUD / list | `backend/src/repositories/financeRepository.js` (cash, listCashComponents, replaceCashComponents) |
-| Currency list | `backend/src/repositories/financeRepository.js` (listCurrencies), `backend/src/db/migrate.js` (currency rows) |
+| Cash CRUD / list | `backend/src/repositories/cashRepository.js` (`listCashComponents`, `replaceCashComponents`) |
+| Currency list | `backend/src/repositories/currencyRepository.js` (`listCurrencies`), `backend/src/db/migrate.js` (currency rows) |
 | USDT/USDC → USD | `backend/src/lib/number.js` (normalizeCurrencyCode) |
 | Net worth aggregation | `backend/src/services/netWorthService.js` (buildDetailRows, aggregateComputedTotals, mapCashDetailRowsToTableRows) |
-| Crypto positions (USDC/USDT only) | `backend/src/repositories/financeRepository.js` (listCoinbaseProducts, createCryptoPositionFromCoinbaseProduct) |
+| Crypto positions (USDC/USDT only) | `marketReferenceRepository.js` (`listCoinbaseProducts`), `portfolioRepository.js` (`createCryptoPositionFromCoinbaseProduct`) |
 | Crypto pricing | `backend/src/services/marketDataService.js` (getCryptoQuoteMapForPositions), `backend/src/lib/crypto.js` |
 | Cash UI (currency dropdown) | `frontend/src/components/networth/AddCashModal.jsx`, `EditCashModal.jsx` (useApiData('/api/currencies')) |
 | Currency display | `frontend/src/utils/formatters.js` (normalizeCurrencyCode, formatCurrencyValue) |

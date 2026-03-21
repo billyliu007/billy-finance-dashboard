@@ -1,0 +1,97 @@
+import { query } from '../db/client.js';
+
+/**
+ * Search US stock symbols by symbol or security name (excludes test issues).
+ * @param {{ queryText?: string, limit?: number }} [options]
+ * @returns {Promise<object[]>}
+ */
+export async function listUsStockSymbols({ queryText, limit = 50 } = {}) {
+  const trimmed = String(queryText || '').trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const like = `%${trimmed}%`;
+  const result = await query(
+    `SELECT symbol,
+            security_name AS "securityName",
+            exchange
+     FROM us_stock_symbols
+     WHERE (symbol ILIKE $1 OR security_name ILIKE $1)
+       AND COALESCE(test_issue, FALSE) = FALSE
+     ORDER BY symbol ASC
+     LIMIT $2`,
+    [like, Math.max(1, Math.min(Number(limit) || 50, 200))],
+  );
+  return result.rows;
+}
+
+/**
+ * List Coinbase products (USDC/USDT) matching query.
+ * @param {{ queryText?: string, limit?: number }} [options]
+ * @returns {Promise<object[]>}
+ */
+export async function listCoinbaseProducts({ queryText = '', limit = 200 } = {}) {
+  const q = String(queryText || '').trim().toUpperCase();
+  const safeLimit = Math.max(1, Math.min(500, Number(limit) || 200));
+  const result = await query(
+    `SELECT product_id AS "productId",
+            base_currency AS "baseCurrency",
+            quote_currency AS "quoteCurrency",
+            status,
+            updated_at AS "updatedAt"
+     FROM coinbase_products
+     WHERE quote_currency IN ('USDC', 'USDT')
+       AND (
+         $1 = ''
+         OR product_id ILIKE '%' || $1 || '%'
+         OR base_currency ILIKE '%' || $1 || '%'
+       )
+     ORDER BY base_currency ASC, quote_currency ASC
+     LIMIT ${safeLimit}`,
+    [q],
+  );
+  return result.rows;
+}
+
+/**
+ * Fetch a single Coinbase product by id.
+ * @param {string} productId
+ * @returns {Promise<object|null>}
+ */
+export async function findCoinbaseProduct(productId) {
+  const id = String(productId || '').trim().toUpperCase();
+  if (!id) {
+    return null;
+  }
+  const result = await query(
+    `SELECT product_id AS "productId",
+            base_currency AS "baseCurrency",
+            quote_currency AS "quoteCurrency",
+            status
+     FROM coinbase_products
+     WHERE product_id = $1`,
+    [id],
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Fetch multiple Coinbase products by ids; returns Map(productId -> quoteCurrency).
+ * Use for batch lookup to avoid N+1 (e.g. in replacePortfolioPositions).
+ * @param {string[]} productIds
+ * @returns {Promise<Map<string, string>>}
+ */
+export async function findCoinbaseQuoteCurrenciesByIds(productIds) {
+  const ids = [...new Set((productIds || []).map((id) => String(id || '').trim().toUpperCase()).filter(Boolean))];
+  if (ids.length === 0) {
+    return new Map();
+  }
+  const result = await query(
+    `SELECT product_id, quote_currency
+     FROM coinbase_products
+     WHERE product_id = ANY($1::text[])`,
+    [ids],
+  );
+  return new Map(result.rows.map((r) => [r.product_id, r.quote_currency]));
+}

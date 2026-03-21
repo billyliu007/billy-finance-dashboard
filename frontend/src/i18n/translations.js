@@ -264,6 +264,7 @@ export const translations = {
       failedClearSalesHistory: 'Failed to clear sales history.',
       failedUpdatePosition: 'Failed to update position.',
       failedDeletePosition: 'Failed to delete position.',
+      failedDeleteTransaction: 'Failed to delete transaction.',
     },
     ai: {
       title: 'AI analysis',
@@ -645,6 +646,7 @@ export const translations = {
       failedClearSalesHistory: '清空已售历史失败。',
       failedUpdatePosition: '更新持仓失败。',
       failedDeletePosition: '删除持仓失败。',
+      failedDeleteTransaction: '删除交易记录失败。',
     },
     ai: {
       title: 'AI 分析',

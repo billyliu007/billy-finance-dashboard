@@ -20,6 +20,8 @@ A personal finance dashboard with multi-user support (net worth, portfolio holdi
 - `backend`: Express API + PostgreSQL
 - `frontend`: React (Vite)
 
+**Architecture & DB (Neon, layers, dashboard state):** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · **Refactors / perf backlog:** [`docs/OPTIMIZATION_AND_REFACTOR.md`](docs/OPTIMIZATION_AND_REFACTOR.md)
+
 ## Local development
 
 ### 1) Install dependencies
@@ -78,7 +80,8 @@ npm run dev
 - `GET /api/health`
 - `GET /api/auth/session`, `POST /api/auth/logout`
 - `GET /api/auth/providers`, `GET /api/auth/{google,apple}/start`, `GET /api/auth/{google,apple}/callback`
-- `GET /api/dashboard/net-worth`, `GET /api/dashboard/portfolio`
+- `GET /api/dashboard` (net worth + portfolio + benchmarks in one payload)
+- `GET /api/trading-performance` (optional `?from=&to=` for analytics range)
 - `GET /api/market/coinbase-products`, `GET /api/market/us-stock-symbols`
 - `POST /api/portfolio/positions/crypto`, `POST /api/portfolio/positions/stock`
 - `GET /api/onboarding/status`, `POST /api/onboarding/initialize`
@@ -87,6 +90,10 @@ npm run dev
 Cron/internal:
 
 - `POST /api/internal/snapshot/daily` (requires `x-cron-token`)
+
+## CI
+
+On push/PR to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs backend unit tests (`npm test --prefix backend`) and builds the frontend.
 
 ## Deployment
 

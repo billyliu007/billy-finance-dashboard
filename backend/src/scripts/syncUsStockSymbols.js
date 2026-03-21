@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { withDbClient } from '../db/client.js';
+import { withTransaction } from '../db/client.js';
 
 const NASDAQ_LISTED_URL = 'https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt';
 const OTHER_LISTED_URL = 'https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt';
@@ -131,27 +131,20 @@ async function run() {
   const now = new Date().toISOString();
   const upsertSql = buildUpsertSql();
 
-  await withDbClient(async (client) => {
-    await client.query('BEGIN');
-    try {
-      for (const row of combined) {
-        await client.query(upsertSql, [
-          row.symbol,
-          row.securityName,
-          row.exchange,
-          row.marketCategory,
-          Boolean(row.etf),
-          Boolean(row.testIssue),
-          row.financialStatus,
-          row.roundLotSize,
-          JSON.stringify(row.raw ?? {}),
-          now,
-        ]);
-      }
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
+  await withTransaction(async (client) => {
+    for (const row of combined) {
+      await client.query(upsertSql, [
+        row.symbol,
+        row.securityName,
+        row.exchange,
+        row.marketCategory,
+        Boolean(row.etf),
+        Boolean(row.testIssue),
+        row.financialStatus,
+        row.roundLotSize,
+        JSON.stringify(row.raw ?? {}),
+        now,
+      ]);
     }
   });
 

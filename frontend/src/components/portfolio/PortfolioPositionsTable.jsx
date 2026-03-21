@@ -7,6 +7,7 @@ import {
   formatQty,
 } from '../../utils/formatters.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
+import { useToast } from '../../contexts/ToastContext.jsx';
 import { deleteJson, fetchJson } from '../../utils/api.js';
 import RecordPurchaseModal from './RecordPurchaseModal.jsx';
 import RecordSaleModal from './RecordSaleModal.jsx';
@@ -23,6 +24,7 @@ export default function PortfolioPositionsTable({
   onRefresh,
 }) {
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const [showMobileDetails] = useState(true);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set());
@@ -211,7 +213,7 @@ export default function PortfolioPositionsTable({
       await loadTransactionsFor(sym);
       onRefresh?.({ mode: 'silent' });
     } catch (err) {
-      window.alert(err?.message || 'Failed to delete purchase.');
+      showToast(err?.message || t('errors.failedDeleteTransaction'));
     }
   }
 

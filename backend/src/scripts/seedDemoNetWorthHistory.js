@@ -6,7 +6,7 @@
  * Usage: node backend/src/scripts/seedDemoNetWorthHistory.js
  */
 import 'dotenv/config';
-import { withDbClient } from '../db/client.js';
+import { query, withTransaction } from '../db/client.js';
 
 const DEMO_EMAIL = 'demo@myworthtrack.local';
 const TARGET_USD = 500_000;
@@ -47,46 +47,36 @@ function formatRecordedAtUtc(date) {
 }
 
 async function run() {
-  await withDbClient(async (client) => {
-    const { rows: userRows } = await client.query(
-      `SELECT id FROM users WHERE lower(email) = lower($1)`,
-      [DEMO_EMAIL],
-    );
-    if (userRows.length === 0) {
-      console.error('Demo user not found. Log in once with the demo account, then run this script.');
-      process.exitCode = 1;
-      return;
-    }
-    const userId = userRows[0].id;
+  const userResult = await query(`SELECT id FROM users WHERE lower(email) = lower($1)`, [DEMO_EMAIL]);
+  if (userResult.rows.length === 0) {
+    console.error('Demo user not found. Log in once with the demo account, then run this script.');
+    process.exitCode = 1;
+    return;
+  }
+  const userId = userResult.rows[0].id;
+  const dailyUsd = generateDailyNetWorths();
 
-    await client.query('BEGIN');
-    try {
-      await client.query(`DELETE FROM networth_history WHERE user_id = $1`, [userId]);
+  await withTransaction(async (client) => {
+    await client.query(`DELETE FROM networth_history WHERE user_id = $1`, [userId]);
 
-      const dailyUsd = generateDailyNetWorths();
-      for (let i = 0; i < DAYS; i++) {
-        const daysAgo = DAYS - 1 - i;
-        const date = getDateUtc(daysAgo);
-        const dateStr = formatDateUtc(date);
-        const recordedStr = formatRecordedAtUtc(date);
-        const usd = dailyUsd[i];
-        const cny = Math.round(usd * CNY_PER_USD * 100) / 100;
+    for (let i = 0; i < DAYS; i++) {
+      const daysAgo = DAYS - 1 - i;
+      const date = getDateUtc(daysAgo);
+      const dateStr = formatDateUtc(date);
+      const recordedStr = formatRecordedAtUtc(date);
+      const usd = dailyUsd[i];
+      const cny = Math.round(usd * CNY_PER_USD * 100) / 100;
 
-        await client.query(
-          `INSERT INTO networth_history (user_id, date_utc, recorded_at_utc, source, total_cny, total_usd, quality_status, computed_at)
-           VALUES ($1, $2, $3::timestamptz, 'daily', $4, $5, 'full', NOW())`,
-          [userId, dateStr, recordedStr, cny, usd],
-        );
-      }
-
-      await client.query('COMMIT');
-      console.log(`Seeded ${DAYS} days of net worth history for demo user (${DEMO_EMAIL}).`);
-      console.log(`USD range: ${Math.min(...dailyUsd).toLocaleString()} – ${Math.max(...dailyUsd).toLocaleString()}`);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
+      await client.query(
+        `INSERT INTO networth_history (user_id, date_utc, recorded_at_utc, source, total_cny, total_usd, quality_status, computed_at)
+         VALUES ($1, $2, $3::timestamptz, 'daily', $4, $5, 'full', NOW())`,
+        [userId, dateStr, recordedStr, cny, usd],
+      );
     }
   });
+
+  console.log(`Seeded ${DAYS} days of net worth history for demo user (${DEMO_EMAIL}).`);
+  console.log(`USD range: ${Math.min(...dailyUsd).toLocaleString()} – ${Math.max(...dailyUsd).toLocaleString()}`);
 }
 
 run().catch((err) => {

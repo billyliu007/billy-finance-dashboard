@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useDashboard } from '../contexts/DashboardContext.jsx';
 import useApiData from '../hooks/useApiData.js';
 
 function mapAssetSources(rows = []) {
@@ -12,9 +13,12 @@ function mapAssetSources(rows = []) {
 
 export default function DevelopmentPage({ frontendVersion }) {
   const status = useApiData('/api/dev/status');
-  const portfolio = useApiData('/api/dashboard/portfolio');
+  const { portfolio, isLoading: isDashboardLoading, error: dashboardError } = useDashboard();
 
-  const assetSources = useMemo(() => mapAssetSources(portfolio.data?.tableRows || []), [portfolio.data]);
+  const assetSources = useMemo(
+    () => mapAssetSources(portfolio?.tableRows || []),
+    [portfolio?.tableRows],
+  );
 
   return (
     <section className="contentWrap">
@@ -23,9 +27,9 @@ export default function DevelopmentPage({ frontendVersion }) {
       </header>
 
       <div className="dashboardPanel">
-        {(status.isLoading || portfolio.isLoading) && <p>Loading development diagnostics...</p>}
+        {(status.isLoading || isDashboardLoading) && <p>Loading development diagnostics...</p>}
         {!status.isLoading && status.error && <p className="error">{status.error}</p>}
-        {!portfolio.isLoading && portfolio.error && <p className="error">{portfolio.error}</p>}
+        {!isDashboardLoading && dashboardError && <p className="error">{dashboardError}</p>}
 
         {!status.isLoading && !status.error && (
           <article className="tableCard">
@@ -103,7 +107,7 @@ export default function DevelopmentPage({ frontendVersion }) {
           </article>
         )}
 
-        {!portfolio.isLoading && !portfolio.error && (
+        {!isDashboardLoading && !dashboardError && (
           <article className="tableCard">
             <h2>Live Asset Price Source</h2>
             <div className="tableWrap">
