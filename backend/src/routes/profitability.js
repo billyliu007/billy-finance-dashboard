@@ -9,10 +9,9 @@ router.use(requireAuth);
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const baseCurrency = req.auth.user.baseCurrency || 'USD';
     const from = req.query?.from != null ? String(req.query.from) : null;
     const to = req.query?.to != null ? String(req.query.to) : null;
-    const payload = await resolveProfitabilityPayload(req.auth.user.userId, baseCurrency, { from, to });
+    const payload = await resolveProfitabilityPayload(req.auth.user.userId, { from, to });
     return res.json(payload);
   }),
 );

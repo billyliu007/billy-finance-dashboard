@@ -1,4 +1,4 @@
-import { resolvePortfolioQuotesPayload } from './dashboardService.js';
+import { loadTradingPerformanceHoldingsSlice } from './dashboardService.js';
 import { listAllPositionTransactions } from '../repositories/financeRepository.js';
 import { normalizeCurrencyCode } from '../lib/number.js';
 
@@ -194,27 +194,26 @@ function computeRealizedAttribution({ trades, portfolioRows }) {
 }
 
 /**
- * Build trading-performance analytics (payload matches what the UI and AI prompt consume).
+ * Trading-performance JSON for the page + AI prompt. Aggregates are USD-normalized (`pnlUsd`).
  * @param {string} userId
- * @param {string} baseCurrency
  * @param {{ from?: string|null, to?: string|null }} [range]
  */
-export async function resolveProfitabilityPayload(userId, baseCurrency, range = {}) {
+export async function resolveProfitabilityPayload(userId, range = {}) {
   const { from, to } = clampDateRange(range);
 
-  const [quotesPayload, transactions] = await Promise.all([
-    resolvePortfolioQuotesPayload(userId, baseCurrency),
+  const [holdings, transactions] = await Promise.all([
+    loadTradingPerformanceHoldingsSlice(userId),
     listAllPositionTransactions(userId, { from, to }),
   ]);
 
-  const portfolioRows = quotesPayload?.portfolio?.tableRows || [];
+  const portfolioRows = holdings?.tableRows || [];
   const currencyBySymbol = new Map(
     portfolioRows.map((r) => [
       String(r.symbol || '').toUpperCase(),
       String(r.currency || 'USD').toUpperCase(),
     ]),
   );
-  const tradeAnalytics = computeTradeAnalytics(transactions, { currencyBySymbol, fxRates: quotesPayload?.fxRates || {} });
+  const tradeAnalytics = computeTradeAnalytics(transactions, { currencyBySymbol, fxRates: {} });
   const realizedPnl = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.pnlUsd), 0);
   const realizedCost = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.costUsd), 0);
 
@@ -250,8 +249,7 @@ export async function resolveProfitabilityPayload(userId, baseCurrency, range = 
   });
 
   return {
-    baseCurrency: quotesPayload.baseCurrency,
-    portfolioIsEmpty: Boolean(quotesPayload.portfolio?.isEmpty),
+    portfolioIsEmpty: Boolean(holdings?.isEmpty),
     range: { from, to },
     summary: {
       realized: { pnl: realizedPnl, pct: realizedCost === 0 ? 0 : (realizedPnl / realizedCost) * 100 },

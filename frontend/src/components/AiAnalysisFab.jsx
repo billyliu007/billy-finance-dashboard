@@ -3,6 +3,7 @@ import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import useApiData from '../hooks/useApiData.js';
 import { buildPrompt, buildAssetsSnapshotPrompt, buildTradingPerformancePrompt } from '../utils/aiPrompts.js';
+import { startOfYearDateOnly, subtractMonthsDateOnly, todayDateOnly } from '../utils/dateOnly.js';
 
 async function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) {
@@ -26,21 +27,6 @@ const PROVIDER_WEB_URLS = {
   grok: 'https://x.com/i/grok',
   deepseek: 'https://chat.deepseek.com/',
 };
-
-function todayDateOnly() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function startOfYearDateOnly() {
-  const d = new Date();
-  return `${d.getFullYear()}-01-01`;
-}
-
-function subtractMonthsDateOnly(dateOnly, months) {
-  const d = new Date(`${dateOnly}T00:00:00.000Z`);
-  d.setUTCMonth(d.getUTCMonth() - months);
-  return d.toISOString().slice(0, 10);
-}
 
 export default function AiAnalysisFab() {
   const { netWorth, portfolio, isLoading } = useDashboard();

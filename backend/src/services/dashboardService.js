@@ -1,9 +1,10 @@
 /**
- * Dashboard: net worth + portfolio. Trading performance uses `resolvePortfolioQuotesPayload` only.
+ * Dashboard: net worth + portfolio. Trading performance uses `loadTradingPerformanceHoldingsSlice`
+ * (DB-only metadata; same visibility as portfolio, no live quotes).
  */
 
 import { buildNetWorthPayload } from './netWorthService.js';
-import { buildPortfolioPayload } from './portfolioService.js';
+import { buildPortfolioPayload, buildTradingPerformanceHoldingsSlice } from './portfolioService.js';
 import {
   getBenchmarkQuotes,
   getCryptoQuoteMapForPositions,
@@ -93,43 +94,18 @@ export function applyTransactionAggregatesToPositions(positions, txAggRows) {
 }
 
 /**
- * Portfolio table rows + FX for live quotes — no net worth history, no benchmarks.
- * Used by `profitabilityService` (trading performance API only).
+ * DB-only holdings metadata for **trading performance** (symbol → currency / attribution labels).
+ * Same visibility rules as the portfolio page; no live quotes.
  * @param {string} userId
- * @param {string} [baseCurrency='USD']
- * @returns {Promise<{ portfolio: object, fxRates: object, baseCurrency: string }>}
+ * @returns {Promise<{ isEmpty: boolean, tableRows: object[] }>}
  */
-export async function resolvePortfolioQuotesPayload(userId, baseCurrency = 'USD') {
-  const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
-
-  const [cashComponents, positions, txAggRows] = await Promise.all([
-    listCashComponents(userId),
+export async function loadTradingPerformanceHoldingsSlice(userId) {
+  const [positions, txAggRows] = await Promise.all([
     listPortfolioPositions(userId),
     listPositionTransactionAggregates(userId),
   ]);
-
   const effectivePositions = applyTransactionAggregatesToPositions(positions, txAggRows);
-
-  const currenciesFromCash = [
-    ...new Set((cashComponents || []).map((c) => String(c?.currency || '').toUpperCase()).filter(Boolean)),
-  ];
-  if (base !== 'CNY') {
-    currenciesFromCash.push(base);
-  }
-
-  const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
-    getStockQuoteMapForPositions(effectivePositions),
-    getCryptoQuoteMapForPositions(effectivePositions),
-    getLiveFxRates(currenciesFromCash),
-  ]);
-
-  const portfolio = buildPortfolioPayload({
-    positions: effectivePositions,
-    stockQuotes,
-    cryptoQuotes,
-  });
-
-  return { portfolio, fxRates, baseCurrency: base };
+  return buildTradingPerformanceHoldingsSlice({ positions: effectivePositions });
 }
 
 /**

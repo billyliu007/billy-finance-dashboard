@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
-import { formatBaseCurrency, formatCurrencyValue, formatPercent } from '../utils/formatters.js';
+import { formatCurrencyValue, formatMoney, formatPercent } from '../utils/formatters.js';
 
 function assetCurrency(row) {
   return String(row?.currency || 'USD').trim().toUpperCase() || 'USD';
@@ -14,7 +14,7 @@ function formatValInAsset(hideValues, value, currency) {
 
 export default function StrategySimulatorPage({ hideValues }) {
   const { t } = useLanguage();
-  const { portfolio: portfolioSnapshot, baseCurrency, isLoading, error } = useDashboard();
+  const { portfolio: portfolioSnapshot, isLoading, error } = useDashboard();
   const portfolioRows = useMemo(() => portfolioSnapshot?.tableRows ?? [], [portfolioSnapshot]);
   const hasHoldings = Boolean(portfolioSnapshot && !portfolioSnapshot.isEmpty);
   const totalValue = Number(portfolioSnapshot?.totals?.value) || 0;
@@ -234,9 +234,7 @@ export default function StrategySimulatorPage({ hideValues }) {
                   <div className="profitabilityCard">
                     <span className="profitabilityCardLabel">{t('profitability.newTotalValue')}</span>
                     <span className="profitabilityCardValue">
-                      {hideValues
-                        ? '—'
-                        : formatBaseCurrency(sellDownResult.newTotal, baseCurrency)}
+                      {hideValues ? '—' : formatMoney(sellDownResult.newTotal)}
                     </span>
                   </div>
                 </div>

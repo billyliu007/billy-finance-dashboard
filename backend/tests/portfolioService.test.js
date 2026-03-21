@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPortfolioPayload } from '../src/services/portfolioService.js';
+import { buildPortfolioPayload, buildTradingPerformanceHoldingsSlice } from '../src/services/portfolioService.js';
 
 function samplePositions() {
   return [
@@ -27,4 +27,14 @@ test('buildPortfolioPayload handles missing live quotes', () => {
     cryptoQuotes: {},
   });
   assert.strictEqual(payload.tableRows[0].priceSource, 'unavailable');
+});
+
+test('buildTradingPerformanceHoldingsSlice returns minimal rows and matches visibility', () => {
+  const slice = buildTradingPerformanceHoldingsSlice({ positions: samplePositions() });
+  assert.strictEqual(slice.isEmpty, false);
+  assert.strictEqual(slice.tableRows.length, 2);
+  const btc = slice.tableRows.find((r) => r.symbol === 'BTC');
+  assert.ok(btc);
+  assert.strictEqual(btc.currency, 'USD');
+  assert.ok(!('currentPrice' in btc));
 });

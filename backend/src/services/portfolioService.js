@@ -97,6 +97,38 @@ function aggregateTotals({ visiblePositions, allPositions }) {
   return totals;
 }
 
+function configuredAssetMap() {
+  return new Map((PORTFOLIO_CONFIG.assets || []).map((asset) => [String(asset.name || '').toUpperCase(), asset]));
+}
+
+/** All positions with metrics + `found` flag (before visibility filter). */
+function computeAllPositionMetrics(positions, stockQuotes, cryptoQuotes) {
+  const map = configuredAssetMap();
+  const normalized = normalizePositionsWithConfig(positions, map);
+  return normalized.map((asset) => {
+    const priceResolution = resolveCurrentPrice(asset, stockQuotes, cryptoQuotes);
+    return computePositionMetrics(asset, priceResolution);
+  });
+}
+
+/**
+ * Minimal holdings slice for trading performance API (no charts/totals; same visibility as portfolio).
+ * @param {{ positions?: object[] }} options
+ * @returns {{ isEmpty: boolean, tableRows: { key: string, symbol: string, name: string, category: string, currency: string }[] }}
+ */
+export function buildTradingPerformanceHoldingsSlice({ positions = [] } = {}) {
+  const computedPositions = computeAllPositionMetrics(positions, {}, {});
+  const visible = computedPositions.filter((p) => p.found);
+  const tableRows = visible.map((p) => ({
+    key: p.symbol,
+    symbol: p.symbol,
+    name: p.name,
+    category: p.category,
+    currency: p.currency,
+  }));
+  return { isEmpty: visible.length === 0, tableRows };
+}
+
 /**
  * Build the portfolio dashboard payload from positions and live quotes.
  * @param {object} options
@@ -106,14 +138,7 @@ function aggregateTotals({ visiblePositions, allPositions }) {
  * @returns {{ totals: object, totalPnlPct: number, chartData: object[], allocationData: object[], tableRows: object[], isEmpty: boolean }}
  */
 export function buildPortfolioPayload({ positions = [], stockQuotes = {}, cryptoQuotes = {} }) {
-  const configuredAssetMap = new Map(
-    (PORTFOLIO_CONFIG.assets || []).map((asset) => [String(asset.name || '').toUpperCase(), asset]),
-  );
-  const normalized = normalizePositionsWithConfig(positions, configuredAssetMap);
-  const computedPositions = normalized.map((asset) => {
-    const priceResolution = resolveCurrentPrice(asset, stockQuotes, cryptoQuotes);
-    return computePositionMetrics(asset, priceResolution);
-  });
+  const computedPositions = computeAllPositionMetrics(positions, stockQuotes, cryptoQuotes);
   const visiblePositions = computedPositions.filter((position) => position.found);
   const totals = aggregateTotals({ visiblePositions, allPositions: computedPositions });
   const totalPnlPct = totals.cost === 0 ? 0 : (totals.pnl / totals.cost) * 100;

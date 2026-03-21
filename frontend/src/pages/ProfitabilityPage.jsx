@@ -14,25 +14,11 @@ import {
 import TrendLineChartWithMarkers from '../components/charts/TrendLineChartWithMarkers.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import useApiData from '../hooks/useApiData.js';
-import { formatBaseCurrency, formatCurrencyValue, formatMaybeHidden, formatPercent } from '../utils/formatters.js';
+import { startOfYearDateOnly, subtractMonthsDateOnly, todayDateOnly } from '../utils/dateOnly.js';
+import { formatCurrencyValue, formatMaybeHidden, formatMoney, formatPercent } from '../utils/formatters.js';
 
-function todayDateOnly() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function startOfYearDateOnly() {
-  const d = new Date();
-  return `${d.getFullYear()}-01-01`;
-}
-
-function subtractMonthsDateOnly(dateOnly, months) {
-  const d = new Date(`${dateOnly}T00:00:00.000Z`);
-  d.setUTCMonth(d.getUTCMonth() - months);
-  return d.toISOString().slice(0, 10);
-}
-
-function formatValBase(hideValues, v, baseCurrency) {
-  return formatMaybeHidden(hideValues, (x) => formatBaseCurrency(x, baseCurrency), Number(v) || 0);
+function formatTradingUsd(hideValues, v) {
+  return formatMaybeHidden(hideValues, formatMoney, Number(v) || 0);
 }
 
 function formatValByCurrency(hideValues, v, currency) {
@@ -95,7 +81,6 @@ export default function ProfitabilityPage({ hideValues }) {
 
   const { data: analytics, isLoading, error: analyticsError } = useApiData(tradingPerformancePath);
 
-  const baseCurrency = analytics?.baseCurrency ?? 'USD';
   const portfolioIsEmpty = Boolean(analytics?.portfolioIsEmpty);
   const summary = analytics?.summary ?? null;
   const monthlyStacked = analytics?.timeSeries?.monthlyStacked ?? [];
@@ -165,7 +150,7 @@ export default function ProfitabilityPage({ hideValues }) {
                 <article className="miniKpi">
                   <p>{t('profitability.realizedPl')}</p>
                   <h3 className={Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}>
-                    {formatValBase(hideValues, summary.realized?.pnl, baseCurrency)}
+                    {formatTradingUsd(hideValues, summary.realized?.pnl)}
                   </h3>
                   <small className={Number(summary.realized?.pnl) >= 0 ? 'pos' : 'neg'}>
                     {hideValues ? t('app.hidden') : formatPercent(summary.realized?.pct ?? 0)}
@@ -210,13 +195,13 @@ export default function ProfitabilityPage({ hideValues }) {
                 <article className="miniKpi">
                   <p>{t('profitability.avgWin')}</p>
                   <h3 className={Number(summary.winStats?.avgWin) >= 0 ? 'pos' : 'neg'}>
-                    {formatValBase(hideValues, summary.winStats?.avgWin, baseCurrency)}
+                    {formatTradingUsd(hideValues, summary.winStats?.avgWin)}
                   </h3>
                 </article>
                 <article className="miniKpi">
                   <p>{t('profitability.avgLoss')}</p>
                   <h3 className={Number(summary.winStats?.avgLoss) >= 0 ? 'pos' : 'neg'}>
-                    {formatValBase(hideValues, summary.winStats?.avgLoss, baseCurrency)}
+                    {formatTradingUsd(hideValues, summary.winStats?.avgLoss)}
                   </h3>
                 </article>
               </div>
@@ -232,7 +217,7 @@ export default function ProfitabilityPage({ hideValues }) {
                     xDataKey="month"
                     yDataKey="cumulativeRealized"
                     hideValues={hideValues}
-                    formatDisplayValue={(v) => formatBaseCurrency(v, baseCurrency)}
+                    formatDisplayValue={(v) => formatMoney(Number(v) || 0)}
                     tooltipSeriesName={t('profitability.cumulativeRealized')}
                     stroke="#f59e0b"
                     strokeWidth={2}
@@ -251,8 +236,15 @@ export default function ProfitabilityPage({ hideValues }) {
                   <BarChart data={realizedAttribution?.byAssetClass ?? []}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
                     <XAxis dataKey="key" tick={CHART_AXIS_TICK} />
-                    <YAxis tick={CHART_AXIS_TICK} />
+                    <YAxis
+                      tick={CHART_AXIS_TICK}
+                      tickFormatter={(v) => formatMaybeHidden(hideValues, formatMoney, Number(v) || 0, '')}
+                    />
                     <Tooltip
+                      formatter={(value) => [
+                        formatMaybeHidden(hideValues, formatMoney, Number(value) || 0, t('app.hidden')),
+                        t('profitability.realizedPl'),
+                      ]}
                       contentStyle={CHART_TOOLTIP_STYLE}
                       labelStyle={{ color: '#f8fafc' }}
                       itemStyle={{ color: '#e2e8f0' }}
@@ -281,8 +273,15 @@ export default function ProfitabilityPage({ hideValues }) {
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
                         <XAxis dataKey="label" tick={CHART_AXIS_TICK} />
-                        <YAxis tick={CHART_AXIS_TICK} />
+                        <YAxis
+                          tick={CHART_AXIS_TICK}
+                          tickFormatter={(v) => formatMaybeHidden(hideValues, formatMoney, Number(v) || 0, '')}
+                        />
                         <Tooltip
+                          formatter={(value) => [
+                            formatMaybeHidden(hideValues, formatMoney, Number(value) || 0, t('app.hidden')),
+                            t('profitability.realizedPl'),
+                          ]}
                           contentStyle={CHART_TOOLTIP_STYLE}
                           labelStyle={{ color: '#f8fafc' }}
                           itemStyle={{ color: '#e2e8f0' }}
@@ -310,8 +309,15 @@ export default function ProfitabilityPage({ hideValues }) {
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
                         <XAxis dataKey="label" tick={CHART_AXIS_TICK} />
-                        <YAxis tick={CHART_AXIS_TICK} />
+                        <YAxis
+                          tick={CHART_AXIS_TICK}
+                          tickFormatter={(v) => formatMaybeHidden(hideValues, formatMoney, Number(v) || 0, '')}
+                        />
                         <Tooltip
+                          formatter={(value) => [
+                            formatMaybeHidden(hideValues, formatMoney, Number(value) || 0, t('app.hidden')),
+                            t('profitability.realizedPl'),
+                          ]}
                           contentStyle={CHART_TOOLTIP_STYLE}
                           labelStyle={{ color: '#f8fafc' }}
                           itemStyle={{ color: '#e2e8f0' }}
