@@ -99,6 +99,7 @@ export function DashboardProvider({ children }) {
     netWorth: data?.netWorth ?? null,
     portfolio: data?.portfolio ?? null,
     benchmarks: data?.benchmarks ?? null,
+    baseCurrency: data?.netWorth?.overview?.baseCurrency ?? 'USD',
     isLoading,
     isRefreshing,
     error,

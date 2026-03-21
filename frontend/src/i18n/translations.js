@@ -356,7 +356,15 @@ export const translations = {
       actionableInsights: 'Actionable insights',
       whatIf: 'What-if scenarios',
       rebalance: 'Rebalance impact',
-      rebalanceDesc: 'Set target allocation (% per holding). See implied trades and new allocation.',
+      rebalanceDesc:
+        'Set target allocation (% per holding). Suggested buy/sell amounts use each asset’s quote currency (e.g. USD, USDT).',
+      rebalanceMethod: 'Rebalance method',
+      rebalanceConstantNav:
+        'Constant total (cash-neutral) — portfolio value unchanged; buys are funded by selling other holdings (typical institutional same-day rebalance).',
+      rebalanceNewCashBuys:
+        'Fund buys with new cash — purchase increases total portfolio value so the asset reaches target % after the deposit (common for top-ups).',
+      rebalanceMethodHint:
+        'Cash-neutral: buy amount = target value − current value. New-cash buys: buy amount = (target value − current value) ÷ (1 − target fraction). Sells use the cash-neutral amount. If several assets need new cash at once, run one at a time or use a full optimizer — each row here is independent.',
       currentWeight: 'Current weight',
       targetWeight: 'Target %',
       suggestedTrade: 'Suggested trade',
@@ -364,7 +372,8 @@ export const translations = {
       buyAmount: 'Buy',
       newWeight: 'New weight',
       sellDown: 'Sell-down impact',
-      sellDownDesc: 'Simulate selling a portion of a holding. See cash received and remaining value.',
+      sellDownDesc:
+        'Simulate selling a portion of a holding. Cash received and remaining value use that asset’s quote currency; new total portfolio value uses your net-worth base currency.',
       selectHolding: 'Select holding',
       sellPct: 'Sell %',
       cashReceived: 'Cash received',
@@ -728,7 +737,15 @@ export const translations = {
       actionableInsights: '可执行洞察',
       whatIf: '情景模拟',
       rebalance: '再平衡影响',
-      rebalanceDesc: '设置目标仓位（每只占比 %），查看建议交易与新仓位。',
+      rebalanceDesc:
+        '设置目标仓位（每只占比 %）。建议买卖金额按该资产的计价币种显示（如 USD、USDT）。',
+      rebalanceMethod: '再平衡方式',
+      rebalanceConstantNav:
+        '总市值不变（现金中性）— 组合总价值不变；买入资金来自卖出其他资产（机构常见同日再平衡）。',
+      rebalanceNewCashBuys:
+        '用新增资金买入 — 买入会增加组合总市值，使该资产在入账后达到目标占比（常见追加资金场景）。',
+      rebalanceMethodHint:
+        '现金中性：买入额 = 目标市值 − 当前市值。新增资金买入：买入额 = (目标市值 − 当前市值) ÷ (1 − 目标比例)。卖出仍按现金中性计算。若多资产同时需新增资金，请逐个试算或使用完整优化器 — 此处每行独立计算。',
       currentWeight: '当前占比',
       targetWeight: '目标 %',
       suggestedTrade: '建议操作',
@@ -736,7 +753,8 @@ export const translations = {
       buyAmount: '买入',
       newWeight: '新占比',
       sellDown: '减仓影响',
-      sellDownDesc: '模拟卖出部分持仓，查看可得现金与剩余市值。',
+      sellDownDesc:
+        '模拟卖出部分持仓。可得现金与剩余市值按该资产计价币种显示；新的组合总市值以净资产基准币种显示。',
       selectHolding: '选择持仓',
       sellPct: '卖出 %',
       cashReceived: '可得现金',

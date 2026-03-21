@@ -956,6 +956,38 @@ h1 {
   margin: 0 0 12px;
 }
 
+.profitabilityRebalanceMode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin: 0 0 8px;
+}
+
+.profitabilityRebalanceMode .profitabilityLabel {
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.profitabilityRadioLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.profitabilityRadioLabel input {
+  margin: 0;
+}
+
+.profitabilityRebalanceHint {
+  margin: 0 0 14px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .profitabilityCards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

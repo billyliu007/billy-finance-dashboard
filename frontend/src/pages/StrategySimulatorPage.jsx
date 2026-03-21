@@ -1,22 +1,28 @@
 import { useMemo, useState } from 'react';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
-import { formatMoney, formatPercent } from '../utils/formatters.js';
+import { formatBaseCurrency, formatCurrencyValue, formatPercent } from '../utils/formatters.js';
 
-function formatVal(hideValues, v) {
+function assetCurrency(row) {
+  return String(row?.currency || 'USD').trim().toUpperCase() || 'USD';
+}
+
+function formatValInAsset(hideValues, value, currency) {
   if (hideValues) return '—';
-  return formatMoney(v);
+  return formatCurrencyValue(value, currency);
 }
 
 export default function StrategySimulatorPage({ hideValues }) {
   const { t } = useLanguage();
-  const { portfolio: portfolioSnapshot, isLoading, error } = useDashboard();
+  const { portfolio: portfolioSnapshot, baseCurrency, isLoading, error } = useDashboard();
   const portfolioRows = useMemo(() => portfolioSnapshot?.tableRows ?? [], [portfolioSnapshot]);
   const hasHoldings = Boolean(portfolioSnapshot && !portfolioSnapshot.isEmpty);
   const totalValue = Number(portfolioSnapshot?.totals?.value) || 0;
 
   const [targetWeights, setTargetWeights] = useState({});
   const [rebalanceDirty, setRebalanceDirty] = useState(false);
+  /** constantNav: total portfolio value unchanged (reshuffle). newCashBuys: buys funded with new cash so total NAV increases. */
+  const [rebalanceMode, setRebalanceMode] = useState('constantNav');
   const [sellDownSymbol, setSellDownSymbol] = useState('');
   const [sellDownPct, setSellDownPct] = useState(20);
 
@@ -28,8 +34,24 @@ export default function StrategySimulatorPage({ hideValues }) {
       const targetPct = targetWeights[r.symbol];
       const targetNum = targetPct != null && targetPct !== '' ? Number(targetPct) : null;
       const targetVal = Number.isFinite(targetNum) && targetNum >= 0 ? (totalValue * targetNum) / 100 : null;
-      const trade = targetVal != null ? targetVal - currentVal : null;
-      const newWeight = targetVal != null && totalValue > 0 ? (targetVal / totalValue) * 100 : null;
+      const w = Number.isFinite(targetNum) && targetNum >= 0 ? targetNum / 100 : null;
+      let trade = targetVal != null ? targetVal - currentVal : null;
+      let newWeight = targetVal != null && totalValue > 0 ? (targetVal / totalValue) * 100 : null;
+
+      if (
+        trade != null &&
+        rebalanceMode === 'newCashBuys' &&
+        trade > 0.01 &&
+        w != null &&
+        w > 0 &&
+        w < 0.9999
+      ) {
+        const buyWithNewCash = trade / (1 - w);
+        trade = buyWithNewCash;
+        const newTotal = totalValue + buyWithNewCash;
+        newWeight = newTotal > 0 ? ((currentVal + buyWithNewCash) / newTotal) * 100 : newWeight;
+      }
+
       return {
         ...r,
         currentWeight,
@@ -39,7 +61,7 @@ export default function StrategySimulatorPage({ hideValues }) {
         newWeight,
       };
     });
-  }, [portfolioRows, totalValue, targetWeights]);
+  }, [portfolioRows, totalValue, targetWeights, rebalanceMode]);
 
   const sellDownResult = useMemo(() => {
     if (!sellDownSymbol || !Number.isFinite(sellDownPct) || sellDownPct <= 0 || sellDownPct > 100) return null;
@@ -49,7 +71,12 @@ export default function StrategySimulatorPage({ hideValues }) {
     const sellValue = (value * sellDownPct) / 100;
     const remaining = value - sellValue;
     const newTotal = totalValue - sellValue;
-    return { sellValue, remaining, newTotal };
+    return {
+      sellValue,
+      remaining,
+      newTotal,
+      assetCurrency: assetCurrency(row),
+    };
   }, [portfolioRows, sellDownSymbol, sellDownPct, totalValue]);
 
   function handleTargetWeightChange(symbol, value) {
@@ -60,6 +87,7 @@ export default function StrategySimulatorPage({ hideValues }) {
   function handleResetRebalance() {
     setTargetWeights({});
     setRebalanceDirty(false);
+    setRebalanceMode('constantNav');
   }
 
   return (
@@ -80,6 +108,34 @@ export default function StrategySimulatorPage({ hideValues }) {
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.rebalance')}</h2>
               <p className="profitabilitySectionDesc">{t('profitability.rebalanceDesc')}</p>
+              <div className="profitabilityRebalanceMode" role="group" aria-label={t('profitability.rebalanceMethod')}>
+                <span className="profitabilityLabel">{t('profitability.rebalanceMethod')}</span>
+                <label className="profitabilityRadioLabel">
+                  <input
+                    type="radio"
+                    name="rebalanceMode"
+                    checked={rebalanceMode === 'constantNav'}
+                    onChange={() => {
+                      setRebalanceMode('constantNav');
+                      setRebalanceDirty(true);
+                    }}
+                  />
+                  {t('profitability.rebalanceConstantNav')}
+                </label>
+                <label className="profitabilityRadioLabel">
+                  <input
+                    type="radio"
+                    name="rebalanceMode"
+                    checked={rebalanceMode === 'newCashBuys'}
+                    onChange={() => {
+                      setRebalanceMode('newCashBuys');
+                      setRebalanceDirty(true);
+                    }}
+                  />
+                  {t('profitability.rebalanceNewCashBuys')}
+                </label>
+              </div>
+              <p className="hint profitabilityRebalanceHint">{t('profitability.rebalanceMethodHint')}</p>
               <div className="profitabilityTableWrap">
                 <table className="profitabilityTable profitabilityTable--rebalance">
                   <thead>
@@ -112,9 +168,9 @@ export default function StrategySimulatorPage({ hideValues }) {
                         <td>
                           {r.trade != null && (
                             r.trade < -0.01
-                              ? `${t('profitability.sellAmount')} ${formatVal(hideValues, -r.trade)}`
+                              ? `${t('profitability.sellAmount')} ${formatValInAsset(hideValues, -r.trade, assetCurrency(r))}`
                               : r.trade > 0.01
-                                ? `${t('profitability.buyAmount')} ${formatVal(hideValues, r.trade)}`
+                                ? `${t('profitability.buyAmount')} ${formatValInAsset(hideValues, r.trade, assetCurrency(r))}`
                                 : '—'
                           )}
                         </td>
@@ -165,15 +221,23 @@ export default function StrategySimulatorPage({ hideValues }) {
                 <div className="profitabilitySellDownResult">
                   <div className="profitabilityCard">
                     <span className="profitabilityCardLabel">{t('profitability.cashReceived')}</span>
-                    <span className="profitabilityCardValue">{formatVal(hideValues, sellDownResult.sellValue)}</span>
+                    <span className="profitabilityCardValue">
+                      {formatValInAsset(hideValues, sellDownResult.sellValue, sellDownResult.assetCurrency)}
+                    </span>
                   </div>
                   <div className="profitabilityCard">
                     <span className="profitabilityCardLabel">{t('profitability.remainingValue')}</span>
-                    <span className="profitabilityCardValue">{formatVal(hideValues, sellDownResult.remaining)}</span>
+                    <span className="profitabilityCardValue">
+                      {formatValInAsset(hideValues, sellDownResult.remaining, sellDownResult.assetCurrency)}
+                    </span>
                   </div>
                   <div className="profitabilityCard">
                     <span className="profitabilityCardLabel">{t('profitability.newTotalValue')}</span>
-                    <span className="profitabilityCardValue">{formatVal(hideValues, sellDownResult.newTotal)}</span>
+                    <span className="profitabilityCardValue">
+                      {hideValues
+                        ? '—'
+                        : formatBaseCurrency(sellDownResult.newTotal, baseCurrency)}
+                    </span>
                   </div>
                 </div>
               )}
