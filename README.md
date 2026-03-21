@@ -81,7 +81,7 @@ npm run dev
 - `GET /api/auth/session`, `POST /api/auth/logout`
 - `GET /api/auth/providers`, `GET /api/auth/{google,apple}/start`, `GET /api/auth/{google,apple}/callback`
 - `GET /api/dashboard` (net worth + portfolio + benchmarks in one payload)
-- `GET /api/trading-performance` (optional `?from=&to=` for analytics range)
+- `GET /api/trading-performance` (optional `?from=&to=`) — slim JSON for the Trading Performance page only: loads portfolio quotes + FX + position transactions (no net worth history, no benchmarks). Response includes `baseCurrency`, `portfolioIsEmpty`, `summary`, `timeSeries.monthlyStacked`, `realizedAttribution`, `trades` (best/worst + return histogram).
 - `GET /api/market/coinbase-products`, `GET /api/market/us-stock-symbols`
 - `POST /api/portfolio/positions/crypto`, `POST /api/portfolio/positions/stock`
 - `GET /api/onboarding/status`, `POST /api/onboarding/initialize`

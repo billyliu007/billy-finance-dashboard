@@ -12,7 +12,6 @@ import {
   YAxis,
 } from 'recharts';
 import TrendLineChartWithMarkers from '../components/charts/TrendLineChartWithMarkers.jsx';
-import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import useApiData from '../hooks/useApiData.js';
 import { formatBaseCurrency, formatCurrencyValue, formatMaybeHidden, formatPercent } from '../utils/formatters.js';
@@ -42,13 +41,7 @@ function formatValByCurrency(hideValues, v, currency) {
 }
 
 function ActiveAttributionBar(props) {
-  const {
-    x,
-    y,
-    width,
-    height,
-    fill,
-  } = props;
+  const { x, y, width, height, fill } = props;
   return (
     <Rectangle
       x={x}
@@ -77,10 +70,8 @@ const NEG_BAR = '#fb7185';
 
 export default function ProfitabilityPage({ hideValues }) {
   const { t } = useLanguage();
-  const { portfolio: portfolioSnapshot, netWorth, isLoading: isDashboardLoading, error: dashboardError } = useDashboard();
-  const baseCurrency = netWorth?.overview?.baseCurrency ?? 'USD';
 
-  const [timeframe, setTimeframe] = useState('since'); // since | ytd | 1m | 3m | 1y | custom
+  const [timeframe, setTimeframe] = useState('since');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
@@ -102,9 +93,10 @@ export default function ProfitabilityPage({ hideValues }) {
     return `/api/trading-performance${qs}`;
   }, [range.from, range.to]);
 
-  const { data: analytics, isLoading: isAnalyticsLoading, error: analyticsError } = useApiData(tradingPerformancePath);
+  const { data: analytics, isLoading, error: analyticsError } = useApiData(tradingPerformancePath);
 
-  const hasHoldings = Boolean(portfolioSnapshot && !portfolioSnapshot.isEmpty);
+  const baseCurrency = analytics?.baseCurrency ?? 'USD';
+  const portfolioIsEmpty = Boolean(analytics?.portfolioIsEmpty);
   const summary = analytics?.summary ?? null;
   const monthlyStacked = analytics?.timeSeries?.monthlyStacked ?? [];
   const realizedAttribution = analytics?.realizedAttribution ?? null;
@@ -131,9 +123,8 @@ export default function ProfitabilityPage({ hideValues }) {
       </header>
 
       <div className="dashboardPanel">
-        {(isDashboardLoading || isAnalyticsLoading) && <p>{t('app.loadingDashboard')}</p>}
-        {!isDashboardLoading && dashboardError && <p className="error">{dashboardError}</p>}
-        {!isAnalyticsLoading && analyticsError && <p className="error">{analyticsError}</p>}
+        {isLoading && <p>{t('app.loadingDashboard')}</p>}
+        {!isLoading && analyticsError && <p className="error">{analyticsError}</p>}
 
         <section className="profitabilitySection">
           <h2 className="profitabilitySectionTitle">{t('profitability.timeframe')}</h2>
@@ -164,11 +155,9 @@ export default function ProfitabilityPage({ hideValues }) {
           </div>
         </section>
 
-        {!isDashboardLoading && !dashboardError && !hasHoldings && (
-          <p>{t('profitability.noHoldings')}</p>
-        )}
+        {!isLoading && !analyticsError && portfolioIsEmpty && <p>{t('profitability.noHoldings')}</p>}
 
-        {!isDashboardLoading && !dashboardError && hasHoldings && summary && (
+        {!isLoading && !analyticsError && !portfolioIsEmpty && summary && (
           <>
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.yourPortfolio')}</h2>
@@ -252,7 +241,6 @@ export default function ProfitabilityPage({ hideValues }) {
               </article>
             </div>
 
-            {/* Attribution (realized only) */}
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.attribution')}</h2>
               <p className="profitabilitySectionDesc">{t('profitability.realizedPl')}</p>
@@ -342,17 +330,13 @@ export default function ProfitabilityPage({ hideValues }) {
               </div>
             </section>
 
-            {/* Trade analytics */}
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.tradeAnalytics')}</h2>
 
               <p className="profitabilitySectionDesc">{t('profitability.tradeReturnDistribution')}</p>
               <div className="profitabilityChartArea profitabilityChartArea--md">
                 <ResponsiveContainer>
-                  <BarChart
-                    data={tradeReturnHistogram}
-                    margin={{ left: -14, right: 10, top: 0, bottom: 0 }}
-                  >
+                  <BarChart data={tradeReturnHistogram} margin={{ left: -14, right: 10, top: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
                     <XAxis
                       dataKey="bucket"
@@ -362,11 +346,7 @@ export default function ProfitabilityPage({ hideValues }) {
                       tickMargin={0}
                       interval={2}
                     />
-                    <YAxis
-                      width={42}
-                      tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }}
-                      tickMargin={0}
-                    />
+                    <YAxis width={42} tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} tickMargin={0} />
                     <Tooltip
                       contentStyle={CHART_TOOLTIP_STYLE}
                       labelStyle={{ color: '#f8fafc' }}
@@ -411,7 +391,7 @@ export default function ProfitabilityPage({ hideValues }) {
                         <td>{formatValByCurrency(hideValues, tr.proceeds, tr.currency)}</td>
                         <td>{formatValByCurrency(hideValues, tr.cost, tr.currency)}</td>
                         <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatValByCurrency(hideValues, tr.pnl, tr.currency)}</td>
-                        <td>{hideValues ? '—' : (tr.returnPct == null ? '—' : formatPercent(tr.returnPct))}</td>
+                        <td>{hideValues ? '—' : tr.returnPct == null ? '—' : formatPercent(tr.returnPct)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -443,14 +423,13 @@ export default function ProfitabilityPage({ hideValues }) {
                         <td>{formatValByCurrency(hideValues, tr.proceeds, tr.currency)}</td>
                         <td>{formatValByCurrency(hideValues, tr.cost, tr.currency)}</td>
                         <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatValByCurrency(hideValues, tr.pnl, tr.currency)}</td>
-                        <td>{hideValues ? '—' : (tr.returnPct == null ? '—' : formatPercent(tr.returnPct))}</td>
+                        <td>{hideValues ? '—' : tr.returnPct == null ? '—' : formatPercent(tr.returnPct)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </section>
-
           </>
         )}
       </div>

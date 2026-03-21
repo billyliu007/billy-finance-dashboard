@@ -14,17 +14,6 @@ function formatMoneyUsd(value) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(num);
 }
 
-function formatMoney(value, currency = 'USD') {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return String(value ?? '');
-  const cur = String(currency || 'USD').toUpperCase();
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(num);
-  } catch {
-    return `${formatNumber(num)} ${cur}`;
-  }
-}
-
 function formatAmountWithCode(value, currency = 'USD', { maxFrac = 2 } = {}) {
   const cur = String(currency || 'USD').toUpperCase();
   return `${formatNumber(value, { maxFrac })} ${cur}`;
@@ -215,23 +204,15 @@ export function buildTradingPerformancePrompt({ analytics, language = 'en' }) {
   const summary = analytics?.summary ?? {};
   const winStats = summary?.winStats ?? {};
   const attribution = analytics?.realizedAttribution ?? {};
-  const monthly = analytics?.timeSeries?.realizedMonthly ?? [];
+  const monthlyStacked = analytics?.timeSeries?.monthlyStacked ?? [];
+  const monthly = monthlyStacked.map((row) => ({
+    month: row?.month,
+    realizedPnl: row?.realizedPnl,
+  }));
   const bestTrades = analytics?.trades?.best ?? [];
   const worstTrades = analytics?.trades?.worst ?? [];
-  const insights = analytics?.insights ?? [];
   const tradeHistogram = analytics?.trades?.distributions?.tradeReturnHistogram ?? [];
   const selectedRange = analytics?.range ?? {};
-  const allTrades = analytics?.trades?.all ?? [];
-  const localPnlBySymbol = new Map();
-  for (const tr of allTrades) {
-    const sym = String(tr?.symbol || '').toUpperCase();
-    if (!sym) continue;
-    const currency = String(tr?.currency || 'USD').toUpperCase();
-    const existing = localPnlBySymbol.get(sym) || { pnl: 0, currency };
-    existing.pnl += Number(tr?.pnl) || 0;
-    existing.currency = existing.currency || currency;
-    localPnlBySymbol.set(sym, existing);
-  }
   const lines = [];
   lines.push(
     isZh
@@ -278,30 +259,14 @@ export function buildTradingPerformancePrompt({ analytics, language = 'en' }) {
   lines.push(isZh ? '### 主要贡献者（Top）' : '### Top contributors');
   for (const row of attribution?.contributors ?? []) {
     lines.push(
-      (() => {
-        const sym = String(row?.symbol || '').toUpperCase();
-        const local = localPnlBySymbol.get(sym);
-        const localText = local
-          ? formatAmountWithCode(local.pnl, local.currency)
-          : (isZh ? '无明细币种' : 'N/A local currency');
-        const usdText = formatAmountWithCode(row?.realizedPnl, 'USD');
-        return `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): local=${localText} | usdNormalized=${usdText}`;
-      })()
+      `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): usdNormalized=${formatAmountWithCode(row?.realizedPnl, 'USD')}`,
     );
   }
   lines.push('');
   lines.push(isZh ? '### 主要拖累者（Top）' : '### Top detractors');
   for (const row of attribution?.detractors ?? []) {
     lines.push(
-      (() => {
-        const sym = String(row?.symbol || '').toUpperCase();
-        const local = localPnlBySymbol.get(sym);
-        const localText = local
-          ? formatAmountWithCode(local.pnl, local.currency)
-          : (isZh ? '无明细币种' : 'N/A local currency');
-        const usdText = formatAmountWithCode(row?.realizedPnl, 'USD');
-        return `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): local=${localText} | usdNormalized=${usdText}`;
-      })()
+      `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): usdNormalized=${formatAmountWithCode(row?.realizedPnl, 'USD')}`,
     );
   }
   lines.push('');
@@ -333,14 +298,6 @@ export function buildTradingPerformancePrompt({ analytics, language = 'en' }) {
     );
   }
   lines.push('');
-
-  if ((insights || []).length > 0) {
-    lines.push(isZh ? '## 系统已有洞察' : '## Existing system insights');
-    for (const insight of insights) {
-      lines.push(`- ${insight}`);
-    }
-    lines.push('');
-  }
 
   lines.push(isZh ? '## 你需要输出的内容' : '## Required output');
   lines.push(

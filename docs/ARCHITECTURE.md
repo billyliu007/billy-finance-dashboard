@@ -29,7 +29,7 @@ PostgreSQL (local, Render Postgres, **Neon**, etc.) via `pg` `Pool`
 | Layer | Role | Examples |
 |--------|------|----------|
 | **Routes** | HTTP, validation, call services | `routes/dashboard.js`, `routes/portfolio.js` |
-| **Services** | Orchestration, caching in-request, Finnhub/Coinbase/FX | `dashboardService.js`, `marketDataService.js` |
+| **Services** | Orchestration, caching in-request, Finnhub/Coinbase/FX | `dashboardService.js` (full dashboard vs `resolvePortfolioQuotesPayload` for trading performance only), `marketDataService.js` |
 | **Repositories** | DB access; transactions via `withTransaction` / `query` | `currencyRepository.js`, `cashRepository.js`, `netWorthHistoryRepository.js`, `marketReferenceRepository.js`, `portfolioRepository.js` (barrel: `financeRepository.js`), `userRepository.js` |
 | **Lib** | Pure helpers | `priceResolution.js`, `portfolioFx.js` |
 
@@ -139,3 +139,4 @@ Use Neon's **serverless** driver when the runtime **cannot hold a TCP connection
 - **2026-03:** Documented `withTransaction` and CI backend tests.
 - **2026-03:** Removed deprecated dashboard slice routes and duplicate profitability API path.
 - **2026-03:** Split finance repositories into domain files; routes use `asyncHandler`; frontend uses toast context for delete errors.
+- **2026-03:** Trading Performance API uses `resolvePortfolioQuotesPayload` (no net worth / benchmarks); page uses only that endpoint (no `DashboardContext` on that route).

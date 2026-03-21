@@ -1,5 +1,5 @@
 /**
- * Assembles the full dashboard payload (net worth + portfolio) for a user.
+ * Dashboard: net worth + portfolio. Trading performance uses `resolvePortfolioQuotesPayload` only.
  */
 
 import { buildNetWorthPayload } from './netWorthService.js';
@@ -18,21 +18,12 @@ import {
 } from '../repositories/financeRepository.js';
 
 /**
- * Load all data required for the dashboard and return net worth, portfolio, fx rates, and raw positions.
- * @param {string} userId
- * @param {string} [baseCurrency='USD'] - User's preferred base currency for net worth display
- * @returns {Promise<{ netWorth: object, portfolio: object, fxRates: object, positions: object[] }>}
+ * Merge raw positions with transaction aggregate rows (same shape as dashboard positions).
+ * @param {object[]} positions
+ * @param {object[]} txAggRows
+ * @returns {object[]}
  */
-export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
-  const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
-
-  const [cashComponents, positions, history, txAggRows] = await Promise.all([
-    listCashComponents(userId),
-    listPortfolioPositions(userId),
-    listNetWorthHistory(userId),
-    listPositionTransactionAggregates(userId),
-  ]);
-
+export function applyTransactionAggregatesToPositions(positions, txAggRows) {
   const txAggBySymbol = new Map(
     (txAggRows || []).map((r) => [
       String(r.symbol || '').toUpperCase(),
@@ -48,7 +39,7 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
       },
     ]),
   );
-  const effectivePositions = (positions || []).map((p) => {
+  return (positions || []).map((p) => {
     const sym = String(p.symbol || '').toUpperCase();
     const tx = txAggBySymbol.get(sym) || {
       buyQty: 0,
@@ -99,6 +90,65 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
       purchasePrice: avgCost,
     };
   });
+}
+
+/**
+ * Portfolio table rows + FX for live quotes — no net worth history, no benchmarks.
+ * Used by `profitabilityService` (trading performance API only).
+ * @param {string} userId
+ * @param {string} [baseCurrency='USD']
+ * @returns {Promise<{ portfolio: object, fxRates: object, baseCurrency: string }>}
+ */
+export async function resolvePortfolioQuotesPayload(userId, baseCurrency = 'USD') {
+  const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
+
+  const [cashComponents, positions, txAggRows] = await Promise.all([
+    listCashComponents(userId),
+    listPortfolioPositions(userId),
+    listPositionTransactionAggregates(userId),
+  ]);
+
+  const effectivePositions = applyTransactionAggregatesToPositions(positions, txAggRows);
+
+  const currenciesFromCash = [
+    ...new Set((cashComponents || []).map((c) => String(c?.currency || '').toUpperCase()).filter(Boolean)),
+  ];
+  if (base !== 'CNY') {
+    currenciesFromCash.push(base);
+  }
+
+  const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
+    getStockQuoteMapForPositions(effectivePositions),
+    getCryptoQuoteMapForPositions(effectivePositions),
+    getLiveFxRates(currenciesFromCash),
+  ]);
+
+  const portfolio = buildPortfolioPayload({
+    positions: effectivePositions,
+    stockQuotes,
+    cryptoQuotes,
+  });
+
+  return { portfolio, fxRates, baseCurrency: base };
+}
+
+/**
+ * Load all data required for the dashboard and return net worth, portfolio, fx rates, and raw positions.
+ * @param {string} userId
+ * @param {string} [baseCurrency='USD'] - User's preferred base currency for net worth display
+ * @returns {Promise<{ netWorth: object, portfolio: object, fxRates: object, positions: object[] }>}
+ */
+export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
+  const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
+
+  const [cashComponents, positions, history, txAggRows] = await Promise.all([
+    listCashComponents(userId),
+    listPortfolioPositions(userId),
+    listNetWorthHistory(userId),
+    listPositionTransactionAggregates(userId),
+  ]);
+
+  const effectivePositions = applyTransactionAggregatesToPositions(positions, txAggRows);
 
   const currenciesFromCash = [
     ...new Set((cashComponents || []).map((c) => String(c?.currency || '').toUpperCase()).filter(Boolean)),
