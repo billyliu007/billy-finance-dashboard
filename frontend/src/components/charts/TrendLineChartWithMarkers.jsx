@@ -8,6 +8,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  usePlotArea,
 } from 'recharts';
 import { formatLocalDateTime, formatMaybeHidden } from '../../utils/formatters.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
@@ -20,7 +21,13 @@ export function formatTrendXAxisLabel(rawValue) {
   return raw;
 }
 
+/**
+ * Recharts 3 ReferenceDot passes label `viewBox` as the dot's bounding rect (≈2r×2r), not the plot.
+ * Center = viewBox.x + width/2; use usePlotArea() for real plot bounds when clamping.
+ */
 function MarkerLabel({ viewBox, value, color, side = 'top', offsetY = 0 }) {
+  const plotArea = usePlotArea();
+
   if (!viewBox || !value) {
     return null;
   }
@@ -29,28 +36,51 @@ function MarkerLabel({ viewBox, value, color, side = 'top', offsetY = 0 }) {
   const approxCharWidth = 6.5;
   const boxWidth = Math.max(68, Math.round(labelText.length * approxCharWidth + 12));
   const boxHeight = 20;
-  let x = viewBox.x - boxWidth / 2;
-  let y = viewBox.y - 30 + offsetY;
+  const edgePad = 8;
+  const dotW = viewBox.width ?? 0;
+  const dotH = viewBox.height ?? 0;
+  const cx = (viewBox.x ?? 0) + dotW / 2;
+  const cy = (viewBox.y ?? 0) + dotH / 2;
 
-  if (side === 'left') {
-    x = viewBox.x - boxWidth - 10;
-    y = viewBox.y - boxHeight / 2 + offsetY;
-  } else if (side === 'right') {
-    x = viewBox.x + 10;
-    y = viewBox.y - boxHeight / 2 + offsetY;
-  } else if (side === 'bottom') {
-    x = viewBox.x - boxWidth / 2;
-    y = viewBox.y + 10 + offsetY;
+  const plotX = plotArea?.x ?? 0;
+  const plotY = plotArea?.y ?? 0;
+  const plotW = plotArea?.width ?? 0;
+  const plotH = plotArea?.height ?? 0;
+  const plotRight = plotX + plotW;
+  const plotBottom = plotY + plotH;
+
+  let effectiveSide = side;
+  // Prefer placing labels inside the plot; flip horizontal side if it would clip past plot edges
+  if (effectiveSide === 'left' && cx - boxWidth - 10 < plotX + edgePad) {
+    effectiveSide = 'right';
+  } else if (effectiveSide === 'right' && cx + 10 + boxWidth > plotRight - edgePad) {
+    effectiveSide = 'left';
   }
 
-  const padding = 4;
-  const minX = padding;
-  const minY = padding;
-  const maxX = (viewBox.x ?? 0) + (viewBox.width ?? 0) - boxWidth - padding;
-  const maxY = (viewBox.y ?? 0) + (viewBox.height ?? 0) - boxHeight - padding;
+  let x = cx - boxWidth / 2;
+  let y = cy - 30 + offsetY;
 
-  x = Math.min(Math.max(minX, x), Number.isFinite(maxX) ? maxX : x);
-  y = Math.min(Math.max(minY, y), Number.isFinite(maxY) ? maxY : y);
+  if (effectiveSide === 'left') {
+    x = cx - boxWidth - 10;
+    y = cy - boxHeight / 2 + offsetY;
+  } else if (effectiveSide === 'right') {
+    x = cx + 10;
+    y = cy - boxHeight / 2 + offsetY;
+  } else if (effectiveSide === 'bottom') {
+    x = cx - boxWidth / 2;
+    y = cy + 10 + offsetY;
+  }
+
+  const minX = plotX + edgePad;
+  const minY = plotY + edgePad;
+  const maxX = plotRight - boxWidth - edgePad;
+  const maxY = plotBottom - boxHeight - edgePad;
+
+  const hasPlot = plotW > 0 && plotH > 0;
+  if (hasPlot) {
+    x = Math.min(Math.max(minX, x), Number.isFinite(maxX) ? maxX : x);
+    y = Math.min(Math.max(minY, y), Number.isFinite(maxY) ? maxY : y);
+  }
 
   return (
     <g>
@@ -150,7 +180,20 @@ export default function TrendLineChartWithMarkers({
   const markerEntries = Array.from(markerByPoint.values()).map((marker) => {
     const isHigh = marker.labels.includes('High');
     const positionIndex = dateIndexByDate.get(marker.point[xDataKey]) ?? 0;
-    const side = isHigh ? 'top' : positionIndex > data.length * 0.65 ? 'left' : 'right';
+    const n = data.length;
+    // Keep callouts inside the chart: never hang labels off the left edge; bias last points leftward.
+    let side = 'top';
+    if (isHigh) {
+      side = 'top';
+    } else if (n <= 1) {
+      side = 'top';
+    } else if (positionIndex === 0) {
+      side = 'right';
+    } else if (positionIndex >= Math.ceil(n * 0.72)) {
+      side = 'left';
+    } else {
+      side = 'right';
+    }
 
     return {
       ...marker,
@@ -175,14 +218,25 @@ export default function TrendLineChartWithMarkers({
 
   const formatForTooltip = (v) => formatDisplayValue(Number(v) || 0);
 
+  // Generous margins so ReferenceDot labels and month ticks are not clipped (Recharts SVG overflow is hidden).
+  const chartMargin = {
+    top: 42,
+    right: isSmallScreen ? 22 : 40,
+    left: isSmallScreen ? 22 : 36,
+    bottom: 36,
+  };
+
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 28, right: 12, left: isSmallScreen ? 6 : 24, bottom: 8 }}>
+    <ResponsiveContainer width="100%" height="100%" className="trendLineChartContainer">
+      <LineChart data={data} margin={chartMargin}>
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
         <XAxis
           dataKey={xDataKey}
           tickFormatter={formatTrendXAxisLabel}
           tick={{ fill: '#94a3b8', fontSize: 12 }}
+          tickMargin={12}
+          interval={data.length <= 24 ? 0 : 'preserveStartEnd'}
+          minTickGap={data.length <= 24 ? 2 : 28}
         />
         <YAxis
           domain={yDomain}
@@ -191,8 +245,8 @@ export default function TrendLineChartWithMarkers({
           tickFormatter={
             isSmallScreen ? undefined : (value) => formatMaybeHidden(hideValues, formatForTooltip, Number(value) || 0, '')
           }
-          width={isSmallScreen ? 8 : 120}
-          tickMargin={isSmallScreen ? 0 : 6}
+          width={isSmallScreen ? 4 : 120}
+          tickMargin={isSmallScreen ? 0 : 8}
         />
         <Tooltip
           formatter={(value) => [

@@ -90,13 +90,19 @@ export default function StrategySimulatorPage({ hideValues }) {
     setRebalanceMode('constantNav');
   }
 
+  const lblAsset = t('portfolio.asset');
+  const lblCurrentW = t('profitability.currentWeight');
+  const lblTargetW = t('profitability.targetWeight');
+  const lblTrade = t('profitability.suggestedTrade');
+  const lblNewW = t('profitability.newWeight');
+
   return (
-    <section className="contentWrap">
+    <section className="contentWrap strategySimulator">
       <header className="pageHeader">
         <h1>{t('strategy.title')}</h1>
       </header>
 
-      <div className="dashboardPanel">
+      <div className="dashboardPanel strategySimulatorPanel">
         {isLoading && <p>{t('app.loadingDashboard')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
         {!isLoading && !error && !hasHoldings && (
@@ -136,45 +142,56 @@ export default function StrategySimulatorPage({ hideValues }) {
                 </label>
               </div>
               <p className="hint profitabilityRebalanceHint">{t('profitability.rebalanceMethodHint')}</p>
-              <div className="profitabilityTableWrap">
-                <table className="profitabilityTable profitabilityTable--rebalance">
+              <div className="profitabilityTableWrap strategyRebalanceWrap">
+                <table className="profitabilityTable strategyRebalanceTable">
                   <thead>
                     <tr>
-                      <th>{t('portfolio.asset')}</th>
-                      <th>{t('profitability.currentWeight')}</th>
-                      <th>{t('profitability.targetWeight')}</th>
-                      <th>{t('profitability.suggestedTrade')}</th>
-                      <th>{t('profitability.newWeight')}</th>
+                      <th>{lblAsset}</th>
+                      <th>{lblCurrentW}</th>
+                      <th>{lblTargetW}</th>
+                      <th>{lblTrade}</th>
+                      <th>{lblNewW}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rebalanceRows.map((r) => (
                       <tr key={r.symbol}>
-                        <td>{r.name ?? r.symbol}</td>
-                        <td>{formatPercent(r.currentWeight)}</td>
-                        <td>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.5"
-                            className="profitabilityInput"
-                            value={targetWeights[r.symbol] ?? ''}
-                            onChange={(e) => handleTargetWeightChange(r.symbol, e.target.value)}
-                            placeholder="0"
-                          />
-                          %
+                        <td data-label={lblAsset}>
+                          <span className="strategyRebalanceCellVal">{r.name ?? r.symbol}</span>
                         </td>
-                        <td>
-                          {r.trade != null && (
-                            r.trade < -0.01
-                              ? `${t('profitability.sellAmount')} ${formatValInAsset(hideValues, -r.trade, assetCurrency(r))}`
-                              : r.trade > 0.01
-                                ? `${t('profitability.buyAmount')} ${formatValInAsset(hideValues, r.trade, assetCurrency(r))}`
-                                : '—'
-                          )}
+                        <td data-label={lblCurrentW}>
+                          <span className="strategyRebalanceCellVal">{formatPercent(r.currentWeight)}</span>
                         </td>
-                        <td>{r.newWeight != null ? formatPercent(r.newWeight) : '—'}</td>
+                        <td data-label={lblTargetW}>
+                          <span className="strategyRebalanceCellVal strategyRebalanceTargetWrap">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              className="profitabilityInput strategyRebalanceWeightInput"
+                              value={targetWeights[r.symbol] ?? ''}
+                              onChange={(e) => handleTargetWeightChange(r.symbol, e.target.value)}
+                              placeholder="0"
+                              aria-label={lblTargetW}
+                            />
+                            <span className="strategyRebalancePctSuffix">%</span>
+                          </span>
+                        </td>
+                        <td data-label={lblTrade}>
+                          <span className="strategyRebalanceCellVal">
+                            {r.trade != null && (
+                              r.trade < -0.01
+                                ? `${t('profitability.sellAmount')} ${formatValInAsset(hideValues, -r.trade, assetCurrency(r))}`
+                                : r.trade > 0.01
+                                  ? `${t('profitability.buyAmount')} ${formatValInAsset(hideValues, r.trade, assetCurrency(r))}`
+                                  : '—'
+                            )}
+                          </span>
+                        </td>
+                        <td data-label={lblNewW}>
+                          <span className="strategyRebalanceCellVal">{r.newWeight != null ? formatPercent(r.newWeight) : '—'}</span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
