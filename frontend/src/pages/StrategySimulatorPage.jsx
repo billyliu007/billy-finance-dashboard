@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { formatCurrencyValue, formatMoney, formatPercent } from '../utils/formatters.js';
+import './StrategySimulatorPage.css';
 
 function assetCurrency(row) {
   return String(row?.currency || 'USD').trim().toUpperCase() || 'USD';
@@ -17,39 +18,66 @@ export default function StrategySimulatorPage({ hideValues }) {
   const { portfolio: portfolioSnapshot, isLoading, error } = useDashboard();
   const portfolioRows = useMemo(() => portfolioSnapshot?.tableRows ?? [], [portfolioSnapshot]);
   const hasHoldings = Boolean(portfolioSnapshot && !portfolioSnapshot.isEmpty);
-  const totalValue = Number(portfolioSnapshot?.totals?.value) || 0;
+  const currentTotalValue = Number(portfolioSnapshot?.totals?.value) || 0;
 
   const [targetWeights, setTargetWeights] = useState({});
   const [rebalanceDirty, setRebalanceDirty] = useState(false);
-  /** constantNav: total portfolio value unchanged (reshuffle). newCashBuys: buys funded with new cash so total NAV increases. */
   const [rebalanceMode, setRebalanceMode] = useState('constantNav');
+  const [autoNormalize, setAutoNormalize] = useState(false);
+  
   const [sellDownSymbol, setSellDownSymbol] = useState('');
   const [sellDownPct, setSellDownPct] = useState(20);
 
-  const rebalanceRows = useMemo(() => {
-    if (!portfolioRows.length || totalValue <= 0) return [];
-    return portfolioRows.map((r) => {
+  const currentInputSum = useMemo(() => {
+    return Object.values(targetWeights).reduce((acc, val) => acc + (Number(val) || 0), 0);
+  }, [targetWeights]);
+
+  const isValid100 = Math.abs(currentInputSum - 100) < 0.01;
+
+  const { rebalanceRows, actionPlan, insights } = useMemo(() => {
+    if (!portfolioRows.length || currentTotalValue <= 0) {
+      return { rebalanceRows: [], actionPlan: [], insights: { requiredCash: 0, targetTotal: 0, turnover: 0 } };
+    }
+
+    let requiredCash = 0;
+    let targetTotal = currentTotalValue;
+    let turnover = 0;
+    const actions = [];
+
+    const rows = portfolioRows.map((r) => {
       const currentWeight = r.weightPct ?? 0;
       const currentVal = r.currentValue ?? 0;
-      const targetPct = targetWeights[r.symbol];
-      const targetNum = targetPct != null && targetPct !== '' ? Number(targetPct) : null;
-      const targetVal = Number.isFinite(targetNum) && targetNum >= 0 ? (totalValue * targetNum) / 100 : null;
-      const w = Number.isFinite(targetNum) && targetNum >= 0 ? targetNum / 100 : null;
-      let trade = targetVal != null ? targetVal - currentVal : null;
-      let newWeight = targetVal != null && totalValue > 0 ? (targetVal / totalValue) * 100 : null;
+      
+      let targetNum = targetWeights[r.symbol] !== undefined && targetWeights[r.symbol] !== '' 
+        ? Number(targetWeights[r.symbol]) 
+        : null;
 
-      if (
-        trade != null &&
-        rebalanceMode === 'newCashBuys' &&
-        trade > 0.01 &&
-        w != null &&
-        w > 0 &&
-        w < 0.9999
-      ) {
+      if (autoNormalize && currentInputSum > 0 && targetNum != null) {
+        targetNum = (targetNum / currentInputSum) * 100;
+      }
+
+      const targetVal = Number.isFinite(targetNum) && targetNum >= 0 ? (currentTotalValue * targetNum) / 100 : null;
+      const w = Number.isFinite(targetNum) && targetNum >= 0 ? targetNum / 100 : null;
+      
+      let trade = targetVal != null ? targetVal - currentVal : null;
+      let newWeight = targetVal != null && currentTotalValue > 0 ? (targetVal / currentTotalValue) * 100 : null;
+
+      if (trade != null && rebalanceMode === 'newCashBuys' && trade > 0.01 && w != null && w > 0 && w < 0.9999) {
         const buyWithNewCash = trade / (1 - w);
         trade = buyWithNewCash;
-        const newTotal = totalValue + buyWithNewCash;
-        newWeight = newTotal > 0 ? ((currentVal + buyWithNewCash) / newTotal) * 100 : newWeight;
+        requiredCash += buyWithNewCash;
+      }
+
+      if (trade != null) {
+        turnover += Math.abs(trade);
+        if (Math.abs(trade) > 0.01) {
+          actions.push({
+            symbol: r.symbol,
+            type: trade > 0 ? 'BUY' : 'SELL',
+            amount: Math.abs(trade),
+            currency: assetCurrency(r)
+          });
+        }
       }
 
       return {
@@ -61,7 +89,30 @@ export default function StrategySimulatorPage({ hideValues }) {
         newWeight,
       };
     });
-  }, [portfolioRows, totalValue, targetWeights, rebalanceMode]);
+
+    if (rebalanceMode === 'newCashBuys') {
+      targetTotal = currentTotalValue + requiredCash;
+      rows.forEach(r => {
+        if (r.newWeight != null && targetTotal > 0) {
+          const simulatedEndValue = (r.currentValue ?? 0) + (r.trade ?? 0);
+          r.newWeight = (simulatedEndValue / targetTotal) * 100;
+        }
+      });
+    }
+
+    actions.sort((a, b) => b.amount - a.amount);
+
+    return {
+      rebalanceRows: rows,
+      actionPlan: actions,
+      insights: {
+        requiredCash,
+        targetTotal,
+        turnover: turnover / 2
+      }
+    };
+  }, [portfolioRows, currentTotalValue, targetWeights, rebalanceMode, autoNormalize, currentInputSum]);
+
 
   const sellDownResult = useMemo(() => {
     if (!sellDownSymbol || !Number.isFinite(sellDownPct) || sellDownPct <= 0 || sellDownPct > 100) return null;
@@ -70,14 +121,14 @@ export default function StrategySimulatorPage({ hideValues }) {
     const value = row.currentValue ?? 0;
     const sellValue = (value * sellDownPct) / 100;
     const remaining = value - sellValue;
-    const newTotal = totalValue - sellValue;
+    const newTotal = currentTotalValue - sellValue;
     return {
       sellValue,
       remaining,
       newTotal,
       assetCurrency: assetCurrency(row),
     };
-  }, [portfolioRows, sellDownSymbol, sellDownPct, totalValue]);
+  }, [portfolioRows, sellDownSymbol, sellDownPct, currentTotalValue]);
 
   function handleTargetWeightChange(symbol, value) {
     setTargetWeights((prev) => ({ ...prev, [symbol]: value }));
@@ -88,12 +139,23 @@ export default function StrategySimulatorPage({ hideValues }) {
     setTargetWeights({});
     setRebalanceDirty(false);
     setRebalanceMode('constantNav');
+    setAutoNormalize(false);
+  }
+
+  function handleNormalizeTo100() {
+    if (currentInputSum === 0) return;
+    const normalized = {};
+    for (const [sym, val] of Object.entries(targetWeights)) {
+      if (val !== '' && Number(val) > 0) {
+        normalized[sym] = ((Number(val) / currentInputSum) * 100).toFixed(2);
+      }
+    }
+    setTargetWeights(normalized);
   }
 
   const lblAsset = t('portfolio.asset');
   const lblCurrentW = t('profitability.currentWeight');
   const lblTargetW = t('profitability.targetWeight');
-  const lblTrade = t('profitability.suggestedTrade');
   const lblNewW = t('profitability.newWeight');
 
   return (
@@ -114,34 +176,68 @@ export default function StrategySimulatorPage({ hideValues }) {
             <section className="profitabilitySection">
               <h2 className="profitabilitySectionTitle">{t('profitability.rebalance')}</h2>
               <p className="profitabilitySectionDesc">{t('profitability.rebalanceDesc')}</p>
-              <div className="profitabilityRebalanceMode" role="group" aria-label={t('profitability.rebalanceMethod')}>
-                <span className="profitabilityLabel">{t('profitability.rebalanceMethod')}</span>
-                <label className="profitabilityRadioLabel">
-                  <input
-                    type="radio"
-                    name="rebalanceMode"
-                    checked={rebalanceMode === 'constantNav'}
-                    onChange={() => {
-                      setRebalanceMode('constantNav');
-                      setRebalanceDirty(true);
-                    }}
-                  />
-                  {t('profitability.rebalanceConstantNav')}
-                </label>
-                <label className="profitabilityRadioLabel">
-                  <input
-                    type="radio"
-                    name="rebalanceMode"
-                    checked={rebalanceMode === 'newCashBuys'}
-                    onChange={() => {
-                      setRebalanceMode('newCashBuys');
-                      setRebalanceDirty(true);
-                    }}
-                  />
-                  {t('profitability.rebalanceNewCashBuys')}
-                </label>
+
+              <div className="strategyCardsRow">
+                <button
+                  type="button"
+                  className={`strategyModeCard ${rebalanceMode === 'constantNav' ? 'active' : ''}`}
+                  onClick={() => { setRebalanceMode('constantNav'); setRebalanceDirty(true); }}
+                >
+                  <h3>{t('profitability.rebalanceConstantNav')}</h3>
+                  <p>Reposition your existing portfolio by selling overweight assets to buy underweight ones. Total value remains the same.</p>
+                </button>
+                <button
+                  type="button"
+                  className={`strategyModeCard ${rebalanceMode === 'newCashBuys' ? 'active' : ''}`}
+                  onClick={() => { setRebalanceMode('newCashBuys'); setRebalanceDirty(true); }}
+                >
+                  <h3>{t('profitability.rebalanceNewCashBuys')}</h3>
+                  <p>Inject new cash to buy underweight assets without selling anything. Grow your portfolio size to hit the targets.</p>
+                </button>
               </div>
-              <p className="hint profitabilityRebalanceHint">{t('profitability.rebalanceMethodHint')}</p>
+
+              <div className="profitabilitySellDownResult strategyKpiRow">
+                <div className="profitabilityCard">
+                  <span className="profitabilityCardLabel">Current Portfolio Value</span>
+                  <span className="profitabilityCardValue">
+                    {hideValues ? '—' : formatMoney(currentTotalValue)}
+                  </span>
+                </div>
+                <div className="profitabilityCard">
+                  <span className="profitabilityCardLabel">Required Cash Injection</span>
+                  <span className="profitabilityCardValue">
+                    {hideValues ? '—' : formatMoney(insights.requiredCash)}
+                  </span>
+                </div>
+                <div className="profitabilityCard">
+                  <span className="profitabilityCardLabel">Target Portfolio Value</span>
+                  <span className="profitabilityCardValue">
+                    {hideValues ? '—' : formatMoney(insights.targetTotal)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="strategyTrackerRow">
+                <div className={`strategyTotalTracker ${!isValid100 && currentInputSum > 0 && !autoNormalize ? 'warn' : 'ok'}`}>
+                  <strong>Total Target Weight:</strong> {autoNormalize ? '100.00' : currentInputSum.toFixed(2)}% / 100%
+                </div>
+                <div className="strategyNormControls">
+                  <label className="profitabilityRadioLabel">
+                    <input
+                      type="checkbox"
+                      checked={autoNormalize}
+                      onChange={(e) => setAutoNormalize(e.target.checked)}
+                    />
+                    Auto-normalize targets to 100%
+                  </label>
+                  {!autoNormalize && !isValid100 && currentInputSum > 0 && (
+                    <button type="button" className="btn btn-sm btn-outline" onClick={handleNormalizeTo100}>
+                      Fix Weights
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="profitabilityTableWrap strategyRebalanceWrap">
                 <table className="profitabilityTable strategyRebalanceTable">
                   <thead>
@@ -149,7 +245,6 @@ export default function StrategySimulatorPage({ hideValues }) {
                       <th>{lblAsset}</th>
                       <th>{lblCurrentW}</th>
                       <th>{lblTargetW}</th>
-                      <th>{lblTrade}</th>
                       <th>{lblNewW}</th>
                     </tr>
                   </thead>
@@ -178,17 +273,6 @@ export default function StrategySimulatorPage({ hideValues }) {
                             <span className="strategyRebalancePctSuffix">%</span>
                           </span>
                         </td>
-                        <td data-label={lblTrade}>
-                          <span className="strategyRebalanceCellVal">
-                            {r.trade != null && (
-                              r.trade < -0.01
-                                ? `${t('profitability.sellAmount')} ${formatValInAsset(hideValues, -r.trade, assetCurrency(r))}`
-                                : r.trade > 0.01
-                                  ? `${t('profitability.buyAmount')} ${formatValInAsset(hideValues, r.trade, assetCurrency(r))}`
-                                  : '—'
-                            )}
-                          </span>
-                        </td>
                         <td data-label={lblNewW}>
                           <span className="strategyRebalanceCellVal">{r.newWeight != null ? formatPercent(r.newWeight) : '—'}</span>
                         </td>
@@ -197,6 +281,27 @@ export default function StrategySimulatorPage({ hideValues }) {
                   </tbody>
                 </table>
               </div>
+
+              {actionPlan.length > 0 && (
+                <div className="strategyActionPlan">
+                  <h3>Proposed Trade Action Plan</h3>
+                  <p>Execute the following trades to reach your target allocation. Estimated Turnover: {hideValues ? '—' : formatMoney(insights.turnover)}</p>
+                  <div className="strategyActionGrid">
+                    {actionPlan.map((action, idx) => (
+                      <div key={idx} className={`strategyActionCard ${action.type.toLowerCase()}`}>
+                        <span className="actionBadge">{action.type}</span>
+                        <div className="actionDetails">
+                          <span className="actionSymbol">{action.symbol}</span>
+                          <span className="actionAmount">
+                            {formatValInAsset(hideValues, action.amount, action.currency)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {rebalanceDirty && (
                 <button type="button" className="modalBtn secondary profitabilityResetBtn" onClick={handleResetRebalance}>
                   {t('profitability.reset')}
