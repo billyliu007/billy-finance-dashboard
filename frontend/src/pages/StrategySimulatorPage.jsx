@@ -32,7 +32,7 @@ export default function StrategySimulatorPage({ hideValues }) {
     return Object.values(targetWeights).reduce((acc, val) => acc + (Number(val) || 0), 0);
   }, [targetWeights]);
 
-  const isValid100 = Math.abs(currentInputSum - 100) < 0.01;
+  const isValid100 = Math.abs(currentInputSum - 100) < 0.02;
 
   const { rebalanceRows, actionPlan, insights } = useMemo(() => {
     if (!portfolioRows.length || currentTotalValue <= 0) {
@@ -219,7 +219,7 @@ export default function StrategySimulatorPage({ hideValues }) {
 
               <div className="strategyTrackerRow">
                 <div className={`strategyTotalTracker ${!isValid100 && currentInputSum > 0 && !autoNormalize ? 'warn' : 'ok'}`}>
-                  <strong>Total Target Weight:</strong> {autoNormalize ? '100.00' : currentInputSum.toFixed(2)}% / 100%
+                  <strong>Total Target Weight:</strong> {autoNormalize || (isValid100 && currentInputSum > 0) ? '100.00' : currentInputSum.toFixed(2)}% / 100%
                 </div>
                 <div className="strategyNormControls">
                   <label className="profitabilityRadioLabel">
