@@ -4,26 +4,24 @@ import { fxCache } from './ttlCache.js';
 const FRANKFURTER_URL = 'https://api.frankfurter.app/latest';
 const FX_TIMEOUT_MS = 10000;
 
-/** Currencies we fetch (all vs USD, then derive to CNY). */
-const DEFAULT_FX_CURRENCIES = ['USD', 'SGD', 'EUR', 'GBP', 'JPY', 'HKD'];
+/** Currencies we fetch (all vs USD). */
+const DEFAULT_FX_CURRENCIES = ['USD', 'CNY', 'SGD', 'EUR', 'GBP', 'JPY', 'HKD'];
 
 /**
- * Fetch FX rates to CNY in a single request: from=USD&to=CNY,SGD,EUR,GBP,JPY,HKD,
- * then derive each currency → CNY (USD/CNY from rates.CNY, EUR/CNY = rates.CNY/rates.EUR, etc.).
+ * Fetch FX rates from Frankfurter (base is always USD).
+ * Returns a mapping: { CURRENCY_CODE: usdValuePerUnit }
+ * Example: if 1 USD = 7.2 CNY, returns { CNY: 0.1388... }
  */
 export async function fetchFrankfurterFxRates(extraCurrencies = []) {
   const toFetch = [...new Set([...DEFAULT_FX_CURRENCIES, ...extraCurrencies])].filter(
-    (c) => c && String(c).toUpperCase() !== 'CNY'
+    (c) => c && String(c).toUpperCase() !== 'USD'
   );
-  if (toFetch.length === 0) {
-    return {};
-  }
 
-  const cacheKey = `fx:${toFetch.sort().join(',')}`;
+  const cacheKey = `fx:usd-base:${toFetch.sort().join(',')}`;
   const cached = fxCache.get(cacheKey);
   if (cached) return cached;
 
-  const toParam = ['CNY', ...toFetch.filter((c) => c !== 'USD')].join(',');
+  const toParam = toFetch.join(',');
   const params = new URLSearchParams({ from: 'USD', to: toParam });
 
   let response;
@@ -32,30 +30,26 @@ export async function fetchFrankfurterFxRates(extraCurrencies = []) {
       timeoutMs: FX_TIMEOUT_MS,
     });
   } catch (err) {
-    return {};
+    return { USD: 1 };
   }
 
   if (!response.ok) {
-    return {};
+    return { USD: 1 };
   }
 
   const body = await response.json();
   const rates = body?.rates;
   if (!rates || typeof rates !== 'object') {
-    return {};
+    return { USD: 1 };
   }
 
-  const usdToCny = Number(rates.CNY);
-  if (!Number.isFinite(usdToCny) || usdToCny <= 0) {
-    return {};
-  }
-
-  const result = { USD: usdToCny };
+  // Frankfurter rates are "1 USD = X CUR".
+  // We want "1 CUR = (1/X) USD" so we can multiply: AmountInCur * Rate = AmountInUSD.
+  const result = { USD: 1 };
   for (const currency of toFetch) {
-    if (currency === 'USD') continue;
-    const usdToCur = Number(rates[currency]);
-    if (Number.isFinite(usdToCur) && usdToCur > 0) {
-      result[currency] = usdToCny / usdToCur;
+    const unitsPerUsd = Number(rates[currency]);
+    if (Number.isFinite(unitsPerUsd) && unitsPerUsd > 0) {
+      result[currency] = 1 / unitsPerUsd;
     }
   }
 

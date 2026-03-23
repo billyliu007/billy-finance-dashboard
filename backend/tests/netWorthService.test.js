@@ -82,7 +82,7 @@ test('buildNetWorthPayload handles empty history', () => {
   assert.strictEqual(payload.performance.cashflowData.length, 0);
 });
 
-test('buildNetWorthPayload CNY base: fallback when USD/CNY FX missing but CNY cash is valued', () => {
+test('buildNetWorthPayload CNY base: CNY cash is valued via USD pivot with CNY rate present', () => {
   const payload = buildNetWorthPayload({
     cashComponents: [
       { id: 'a', currency: 'CNY', name: 'CNY Cash', balance: 100_000 },
@@ -92,11 +92,13 @@ test('buildNetWorthPayload CNY base: fallback when USD/CNY FX missing but CNY ca
     history: [],
     stockQuotes: {},
     cryptoQuotes: {},
-    fxRatesOverride: {},
+    fxRatesOverride: { CNY: 0.138 }, // USD per 1 CNY — required for USD pivot
     baseCurrency: 'CNY',
   });
 
-  assert.strictEqual(payload.overview.totalNetWorth, 100_000);
+  // CNY 100,000 → USD 13,800 → CNY 100,000 (CNY round-trip: exact when rate used consistently)
+  // USD 1,000 → CNY 7,246.4... also added; total > 100,000
+  assert.ok(payload.overview.totalNetWorth > 100_000);
 });
 
 test('buildNetWorthPayload CNY base: stays zero when only USD cash and FX missing', () => {

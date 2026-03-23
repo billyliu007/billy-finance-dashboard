@@ -31,20 +31,12 @@ function buildDetailRows(cashComponents, fxRates) {
     const balance = Number(item.balance ?? item.amount ?? 0);
     const signedValue = Number.isFinite(balance) ? balance : 0;
     const type = signedValue < 0 ? 'liability' : 'asset';
-    const currencyDisplay = String(item.currency || 'CNY').trim().toUpperCase() || 'CNY';
+    const currencyDisplay = String(item.currency || 'USD').trim().toUpperCase() || 'USD';
     const currencyNormalized = normalizeCurrencyCode(currencyDisplay);
-    const rateToCny = fxRates[currencyNormalized];
-    const usdToCny = fxRates.USD;
-    const rateToUsd =
-      currencyNormalized === 'USD'
-        ? 1
-        : currencyNormalized === 'CNY'
-          ? Number.isFinite(usdToCny) && usdToCny > 0
-            ? 1 / usdToCny
-            : null
-          : Number.isFinite(rateToCny) && rateToCny > 0 && Number.isFinite(usdToCny) && usdToCny > 0
-            ? rateToCny / usdToCny
-            : null;
+
+    // USD is the single computation pivot. fxRates[currency] = USD per 1 unit of that currency.
+    // fxRates.USD is always 1 (hardcoded). All other currencies need their rate present to be valued.
+    const rateToUsd = fxRates[currencyNormalized];
     const key = item.id ?? `cash_${currencyDisplay}_${String(item.name || '').replace(/\s+/g, '_')}`;
 
     return {
@@ -55,10 +47,9 @@ function buildDetailRows(cashComponents, fxRates) {
       currency: currencyDisplay,
       currencyNormalized,
       value: signedValue,
-      fxRate: Number.isFinite(rateToCny) ? rateToCny : null,
-      cnyValue: Number.isFinite(rateToCny) ? signedValue * rateToCny : null,
+      fxRate: Number.isFinite(rateToUsd) ? rateToUsd : null,
       usdValue: Number.isFinite(rateToUsd) ? signedValue * rateToUsd : null,
-      found: true,
+      found: Number.isFinite(rateToUsd),
     };
   });
 }
@@ -80,16 +71,14 @@ function computeUsdPositionsTotal(positions, stockQuotes = {}, cryptoQuotes = {}
 function aggregateComputedTotalsUsd(visibleDetailRows, usdPositionsTotal, fxRates) {
   const currencies = new Set(visibleDetailRows.map((item) => item.currencyNormalized));
   if (usdPositionsTotal > 0) currencies.add('USD');
-  const usdToCny = fxRates.USD;
   const result = {};
 
   for (const currency of currencies) {
     const key = currencyToComponentKey(currency);
     const rows = visibleDetailRows.filter((item) => item.currencyNormalized === currency);
 
-    const hasUsdRate = Number.isFinite(usdToCny) && usdToCny > 0;
-    const hasCurrencyRateToCny =
-      currency === 'CNY' ? true : Number.isFinite(fxRates[currency]) && fxRates[currency] > 0;
+    const rateToUsd = fxRates[currency];
+    const hasRate = Number.isFinite(rateToUsd) && rateToUsd > 0;
 
     const cashUsdSum = rows.reduce((sum, item) => sum + (item.usdValue ?? 0), 0);
     const positionsUsd = currency === 'USD' ? usdPositionsTotal : 0;
@@ -101,8 +90,7 @@ function aggregateComputedTotalsUsd(visibleDetailRows, usdPositionsTotal, fxRate
 
     let reason = null;
     if (!found) {
-      if (!hasUsdRate) reason = 'Missing USD/CNY rate';
-      else if (!hasCurrencyRateToCny) reason = `Missing ${currency}/CNY rate`;
+      if (!hasRate) reason = `Missing ${currency} FX rate to USD`;
       else reason = `No ${currency} cash or positions`;
     }
 
@@ -112,13 +100,14 @@ function aggregateComputedTotalsUsd(visibleDetailRows, usdPositionsTotal, fxRate
   return result;
 }
 
-function mapCashDetailRowsToTableRows(visibleDetailRows, baseCurrency = 'CNY', rateToBase = 1) {
+// targetBasePerUsd = 1 / fxRates[base]: converts a USD amount into the display base currency.
+function mapCashDetailRowsToTableRows(visibleDetailRows, baseCurrency = 'USD', targetBasePerUsd = null) {
   return visibleDetailRows
     .filter((item) => !shouldHideCashRow(item.value))
     .map((item) => {
-      const cnyVal = item.cnyValue;
-      const amountBase = cnyVal != null && Number.isFinite(rateToBase) && rateToBase > 0
-        ? cnyVal / rateToBase
+      // USD is the pivot: amountBase = usdValue * (units of base per 1 USD)
+      const amountBase = item.usdValue != null && Number.isFinite(targetBasePerUsd) && targetBasePerUsd > 0
+        ? item.usdValue * targetBasePerUsd
         : null;
       return {
         id: item.key,
@@ -128,7 +117,7 @@ function mapCashDetailRowsToTableRows(visibleDetailRows, baseCurrency = 'CNY', r
         currency: item.currency,
         amountLocal: item.value,
         fxRate: item.fxRate,
-        amountCny: amountBase,
+        amountCny: amountBase,      // field name kept for frontend compatibility; holds base-currency amount
         amountClass: item.value >= 0 ? 'pos' : 'neg',
         amountCnyClass: amountBase == null ? '' : amountBase >= 0 ? 'pos' : 'neg',
       };
@@ -138,36 +127,70 @@ function mapCashDetailRowsToTableRows(visibleDetailRows, baseCurrency = 'CNY', r
 /**
  * Resolve history rows to display values in base currency.
  * Uses stored CNY when base is CNY; uses stored USD when base is USD; otherwise converts via FX.
- * Legacy rows have only netWorthCny (total_usd null).
+ * For non-native-currency bases (e.g. SGD), prefers the historically-saved FX rates from
+ * row.metadata.fx_rates (written by the cron job) over the live rates, for accuracy.
+ * Legacy rows without metadata fall back to the live fxRates.
  */
 function parseCashflowRows(rows, baseCurrency, fxRates) {
   const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
-  const rateToBase = Number.isFinite(fxRates[base]) && fxRates[base] > 0 ? fxRates[base] : 1;
-  const usdRate = Number.isFinite(fxRates.USD) && fxRates.USD > 0 ? fxRates.USD : null;
+
+  // Live-rate fallbacks (used when no historical metadata is present)
+  const liveusdPerBase = fxRates[base];
+  const liveTargetBasePerUsd = (Number.isFinite(liveusdPerBase) && liveusdPerBase > 0) ? (1 / liveusdPerBase) : null;
+  const liveusdPerCny = fxRates.CNY;
 
   return (rows || [])
     .map((row) => {
       const date = String(row?.date || '').trim();
       const recordedAtUtc = String(row?.recordedAtUtc || '').trim();
-      const cnyRaw = row?.netWorthCny ?? row?.netWorth;
-      const cny = cnyRaw != null && Number.isFinite(Number(cnyRaw)) ? Number(cnyRaw) : null;
-      const usd = row?.netWorthUsd != null && Number.isFinite(Number(row.netWorthUsd)) ? Number(row.netWorthUsd) : null;
 
-      let netWorth = null;
-      if (base === 'CNY' && cny != null) {
-        netWorth = cny;
-      } else if (base === 'USD' && usd != null) {
-        netWorth = usd;
-      } else if (cny != null && rateToBase > 0) {
-        netWorth = cny / rateToBase;
-      } else if (usd != null && usdRate != null && rateToBase > 0) {
-        netWorth = (usd * usdRate) / rateToBase;
+      const cnyRaw = row?.netWorthCny ?? row?.netWorth;
+      const cnyValue = cnyRaw != null && Number.isFinite(Number(cnyRaw)) ? Number(cnyRaw) : null;
+      const usdValueStored = row?.netWorthUsd != null && Number.isFinite(Number(row.netWorthUsd)) ? Number(row.netWorthUsd) : null;
+
+      // Prefer historically-saved FX rates from metadata (written by cron job) for non-native paths.
+      // CNY and USD branches read native columns directly, so historical rates only matter for the
+      // conversion fallback branch (base is something other than CNY / USD, e.g. SGD).
+      const historicalFx = row?.metadata?.fx_rates;
+      const resolvedFx = (historicalFx && typeof historicalFx === 'object') ? historicalFx : fxRates;
+
+      const usdPerBase = resolvedFx[base];
+      const targetBasePerUsd = (Number.isFinite(usdPerBase) && usdPerBase > 0) ? (1 / usdPerBase) : liveTargetBasePerUsd;
+      const usdPerCny = resolvedFx.CNY ?? liveusdPerCny;
+
+      let netWorthValue = null;
+
+      // 1. If base is CNY, prioritize the native recorded cnyValue (no conversion needed)
+      if (base === 'CNY' && cnyValue != null) {
+        netWorthValue = cnyValue;
       }
-      if (netWorth == null || !Number.isFinite(netWorth) || date === '') return null;
+      // 2. If base is USD, prioritize the modern netWorthUsd column (no conversion needed)
+      else if (base === 'USD' && usdValueStored != null) {
+        netWorthValue = usdValueStored;
+      }
+      // 3. For other bases (e.g. SGD): convert via historical FX if available, else live rate
+      else {
+        let effectiveUsdValue = usdValueStored;
+        if (effectiveUsdValue == null && cnyValue != null && usdPerCny != null) {
+          // Legacy row: only CNY recorded — convert CNY -> USD first using the best available rate
+          effectiveUsdValue = cnyValue * usdPerCny;
+        }
+
+        if (effectiveUsdValue != null) {
+          if (base === 'USD') {
+            netWorthValue = effectiveUsdValue;
+          } else if (targetBasePerUsd != null) {
+            netWorthValue = effectiveUsdValue * targetBasePerUsd;
+          }
+        }
+      }
+
+      if (netWorthValue == null || !Number.isFinite(netWorthValue) || date === '') return null;
+
       return {
         date,
         recordedAtUtc,
-        netWorth,
+        netWorth: netWorthValue,
         dateTimeLabel: recordedAtUtc || date,
       };
     })
@@ -289,7 +312,7 @@ export function buildNetWorthPayload({
 }) {
   const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
   const fxRates = {
-    CNY: 1,
+    USD: 1, // Base of our universe
     ...Object.entries(fxRatesOverride).reduce((acc, [currency, rate]) => {
       const parsedRate = Number(rate);
       if (Number.isFinite(parsedRate) && parsedRate > 0) {
@@ -298,38 +321,28 @@ export function buildNetWorthPayload({
       return acc;
     }, {}),
   };
-  const usdToCny = fxRates.USD;
-  const baseToCny = fxRates[base];
-  const usdToBase =
-    base === 'USD'
-      ? 1
-      : base === 'CNY'
-        ? Number.isFinite(usdToCny) && usdToCny > 0
-          ? usdToCny
-          : null
-        : Number.isFinite(usdToCny) && usdToCny > 0 && Number.isFinite(baseToCny) && baseToCny > 0
-          ? usdToCny / baseToCny
-          : null;
-  const rateToBase = Number.isFinite(baseToCny) && baseToCny > 0 ? baseToCny : 1;
+
+  const usdPerBase = fxRates[base];
+  const targetBasePerUsd = (Number.isFinite(usdPerBase) && usdPerBase > 0) ? (1 / usdPerBase) : null;
 
   const detailRows = buildDetailRows(cashComponents, fxRates);
   const visibleDetailRows = detailRows.filter((item) => item.found);
-  const cashRows = mapCashDetailRowsToTableRows(visibleDetailRows, base, rateToBase);
+
+  // targetBasePerUsd: how many units of the display base you get for 1 USD.
+  // Used consistently everywhere — single USD pivot, no CNY middleman.
+  const cashRows = mapCashDetailRowsToTableRows(visibleDetailRows, base, targetBasePerUsd);
   const usdPositionsTotal = computeUsdPositionsTotal(positions, stockQuotes, cryptoQuotes);
   const aggregatedTotalsByKey = aggregateComputedTotalsUsd(visibleDetailRows, usdPositionsTotal, fxRates);
   const orderedKeys = Object.keys(aggregatedTotalsByKey).sort((a, b) => {
     if (a === 'cny_assets_total') return -1;
     if (b === 'cny_assets_total') return 1;
-    if (a === 'usd_assets_in_cny') return -1;
-    if (b === 'usd_assets_in_cny') return 1;
     return a.localeCompare(b);
   });
   const componentValuesAll = orderedKeys.map((key) => {
     const agg = aggregatedTotalsByKey[key] || { found: false, valueUsd: 0, reason: 'Missing data' };
-    const valueInBase =
-      agg.valueUsd != null && Number.isFinite(usdToBase) && usdToBase > 0
-        ? agg.valueUsd * usdToBase
-        : null;
+    const valueInBase = (agg.valueUsd != null && targetBasePerUsd != null)
+      ? agg.valueUsd * targetBasePerUsd
+      : null;
     return {
       key,
       name: componentKeyToDisplayName(key, base),
@@ -340,31 +353,7 @@ export function buildNetWorthPayload({
   const missingInputs = componentValuesAll
     .filter((item) => !item.found)
     .map((item) => `${item.name}: ${item.reason || 'Missing data'}`);
-  let totalNetWorth = componentValuesAll.reduce((sum, component) => sum + (component.value ?? 0), 0);
-
-  /**
-   * When USD/CNY (and cross rates) are missing, component `value` is null everywhere and the sum is 0
-   * even though CNY-denominated cash still has valid cnyValue. Snapshots and charts then store 0 incorrectly.
-   * For base CNY, recover total from sum(cnyValue) + positions in CNY when USD rate exists for positions.
-   */
-  if (String(base).toUpperCase() === 'CNY') {
-    const cashCnySum = visibleDetailRows.reduce(
-      (sum, row) =>
-        sum + (row.cnyValue != null && Number.isFinite(row.cnyValue) ? row.cnyValue : 0),
-      0,
-    );
-    const positionsNeedFx = usdPositionsTotal > 0;
-    const canValuePositions = Number.isFinite(usdToCny) && usdToCny > 0;
-    const positionsCny =
-      positionsNeedFx && canValuePositions ? usdPositionsTotal * usdToCny : 0;
-    const fallbackTotalCny = cashCnySum + positionsCny;
-    const componentsEffectivelyZero =
-      !Number.isFinite(totalNetWorth) || Math.abs(totalNetWorth) < 1e-9;
-    const blockedByMissingUsdForPositions = positionsNeedFx && !canValuePositions;
-    if (componentsEffectivelyZero && !blockedByMissingUsdForPositions && Number.isFinite(fallbackTotalCny)) {
-      totalNetWorth = fallbackTotalCny;
-    }
-  }
+  const totalNetWorth = componentValuesAll.reduce((sum, component) => sum + (component.value ?? 0), 0);
   // Exclude zero-value components from breakdown so it matches the cash table (which hides 0-balance rows)
   const componentValues = componentValuesAll.filter(
     (c) => c.value == null || !Number.isFinite(c.value) || Math.abs(c.value) >= 1e-9
