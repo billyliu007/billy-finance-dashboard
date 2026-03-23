@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from './http.js';
+import { fxCache } from './ttlCache.js';
 
 const FRANKFURTER_URL = 'https://api.frankfurter.app/latest';
 const FX_TIMEOUT_MS = 10000;
@@ -17,6 +18,10 @@ export async function fetchFrankfurterFxRates(extraCurrencies = []) {
   if (toFetch.length === 0) {
     return {};
   }
+
+  const cacheKey = `fx:${toFetch.sort().join(',')}`;
+  const cached = fxCache.get(cacheKey);
+  if (cached) return cached;
 
   const toParam = ['CNY', ...toFetch.filter((c) => c !== 'USD')].join(',');
   const params = new URLSearchParams({ from: 'USD', to: toParam });
@@ -53,5 +58,7 @@ export async function fetchFrankfurterFxRates(extraCurrencies = []) {
       result[currency] = usdToCny / usdToCur;
     }
   }
+
+  fxCache.set(cacheKey, result);
   return result;
 }

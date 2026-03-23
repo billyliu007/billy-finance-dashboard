@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from './http.js';
+import { marketDataCache } from './ttlCache.js';
 
 const FINNHUB_QUOTE_URL = 'https://finnhub.io/api/v1/quote';
 const FINNHUB_CANDLE_URL = 'https://finnhub.io/api/v1/stock/candle';
@@ -43,6 +44,10 @@ export async function fetchFinnhubQuotes(symbols = []) {
     return {};
   }
 
+  const cacheKey = `finnhub:quotes:${normalizedSymbols.sort().join(',')}`;
+  const cached = marketDataCache.get(cacheKey);
+  if (cached) return cached;
+
   const requests = normalizedSymbols.map(async (symbol) => {
     try {
       const params = new URLSearchParams({ symbol, token: apiKey });
@@ -61,12 +66,15 @@ export async function fetchFinnhubQuotes(symbols = []) {
   });
 
   const results = await Promise.all(requests);
-  return results.reduce((acc, item) => {
+  const data = results.reduce((acc, item) => {
     if (item) {
       acc[item.symbol] = item;
     }
     return acc;
   }, {});
+
+  marketDataCache.set(cacheKey, data);
+  return data;
 }
 
 /**
@@ -78,6 +86,10 @@ export async function fetchFinnhubDailyCloses({ symbol, fromDate, toDate }) {
   const apiKey = String(process.env.FINNHUB_API_KEY || '').trim();
   const sym = String(symbol || '').trim().toUpperCase();
   if (!apiKey || !sym || !fromDate || !toDate) return [];
+
+  const cacheKey = `finnhub:daily:${sym}:${fromDate}:${toDate}`;
+  const cached = marketDataCache.get(cacheKey);
+  if (cached) return cached;
 
   const fromTs = Math.floor(new Date(`${fromDate}T00:00:00.000Z`).getTime() / 1000);
   const toTs = Math.floor(new Date(`${toDate}T23:59:59.999Z`).getTime() / 1000);
@@ -106,6 +118,7 @@ export async function fetchFinnhubDailyCloses({ symbol, fromDate, toDate }) {
       const date = new Date(ts * 1000).toISOString().slice(0, 10);
       out.push({ date, close });
     }
+    marketDataCache.set(cacheKey, out, 3600000); // cache daily candles for 1 hour
     return out;
   } catch {
     return [];

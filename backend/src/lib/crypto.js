@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from './http.js';
+import { marketDataCache } from './ttlCache.js';
 
 const BINANCE_TICKER_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price';
 const COINGECKO_SIMPLE_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price';
@@ -53,6 +54,10 @@ export async function fetchBinanceUsdtQuotes(targets = []) {
     return {};
   }
 
+  const cacheKey = `binance:quotes:${normalizedTargets.map((t) => t.providerSymbol).sort().join(',')}`;
+  const cached = marketDataCache.get(cacheKey);
+  if (cached) return cached;
+
   const requests = normalizedTargets.map(async (target) => {
     try {
       const params = new URLSearchParams({ symbol: target.providerSymbol });
@@ -82,12 +87,15 @@ export async function fetchBinanceUsdtQuotes(targets = []) {
   });
 
   const results = await Promise.all(requests);
-  return results.reduce((acc, item) => {
+  const data = results.reduce((acc, item) => {
     if (item) {
       acc[item.symbol] = item;
     }
     return acc;
   }, {});
+
+  marketDataCache.set(cacheKey, data);
+  return data;
 }
 
 export async function fetchCoingeckoUsdQuotes(symbols = []) {
@@ -109,6 +117,10 @@ export async function fetchCoingeckoUsdQuotes(symbols = []) {
     return {};
   }
 
+  const cacheKey = `coingecko:quotes:${ids.sort().join(',')}`;
+  const cached = marketDataCache.get(cacheKey);
+  if (cached) return cached;
+
   try {
     const params = new URLSearchParams({
       ids: ids.join(','),
@@ -123,7 +135,7 @@ export async function fetchCoingeckoUsdQuotes(symbols = []) {
 
     const body = await response.json();
     const timestamp = Date.now();
-    return ids.reduce((acc, id) => {
+    const data = ids.reduce((acc, id) => {
       const symbol = idToSymbol.get(id);
       const price = Number(body?.[id]?.usd);
       if (symbol && Number.isFinite(price) && price > 0) {
@@ -137,6 +149,9 @@ export async function fetchCoingeckoUsdQuotes(symbols = []) {
       }
       return acc;
     }, {});
+    
+    marketDataCache.set(cacheKey, data);
+    return data;
   } catch {
     return {};
   }
@@ -153,6 +168,10 @@ export async function fetchCoinbaseProductQuotes(targets = []) {
   if (normalizedTargets.length === 0) {
     return {};
   }
+
+  const cacheKey = `coinbase:quotes:${normalizedTargets.map((t) => t.providerSymbol).sort().join(',')}`;
+  const cached = marketDataCache.get(cacheKey);
+  if (cached) return cached;
 
   const results = await Promise.all(
     normalizedTargets.map(async (target) => {
@@ -175,12 +194,15 @@ export async function fetchCoinbaseProductQuotes(targets = []) {
     })
   );
 
-  return results.reduce((acc, item) => {
+  const data = results.reduce((acc, item) => {
     if (item) {
       acc[item.symbol] = item;
     }
     return acc;
   }, {});
+
+  marketDataCache.set(cacheKey, data);
+  return data;
 }
 
 /**
@@ -194,6 +216,10 @@ export async function fetchCoinbaseDailyCloses({ productId, fromDate, toDate }) 
   const start = new Date(`${fromDate}T00:00:00.000Z`);
   const end = new Date(`${toDate}T23:59:59.999Z`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return [];
+
+  const cacheKey = `coinbase:daily:${id}:${fromDate}:${toDate}`;
+  const cached = marketDataCache.get(cacheKey);
+  if (cached) return cached;
 
   try {
     const params = new URLSearchParams({
@@ -209,7 +235,7 @@ export async function fetchCoinbaseDailyCloses({ productId, fromDate, toDate }) 
     const rows = await response.json();
     if (!Array.isArray(rows)) return [];
 
-    return rows
+    const out = rows
       .map((row) => {
         const ts = Number(row?.[0]);
         const close = Number(row?.[4]);
@@ -218,6 +244,9 @@ export async function fetchCoinbaseDailyCloses({ productId, fromDate, toDate }) 
       })
       .filter(Boolean)
       .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+    marketDataCache.set(cacheKey, out, 3600000); // 1 hour cache
+    return out;
   } catch {
     return [];
   }

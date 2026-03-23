@@ -7,7 +7,9 @@ export function formatMaybeHidden(hideValues, formatter, value, hiddenText = 'Hi
 
 export function normalizeCurrencyCode(currency) {
   const normalized = String(currency || 'USD').toUpperCase();
-  return normalized === 'RMB' ? 'CNY' : normalized;
+  if (normalized === 'RMB') return 'CNY';
+  if (normalized === 'USDT' || normalized === 'USDC') return 'USD';
+  return normalized;
 }
 
 export function formatCny(value) {
@@ -53,14 +55,6 @@ export function formatCurrencyValue(value, currency = 'USD') {
     return `${sign}S$${numberPart}`;
   }
 
-  if (normalized === 'USDT' || normalized === 'USDC') {
-    const abs = Math.abs(value);
-    const numberPart = new Intl.NumberFormat('en-US', {
-      maximumFractionDigits: 2,
-    }).format(abs);
-    const sign = value < 0 ? '-' : '';
-    return `${sign}${numberPart} ${normalized}`;
-  }
 
   try {
     return new Intl.NumberFormat(locale, {

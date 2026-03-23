@@ -5,13 +5,14 @@ import {
   CartesianGrid,
   Cell,
   Rectangle,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 import TrendLineChartWithMarkers from '../components/charts/TrendLineChartWithMarkers.jsx';
+import AttributionBarChart from '../components/charts/AttributionBarChart.jsx';
+import TradeHistoryTable from '../components/TradeHistoryTable.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import useApiData from '../hooks/useApiData.js';
 import { startOfYearDateOnly, subtractMonthsDateOnly, todayDateOnly } from '../utils/dateOnly.js';
@@ -51,8 +52,6 @@ const CHART_TOOLTIP_STYLE = {
   borderRadius: '10px',
   color: '#e2e8f0',
 };
-const POS_BAR = '#22c55e';
-const NEG_BAR = '#fb7185';
 
 export default function ProfitabilityPage({ hideValues }) {
   const { t } = useLanguage();
@@ -231,107 +230,34 @@ export default function ProfitabilityPage({ hideValues }) {
               <p className="profitabilitySectionDesc">{t('profitability.realizedPl')}</p>
 
               <p className="profitabilitySectionDesc">{t('profitability.byAssetClass')}</p>
-              <div className="profitabilityChartArea profitabilityChartArea--md">
-                <ResponsiveContainer>
-                  <BarChart data={realizedAttribution?.byAssetClass ?? []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
-                    <XAxis dataKey="key" tick={CHART_AXIS_TICK} />
-                    <YAxis
-                      tick={CHART_AXIS_TICK}
-                      tickFormatter={(v) => formatMaybeHidden(hideValues, formatMoney, Number(v) || 0, '')}
-                    />
-                    <Tooltip
-                      formatter={(value) => [
-                        formatMaybeHidden(hideValues, formatMoney, Number(value) || 0, t('app.hidden')),
-                        t('profitability.realizedPl'),
-                      ]}
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      labelStyle={{ color: '#f8fafc' }}
-                      itemStyle={{ color: '#e2e8f0' }}
-                      cursor={false}
-                    />
-                    <ReferenceLine y={0} stroke="#64748b" />
-                    <Bar dataKey="realizedPnl" name={t('profitability.realizedPl')} activeBar={<ActiveAttributionBar />}>
-                      {(realizedAttribution?.byAssetClass ?? []).map((entry, index) => (
-                        <Cell key={`cls-${entry.key}-${index}`} fill={entry.realizedPnl >= 0 ? POS_BAR : NEG_BAR} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <AttributionBarChart
+                data={realizedAttribution?.byAssetClass ?? []}
+                xKey="key"
+                hideValues={hideValues}
+              />
 
               <div className="profitabilityTwoCol">
                 <div>
                   <p className="profitabilitySectionDesc">{t('profitability.contributors')}</p>
-                  <div className="profitabilityChartArea profitabilityChartArea--md">
-                    <ResponsiveContainer>
-                      <BarChart
-                        data={(realizedAttribution?.contributors ?? []).map((r) => ({
-                          ...r,
-                          label: `${r.symbol}`,
-                        }))}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
-                        <XAxis dataKey="label" tick={CHART_AXIS_TICK} />
-                        <YAxis
-                          tick={CHART_AXIS_TICK}
-                          tickFormatter={(v) => formatMaybeHidden(hideValues, formatMoney, Number(v) || 0, '')}
-                        />
-                        <Tooltip
-                          formatter={(value) => [
-                            formatMaybeHidden(hideValues, formatMoney, Number(value) || 0, t('app.hidden')),
-                            t('profitability.realizedPl'),
-                          ]}
-                          contentStyle={CHART_TOOLTIP_STYLE}
-                          labelStyle={{ color: '#f8fafc' }}
-                          itemStyle={{ color: '#e2e8f0' }}
-                          cursor={false}
-                        />
-                        <ReferenceLine y={0} stroke="#64748b" />
-                        <Bar dataKey="realizedPnl" name={t('profitability.realizedPl')} activeBar={<ActiveAttributionBar />}>
-                          {(realizedAttribution?.contributors ?? []).map((entry, index) => (
-                            <Cell key={`contrib-${entry.symbol}-${index}`} fill={entry.realizedPnl >= 0 ? POS_BAR : NEG_BAR} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <AttributionBarChart
+                    data={(realizedAttribution?.contributors ?? []).map((r) => ({
+                      ...r,
+                      label: `${r.symbol}`,
+                    }))}
+                    xKey="label"
+                    hideValues={hideValues}
+                  />
                 </div>
                 <div>
                   <p className="profitabilitySectionDesc">{t('profitability.detractors')}</p>
-                  <div className="profitabilityChartArea profitabilityChartArea--md">
-                    <ResponsiveContainer>
-                      <BarChart
-                        data={(realizedAttribution?.detractors ?? []).map((r) => ({
-                          ...r,
-                          label: `${r.symbol}`,
-                        }))}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} />
-                        <XAxis dataKey="label" tick={CHART_AXIS_TICK} />
-                        <YAxis
-                          tick={CHART_AXIS_TICK}
-                          tickFormatter={(v) => formatMaybeHidden(hideValues, formatMoney, Number(v) || 0, '')}
-                        />
-                        <Tooltip
-                          formatter={(value) => [
-                            formatMaybeHidden(hideValues, formatMoney, Number(value) || 0, t('app.hidden')),
-                            t('profitability.realizedPl'),
-                          ]}
-                          contentStyle={CHART_TOOLTIP_STYLE}
-                          labelStyle={{ color: '#f8fafc' }}
-                          itemStyle={{ color: '#e2e8f0' }}
-                          cursor={false}
-                        />
-                        <ReferenceLine y={0} stroke="#64748b" />
-                        <Bar dataKey="realizedPnl" name={t('profitability.realizedPl')} activeBar={<ActiveAttributionBar />}>
-                          {(realizedAttribution?.detractors ?? []).map((entry, index) => (
-                            <Cell key={`detract-${entry.symbol}-${index}`} fill={entry.realizedPnl >= 0 ? POS_BAR : NEG_BAR} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <AttributionBarChart
+                    data={(realizedAttribution?.detractors ?? []).map((r) => ({
+                      ...r,
+                      label: `${r.symbol}`,
+                    }))}
+                    xKey="label"
+                    hideValues={hideValues}
+                  />
                 </div>
               </div>
             </section>
@@ -372,69 +298,17 @@ export default function ProfitabilityPage({ hideValues }) {
                 </ResponsiveContainer>
               </div>
 
-              <div className="profitabilityTableWrap">
-                <table className="profitabilityTable profitabilityTable--trades">
-                  <thead>
-                    <tr>
-                      <th colSpan={7}>{t('profitability.bestTrades')}</th>
-                    </tr>
-                    <tr>
-                      <th>{t('profitability.date')}</th>
-                      <th>{t('portfolio.asset')}</th>
-                      <th>{t('profitability.qty')}</th>
-                      <th>{t('profitability.proceeds')}</th>
-                      <th>{t('profitability.cost')}</th>
-                      <th>{t('profitability.pl')}</th>
-                      <th>{t('profitability.returnPctShort')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(trades?.best ?? []).map((tr) => (
-                      <tr key={`best-${tr.id}`}>
-                        <td>{tr.txDate}</td>
-                        <td>{tr.symbol}</td>
-                        <td>{hideValues ? '—' : tr.qty}</td>
-                        <td>{formatValByCurrency(hideValues, tr.proceeds, tr.currency)}</td>
-                        <td>{formatValByCurrency(hideValues, tr.cost, tr.currency)}</td>
-                        <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatValByCurrency(hideValues, tr.pnl, tr.currency)}</td>
-                        <td>{hideValues ? '—' : tr.returnPct == null ? '—' : formatPercent(tr.returnPct)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TradeHistoryTable
+                trades={trades?.best ?? []}
+                title={t('profitability.bestTrades')}
+                hideValues={hideValues}
+              />
 
-              <div className="profitabilityTableWrap">
-                <table className="profitabilityTable profitabilityTable--trades">
-                  <thead>
-                    <tr>
-                      <th colSpan={7}>{t('profitability.worstTrades')}</th>
-                    </tr>
-                    <tr>
-                      <th>{t('profitability.date')}</th>
-                      <th>{t('portfolio.asset')}</th>
-                      <th>{t('profitability.qty')}</th>
-                      <th>{t('profitability.proceeds')}</th>
-                      <th>{t('profitability.cost')}</th>
-                      <th>{t('profitability.pl')}</th>
-                      <th>{t('profitability.returnPctShort')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(trades?.worst ?? []).map((tr) => (
-                      <tr key={`worst-${tr.id}`}>
-                        <td>{tr.txDate}</td>
-                        <td>{tr.symbol}</td>
-                        <td>{hideValues ? '—' : tr.qty}</td>
-                        <td>{formatValByCurrency(hideValues, tr.proceeds, tr.currency)}</td>
-                        <td>{formatValByCurrency(hideValues, tr.cost, tr.currency)}</td>
-                        <td className={tr.pnl >= 0 ? 'pos' : 'neg'}>{formatValByCurrency(hideValues, tr.pnl, tr.currency)}</td>
-                        <td>{hideValues ? '—' : tr.returnPct == null ? '—' : formatPercent(tr.returnPct)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TradeHistoryTable
+                trades={trades?.worst ?? []}
+                title={t('profitability.worstTrades')}
+                hideValues={hideValues}
+              />
             </section>
           </>
         )}

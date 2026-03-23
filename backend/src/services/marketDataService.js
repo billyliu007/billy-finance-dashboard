@@ -1,6 +1,5 @@
-import { fetchFinnhubDailyCloses, fetchFinnhubQuotes } from '../lib/finnhub.js';
 import { fetchFrankfurterFxRates } from '../lib/fx.js';
-import { fetchCoinbaseDailyCloses, fetchCoinbaseProductQuotes } from '../lib/crypto.js';
+import { stockProviders, cryptoProviders } from '../lib/marketDataProviders.js';
 
 const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
 const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'coinbase').trim().toLowerCase();
@@ -31,55 +30,43 @@ function toStockTargets(positions) {
 
 export async function getStockQuoteMapForPositions(positions) {
   const stockTargets = toStockTargets(positions);
-  if (!process.env.FINNHUB_API_KEY || stockTargets.length === 0) {
-    return {};
-  }
-  const rawQuotes = await fetchFinnhubQuotes(stockTargets.map((target) => target.providerSymbol));
-  return stockTargets.reduce((acc, target) => {
-    const quote = rawQuotes[target.providerSymbol];
-    if (quote) {
-      acc[target.assetSymbol] = { ...quote, symbol: target.assetSymbol };
-    }
-    return acc;
-  }, {});
+  const provider = stockProviders['finnhub']; // Or dynamically load from env if needed
+  if (!provider) return {};
+  return provider.getQuotes(stockTargets);
 }
 
 export async function getCryptoQuoteMapForPositions(positions) {
-  const seen = new Set();
-  const coinbaseTargets = [];
-
+  const targetsByProvider = {};
+  
   for (const position of positions || []) {
     if (!isCrypto(position)) continue;
     const symbol = String(position.symbol || '').trim().toUpperCase();
-    const provider = String(position.marketProvider || '').trim().toLowerCase();
+    const providerStr = String(position.marketProvider || '').trim().toLowerCase();
     const instrumentId = String(position.marketInstrumentId || '').trim().toUpperCase();
-    if (!symbol || !provider || !instrumentId) continue;
-    const key = `${provider}:${instrumentId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (!symbol || !providerStr || !instrumentId) continue;
+    
+    if (!targetsByProvider[providerStr]) {
+       targetsByProvider[providerStr] = new Map();
+    }
+    targetsByProvider[providerStr].set(`${symbol}:${instrumentId}`, {
+      assetSymbol: symbol,
+      providerSymbol: instrumentId,
+    });
+  }
 
-    if (provider === 'coinbase') {
-      coinbaseTargets.push({
-        assetSymbol: symbol,
-        providerSymbol: instrumentId,
-      });
+  const allQuotes = {};
+  for (const [providerName, targetMap] of Object.entries(targetsByProvider)) {
+    const provider = cryptoProviders[providerName];
+    if (provider) {
+      const targets = Array.from(targetMap.values());
+      const quotes = await provider.getQuotes(targets);
+      Object.assign(allQuotes, quotes);
     }
   }
 
-  const quotes = {};
-
-  if (coinbaseTargets.length > 0) {
-    const coinbaseQuotes = await fetchCoinbaseProductQuotes(coinbaseTargets);
-    Object.assign(quotes, coinbaseQuotes);
-  }
-
-  return quotes;
+  return allQuotes;
 }
 
-/**
- * Fetch FX rates to CNY. Optionally pass currencies from cash components so all used currencies get a rate.
- * @param {string[]} [currenciesFromCash] - e.g. ['USD', 'SGD', 'EUR'] from user's cash rows
- */
 export async function getLiveFxRates(currenciesFromCash = []) {
   if (FX_PROVIDER === 'frankfurter') {
     const normalized = (currenciesFromCash || [])
@@ -90,49 +77,37 @@ export async function getLiveFxRates(currenciesFromCash = []) {
   return {};
 }
 
-/**
- * Fetch SPY (stock) and BTC (crypto) quotes for benchmark comparison.
- * @returns {Promise<{ spy: { symbol: string, price: number, changePct: number | null } | null, btc: { symbol: string, price: number, changePct: number | null } | null }>}
- */
 export async function getBenchmarkQuotes() {
+  const stockProvider = stockProviders['finnhub'];
+  const cryptoProvider = cryptoProviders['coinbase'];
+  
   const [stockQuotes, cryptoQuotes] = await Promise.all([
-    getStockQuoteMapForPositions([{ symbol: 'SPY', category: 'US Stock Assets' }]),
-    fetchCoinbaseProductQuotes([{ assetSymbol: 'BTC', providerSymbol: 'BTC-USD' }]),
+    stockProvider ? stockProvider.getQuotes([{ assetSymbol: 'SPY', providerSymbol: 'SPY' }]) : {},
+    cryptoProvider ? cryptoProvider.getQuotes([{ assetSymbol: 'BTC', providerSymbol: 'BTC-USD' }]) : {},
   ]);
 
   const spyQuote = stockQuotes?.SPY;
   const btcQuote = cryptoQuotes?.BTC;
 
   return {
-    spy:
-      spyQuote && Number.isFinite(spyQuote.price)
-        ? {
-            symbol: 'SPY',
-            price: spyQuote.price,
-            changePct: spyQuote.changePct ?? null,
-          }
+    spy: spyQuote && Number.isFinite(spyQuote.price)
+        ? { symbol: 'SPY', price: spyQuote.price, changePct: spyQuote.changePct ?? null }
         : null,
-    btc:
-      btcQuote && Number.isFinite(btcQuote.price)
-        ? {
-            symbol: 'BTC',
-            price: btcQuote.price,
-            changePct: btcQuote.changePct ?? null,
-          }
+    btc: btcQuote && Number.isFinite(btcQuote.price)
+        ? { symbol: 'BTC', price: btcQuote.price, changePct: btcQuote.changePct ?? null }
         : null,
   };
 }
 
-/**
- * Fetch benchmark daily closes for SPY and BTC across a date range.
- * @param {{ fromDate: string, toDate: string }} options
- * @returns {Promise<{ spy: Array<{date:string, close:number}>, btc: Array<{date:string, close:number}> }>}
- */
 export async function getBenchmarkHistory({ fromDate, toDate }) {
+  const stockProvider = stockProviders['finnhub'];
+  const cryptoProvider = cryptoProviders['coinbase'];
+  
   const [spy, btc] = await Promise.all([
-    fetchFinnhubDailyCloses({ symbol: 'SPY', fromDate, toDate }),
-    fetchCoinbaseDailyCloses({ productId: 'BTC-USD', fromDate, toDate }),
+    stockProvider ? stockProvider.getDailyCloses({ target: { providerSymbol: 'SPY' }, fromDate, toDate }) : [],
+    cryptoProvider ? cryptoProvider.getDailyCloses({ target: { providerSymbol: 'BTC-USD' }, fromDate, toDate }) : [],
   ]);
+  
   return { spy, btc };
 }
 
@@ -146,8 +121,7 @@ export async function buildProviderDiagnosticsForPositions(positions) {
     {
       provider: 'finnhub',
       status: Object.keys(stockQuotes).length > 0 ? 'ok' : 'error',
-      message:
-        Object.keys(stockQuotes).length > 0
+      message: Object.keys(stockQuotes).length > 0
           ? `Live stock quotes received (${Object.keys(stockQuotes).length}).`
           : 'No live stock quotes received from Finnhub.',
       checkedAt: new Date().toISOString(),
@@ -155,8 +129,7 @@ export async function buildProviderDiagnosticsForPositions(positions) {
     {
       provider: CRYPTO_PROVIDER,
       status: Object.keys(cryptoQuotes).length > 0 ? 'ok' : 'error',
-      message:
-        Object.keys(cryptoQuotes).length > 0
+      message: Object.keys(cryptoQuotes).length > 0
           ? `Live crypto quotes received (${Object.keys(cryptoQuotes).length}).`
           : 'No live crypto quotes received.',
       checkedAt: new Date().toISOString(),
@@ -164,8 +137,7 @@ export async function buildProviderDiagnosticsForPositions(positions) {
     {
       provider: FX_PROVIDER,
       status: Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD) ? 'ok' : 'error',
-      message:
-        Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD)
+      message: Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD)
           ? 'Live FX rates received for USD/CNY and SGD/CNY.'
           : 'Live FX rates unavailable.',
       checkedAt: new Date().toISOString(),
