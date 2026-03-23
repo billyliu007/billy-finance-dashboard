@@ -356,6 +356,16 @@ export const translations = {
     },
     strategy: {
       title: 'Strategy Simulator',
+      constantNavDesc: 'Reposition your existing portfolio by selling overweight assets to buy underweight ones. Total value remains the same.',
+      newCashBuysDesc: 'Inject new cash to buy underweight assets without selling anything. Grow your portfolio size to hit the targets.',
+      currentValue: 'Current Portfolio Value',
+      requiredCash: 'Required Cash Injection',
+      targetValue: 'Target Portfolio Value',
+      totalWeight: 'Total Target Weight',
+      autoNormalize: 'Auto-normalize targets to 100%',
+      fixWeights: 'Fix Weights',
+      actionPlanTitle: 'Proposed Trade Action Plan',
+      actionPlanDesc: 'Execute the following trades to reach your target allocation. Estimated Turnover: {turnover}',
     },
   },
   zh: {
@@ -708,6 +718,16 @@ export const translations = {
     },
     strategy: {
       title: '策略模拟',
+      constantNavDesc: '通过卖出超配资产来买入低配资产，重新调整现有组合。总市值保持不变。',
+      newCashBuysDesc: '注入新资金买入低配资产，无需卖出。通过增加组合规模来达到目标占比。',
+      currentValue: '当前组合市值',
+      requiredCash: '所需新增资金',
+      targetValue: '目标组合市值',
+      totalWeight: '目标总占比',
+      autoNormalize: '自动归一化权重至 100%',
+      fixWeights: '修复权重',
+      actionPlanTitle: '建议交易行动计划',
+      actionPlanDesc: '执行以下交易以达到您的目标配置。预计换手金额：{turnover}',
     },
   },
 };

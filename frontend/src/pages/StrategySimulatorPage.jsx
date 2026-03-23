@@ -184,7 +184,7 @@ export default function StrategySimulatorPage({ hideValues }) {
                   onClick={() => { setRebalanceMode('constantNav'); setRebalanceDirty(true); }}
                 >
                   <h3>{t('profitability.rebalanceConstantNav')}</h3>
-                  <p>Reposition your existing portfolio by selling overweight assets to buy underweight ones. Total value remains the same.</p>
+                  <p>{t('strategy.constantNavDesc')}</p>
                 </button>
                 <button
                   type="button"
@@ -192,25 +192,25 @@ export default function StrategySimulatorPage({ hideValues }) {
                   onClick={() => { setRebalanceMode('newCashBuys'); setRebalanceDirty(true); }}
                 >
                   <h3>{t('profitability.rebalanceNewCashBuys')}</h3>
-                  <p>Inject new cash to buy underweight assets without selling anything. Grow your portfolio size to hit the targets.</p>
+                  <p>{t('strategy.newCashBuysDesc')}</p>
                 </button>
               </div>
 
               <div className="profitabilitySellDownResult strategyKpiRow">
                 <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">Current Portfolio Value</span>
+                  <span className="profitabilityCardLabel">{t('strategy.currentValue')}</span>
                   <span className="profitabilityCardValue">
                     {hideValues ? '—' : formatMoney(currentTotalValue)}
                   </span>
                 </div>
                 <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">Required Cash Injection</span>
+                  <span className="profitabilityCardLabel">{t('strategy.requiredCash')}</span>
                   <span className="profitabilityCardValue">
                     {hideValues ? '—' : formatMoney(insights.requiredCash)}
                   </span>
                 </div>
                 <div className="profitabilityCard">
-                  <span className="profitabilityCardLabel">Target Portfolio Value</span>
+                  <span className="profitabilityCardLabel">{t('strategy.targetValue')}</span>
                   <span className="profitabilityCardValue">
                     {hideValues ? '—' : formatMoney(insights.targetTotal)}
                   </span>
@@ -219,7 +219,7 @@ export default function StrategySimulatorPage({ hideValues }) {
 
               <div className="strategyTrackerRow">
                 <div className={`strategyTotalTracker ${!isValid100 && currentInputSum > 0 && !autoNormalize ? 'warn' : 'ok'}`}>
-                  <strong>Total Target Weight:</strong> {autoNormalize || (isValid100 && currentInputSum > 0) ? '100.00' : currentInputSum.toFixed(2)}% / 100%
+                  <strong>{t('strategy.totalWeight')}:</strong> {autoNormalize || (isValid100 && currentInputSum > 0) ? '100.00' : currentInputSum.toFixed(2)}% / 100%
                 </div>
                 <div className="strategyNormControls">
                   <label className="profitabilityRadioLabel">
@@ -228,11 +228,11 @@ export default function StrategySimulatorPage({ hideValues }) {
                       checked={autoNormalize}
                       onChange={(e) => setAutoNormalize(e.target.checked)}
                     />
-                    Auto-normalize targets to 100%
+                    {t('strategy.autoNormalize')}
                   </label>
                   {!autoNormalize && !isValid100 && currentInputSum > 0 && (
                     <button type="button" className="btn btn-sm btn-outline" onClick={handleNormalizeTo100}>
-                      Fix Weights
+                      {t('strategy.fixWeights')}
                     </button>
                   )}
                 </div>
@@ -284,8 +284,8 @@ export default function StrategySimulatorPage({ hideValues }) {
 
               {actionPlan.length > 0 && (
                 <div className="strategyActionPlan">
-                  <h3>Proposed Trade Action Plan</h3>
-                  <p>Execute the following trades to reach your target allocation. Estimated Turnover: {hideValues ? '—' : formatMoney(insights.turnover)}</p>
+                  <h3>{t('strategy.actionPlanTitle')}</h3>
+                  <p>{t('strategy.actionPlanDesc', { turnover: hideValues ? '—' : formatMoney(insights.turnover) })}</p>
                   <div className="strategyActionGrid">
                     {actionPlan.map((action, idx) => (
                       <div key={idx} className={`strategyActionCard ${action.type.toLowerCase()}`}>
