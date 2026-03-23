@@ -1,7 +1,15 @@
 import { buildNetWorthPayload } from './netWorthService.js';
-import { listCashComponents, listNetWorthHistory, listPortfolioPositions, upsertNetWorthSnapshot } from '../repositories/financeRepository.js';
+import {
+  listCashComponents,
+  listNetWorthHistory,
+  listPortfolioPositions,
+  listPositionTransactionAggregates,
+  upsertDailyFxRateSet,
+  upsertNetWorthSnapshot,
+} from '../repositories/financeRepository.js';
 import { listUsersForSnapshots } from '../repositories/userRepository.js';
 import { getCryptoQuoteMapForPositions, getLiveFxRates, getStockQuoteMapForPositions } from './marketDataService.js';
+import { applyTransactionAggregatesToPositions } from './dashboardService.js';
 
 function todayUtcDate() {
   return new Date().toISOString().slice(0, 10);
@@ -36,12 +44,14 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
   const allUserData = await Promise.all(
     users.map(async (user) => {
       try {
-        const [cashComponents, positions, history] = await Promise.all([
+        const [cashComponents, positions, history, txAggRows] = await Promise.all([
           listCashComponents(user.id),
           listPortfolioPositions(user.id),
           listNetWorthHistory(user.id),
+          listPositionTransactionAggregates(user.id),
         ]);
-        return { user, cashComponents, positions, history };
+        const effectivePositions = applyTransactionAggregatesToPositions(positions, txAggRows);
+        return { user, cashComponents, positions: effectivePositions, history };
       } catch (err) {
         results.push({ userId: user.id, status: 'error', message: `failed to load user data: ${err.message}` });
         return null;
@@ -75,9 +85,13 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
     return [{ status: 'error', message: 'FX rates unavailable, aborting snapshots' }];
   }
 
+  const fxProvider = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase() || 'frankfurter';
+  const fxRateSetId = await upsertDailyFxRateSet({ dateUtc, provider: fxProvider, rates: fxRates });
+
   // 4. Process each user using the shared market data
   for (const { user, cashComponents, positions, history } of activeUserData) {
     try {
+      const baseCurrency = String(user.baseCurrency || 'USD').trim().toUpperCase() || 'USD';
       const payload = buildNetWorthPayload({
         cashComponents,
         positions,
@@ -85,10 +99,10 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
         stockQuotes,
         cryptoQuotes,
         fxRatesOverride: fxRates,
-        baseCurrency: user.base_currency || 'USD',
+        baseCurrency,
       });
 
-      const totalUsd = payload.overview.totalNetWorth * (fxRates[user.base_currency || 'USD'] || 1);
+      const totalUsd = payload.overview.totalNetWorth * (fxRates[baseCurrency] || 1);
       // Wait, buildNetWorthPayload returns totalNetWorth in baseCurrency. 
       // If baseCurrency is USD, totalNetWorth is USD.
       // If baseCurrency is CNY, totalNetWorth is CNY.
@@ -96,7 +110,7 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
       
       const usdToCny = 1 / (fxRates.CNY || 0.14);
       const totalNetWorthInBase = payload.overview.totalNetWorth;
-      const base = user.base_currency || 'USD';
+      const base = baseCurrency;
       
       let finalTotalUsd = 0;
       let finalTotalCny = 0;
@@ -130,12 +144,8 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
         dateUtc,
         totalCny: finalTotalCny,
         totalUsd: finalTotalUsd,
+        fxRateSetId,
         qualityStatus: payload.overview.missingInputs.length > 0 ? 'partial' : 'full',
-        metadata: {
-          fx_rates: fxRates,
-          base_currency: base,
-          computed_at: new Date().toISOString(),
-        }
       });
 
       results.push({ userId: user.id, status: 'ok' });

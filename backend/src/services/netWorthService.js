@@ -127,14 +127,13 @@ function mapCashDetailRowsToTableRows(visibleDetailRows, baseCurrency = 'USD', t
 /**
  * Resolve history rows to display values in base currency.
  * Uses stored CNY when base is CNY; uses stored USD when base is USD; otherwise converts via FX.
- * For non-native-currency bases (e.g. SGD), prefers the historically-saved FX rates from
- * row.metadata.fx_rates (written by the cron job) over the live rates, for accuracy.
- * Legacy rows without metadata fall back to the live fxRates.
+ * For non-native-currency bases (e.g. SGD), prefers shared historical FX rates loaded from
+ * fx_daily_rates (via history repository join), then falls back to live fxRates.
  */
 function parseCashflowRows(rows, baseCurrency, fxRates) {
   const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
 
-  // Live-rate fallbacks (used when no historical metadata is present)
+  // Live-rate fallbacks (used when no shared historical FX is present)
   const liveusdPerBase = fxRates[base];
   const liveTargetBasePerUsd = (Number.isFinite(liveusdPerBase) && liveusdPerBase > 0) ? (1 / liveusdPerBase) : null;
   const liveusdPerCny = fxRates.CNY;
@@ -148,11 +147,15 @@ function parseCashflowRows(rows, baseCurrency, fxRates) {
       const cnyValue = cnyRaw != null && Number.isFinite(Number(cnyRaw)) ? Number(cnyRaw) : null;
       const usdValueStored = row?.netWorthUsd != null && Number.isFinite(Number(row.netWorthUsd)) ? Number(row.netWorthUsd) : null;
 
-      // Prefer historically-saved FX rates from metadata (written by cron job) for non-native paths.
+      // Prefer shared historical FX rates from fx_daily_rates (via repository join),
+      // then fall back to live fxRates.
       // CNY and USD branches read native columns directly, so historical rates only matter for the
       // conversion fallback branch (base is something other than CNY / USD, e.g. SGD).
-      const historicalFx = row?.metadata?.fx_rates;
-      const resolvedFx = (historicalFx && typeof historicalFx === 'object') ? historicalFx : fxRates;
+      const sharedHistoricalFx = row?.sharedFxRates;
+      const historicalFx = (sharedHistoricalFx && typeof sharedHistoricalFx === 'object')
+        ? sharedHistoricalFx
+        : null;
+      const resolvedFx = historicalFx || fxRates;
 
       const usdPerBase = resolvedFx[base];
       const targetBasePerUsd = (Number.isFinite(usdPerBase) && usdPerBase > 0) ? (1 / usdPerBase) : liveTargetBasePerUsd;

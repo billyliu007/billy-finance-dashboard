@@ -7,14 +7,15 @@ import { query, withTransaction } from '../db/client.js';
  */
 export async function listNetWorthHistory(userId) {
   const result = await query(
-    `SELECT to_char(date_utc, 'YYYY-MM-DD') AS date,
-            to_char(recorded_at_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "recordedAtUtc",
-            total_cny::float8 AS "netWorthCny",
-            total_usd::float8 AS "netWorthUsd",
-            metadata
-     FROM networth_history
-     WHERE user_id = $1
-     ORDER BY recorded_at_utc ASC`,
+    `SELECT to_char(h.date_utc, 'YYYY-MM-DD') AS date,
+            to_char(h.recorded_at_utc AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "recordedAtUtc",
+            h.total_cny::float8 AS "netWorthCny",
+            h.total_usd::float8 AS "netWorthUsd",
+            fx.rates AS "sharedFxRates"
+     FROM networth_history h
+     LEFT JOIN fx_daily_rates fx ON fx.id = h.fx_rate_set_id
+     WHERE h.user_id = $1
+     ORDER BY h.recorded_at_utc ASC`,
     [userId],
   );
   return result.rows;
@@ -44,8 +45,8 @@ export async function upsertNetWorthSnapshot({
   dateUtc,
   totalCny,
   totalUsd = null,
+  fxRateSetId = null,
   qualityStatus = 'full',
-  metadata = {},
 }) {
   await withTransaction(async (client) => {
     await client.query(
@@ -55,9 +56,9 @@ export async function upsertNetWorthSnapshot({
     );
     const usdVal = totalUsd != null && Number.isFinite(Number(totalUsd)) ? Number(totalUsd) : null;
     await client.query(
-      `INSERT INTO networth_history (user_id, date_utc, recorded_at_utc, source, total_cny, total_usd, quality_status, computed_at, metadata)
-       VALUES ($1, $2, NOW(), 'daily', $3, $4, $5, NOW(), $6)`,
-      [userId, dateUtc, Number(totalCny || 0), usdVal, qualityStatus, JSON.stringify(metadata)],
+      `INSERT INTO networth_history (user_id, date_utc, recorded_at_utc, source, total_cny, total_usd, fx_rate_set_id, quality_status, computed_at)
+       VALUES ($1, $2, NOW(), 'daily', $3, $4, $5, $6, NOW())`,
+      [userId, dateUtc, Number(totalCny || 0), usdVal, fxRateSetId, qualityStatus],
     );
   });
 }

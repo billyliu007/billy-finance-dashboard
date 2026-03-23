@@ -82,6 +82,22 @@ CREATE TABLE IF NOT EXISTS networth_history (
   computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS fx_daily_rates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date_utc DATE NOT NULL,
+  provider TEXT NOT NULL,
+  rates JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (date_utc, provider)
+);
+
+ALTER TABLE networth_history
+ADD COLUMN IF NOT EXISTS fx_rate_set_id UUID REFERENCES fx_daily_rates (id) ON DELETE SET NULL;
+
+ALTER TABLE networth_history
+DROP COLUMN IF EXISTS metadata;
+
 CREATE TABLE IF NOT EXISTS coinbase_products (
   product_id TEXT PRIMARY KEY,
   base_currency TEXT NOT NULL,
@@ -119,5 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_positions_user_id ON portfolio_position
 CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol ON portfolio_position_transactions (user_id, symbol);
 CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol_date ON portfolio_position_transactions (user_id, symbol, tx_date DESC);
 CREATE INDEX IF NOT EXISTS idx_networth_history_user_id_date ON networth_history (user_id, date_utc DESC);
+CREATE INDEX IF NOT EXISTS idx_networth_history_fx_rate_set_id ON networth_history (fx_rate_set_id);
+CREATE INDEX IF NOT EXISTS idx_fx_daily_rates_date_provider ON fx_daily_rates (date_utc DESC, provider);
 CREATE INDEX IF NOT EXISTS idx_coinbase_products_base_quote ON coinbase_products (base_currency, quote_currency);
 CREATE INDEX IF NOT EXISTS idx_us_stock_symbols_exchange ON us_stock_symbols (exchange);
