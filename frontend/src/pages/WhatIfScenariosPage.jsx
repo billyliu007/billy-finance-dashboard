@@ -495,7 +495,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   <h2>{t('whatif.featureATitle')}</h2>
                   <p className="profitabilitySectionDesc">{t('whatif.featureADesc')}</p>
                   <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable">
+                    <table className="profitabilityTable whatIfTable whatIfTableTarget">
                       <thead>
                         <tr>
                           <th>{t('portfolio.asset')}</th>
@@ -511,13 +511,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           const pricePrefix = isDollarCurrency(targetCurrency) ? '$' : `${targetCurrency} `;
                           return (
                             <tr key={row.symbol}>
-                              <td>{row.symbol}</td>
-                              <td>
+                              <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                              <td data-label={t('whatif.currentPrice')}>
                                 {hideValues
                                   ? '—'
                                   : formatCurrencyValue(num(row.baselinePrice), targetCurrency)}
                               </td>
-                              <td>
+                              <td data-label={t('whatif.targetDeltaVsCurrentPct')}>
                                 <input
                                   type="number"
                                   step="0.1"
@@ -535,7 +535,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   disabled={num(row.baselinePrice) <= 0}
                                 />
                               </td>
-                              <td>
+                              <td data-label={t('whatif.targetPrice')}>
                                 <span className="strategyRebalanceTargetWrap">
                                   <span className="whatIfPricePrefix">{pricePrefix}</span>
                                   <input
@@ -754,7 +754,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
 
                   <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchases">
                       <thead>
                         <tr>
                           <th>{t('portfolio.assetClass')}</th>
@@ -767,11 +767,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <tbody>
                         {buyRows.map((row, index) => (
                           <tr key={`${row.id || index}-${row.symbol}`}>
-                            <td>{row.assetClass === 'crypto' ? t('portfolio.cryptoPosition') : t('portfolio.stockPosition')}</td>
-                            <td>{row.symbol}</td>
-                            <td>{row.qty}</td>
-                            <td>{row.buyPrice}</td>
-                            <td>
+                            <td data-label={t('portfolio.assetClass')}>{row.assetClass === 'crypto' ? t('portfolio.cryptoPosition') : t('portfolio.stockPosition')}</td>
+                            <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                            <td data-label={t('portfolio.quantity')}>{row.qty}</td>
+                            <td data-label={t('modals.avgCostPerUnit')}>{row.buyPrice}</td>
+                            <td data-label={t('netWorth.actions')}>
                               <button
                                 type="button"
                                 className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
@@ -892,7 +892,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
 
                   <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable">
+                    <table className="profitabilityTable whatIfTable whatIfTableResults">
                       <thead>
                         <tr>
                           <th>{t('portfolio.asset')}</th>
@@ -905,11 +905,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <tbody>
                         {resultRows.map((row) => (
                           <tr key={row.symbol}>
-                            <td>{row.symbol}</td>
-                            <td>{row.qty}</td>
-                            <td>{hideValues ? '—' : formatCurrencyValue(row.scenarioPrice, row.currency || 'USD')}</td>
-                            <td>{hideValues ? '—' : formatCurrencyValue(row.scenarioValue, row.currency || 'USD')}</td>
-                            <td>{formatPercent(row.scenarioWeightPct)}</td>
+                            <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                            <td data-label={t('portfolio.quantity')}>{row.qty}</td>
+                            <td data-label={t('whatif.scenarioPrice')}>{hideValues ? '—' : formatCurrencyValue(row.scenarioPrice, row.currency || 'USD')}</td>
+                            <td data-label={t('portfolio.marketValue')}>{hideValues ? '—' : formatCurrencyValue(row.scenarioValue, row.currency || 'USD')}</td>
+                            <td data-label={t('portfolio.portfolioWeight')}>{formatPercent(row.scenarioWeightPct)}</td>
                           </tr>
                         ))}
                       </tbody>
