@@ -1,8 +1,14 @@
-import { fetchFrankfurterFxRates } from '../lib/fx.js';
+import { fetchFxRatesWithFallback } from '../lib/fx.js';
 import { stockProviders, cryptoProviders } from '../lib/marketDataProviders.js';
 
 const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
+/** Set to `none`, `off`, or `false` to use Frankfurter only. Any other value keeps secondary FX enabled. */
+const FX_PROVIDER_FALLBACK = String(process.env.FX_PROVIDER_FALLBACK ?? 'open.er-api').trim().toLowerCase();
 const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'coinbase').trim().toLowerCase();
+
+function fxFallbackDisabled() {
+  return ['none', 'off', 'false'].includes(FX_PROVIDER_FALLBACK);
+}
 
 function isStock(position) {
   return /stock/i.test(String(position?.category || ''));
@@ -67,14 +73,34 @@ export async function getCryptoQuoteMapForPositions(positions) {
   return allQuotes;
 }
 
-export async function getLiveFxRates(currenciesFromCash = []) {
-  if (FX_PROVIDER === 'frankfurter') {
-    const normalized = (currenciesFromCash || [])
-      .map((c) => String(c || '').trim().toUpperCase())
-      .filter((c) => c && c !== 'CNY');
-    return fetchFrankfurterFxRates(normalized);
+/**
+ * Live FX map (USD per 1 unit). Frankfurter first; merges open.er-api when defaults + cash currencies are incomplete.
+ * @returns {Promise<{ rates: Record<string, number>, providerLabel: string }>}
+ */
+export async function resolveLiveFxRates(currenciesFromCash = []) {
+  const normalized = (currenciesFromCash || [])
+    .map((c) => String(c || '').trim().toUpperCase())
+    .filter((c) => c && c !== 'CNY');
+
+  if (FX_PROVIDER !== 'frankfurter') {
+    return { rates: {}, providerLabel: FX_PROVIDER || 'unknown' };
   }
-  return {};
+
+  const { rates, providersUsed } = await fetchFxRatesWithFallback(normalized, {
+    disableFallback: fxFallbackDisabled(),
+  });
+
+  return { rates, providerLabel: providersUsed.join('+') };
+}
+
+export async function getLiveFxRates(currenciesFromCash = []) {
+  const { rates } = await resolveLiveFxRates(currenciesFromCash);
+  return rates;
+}
+
+/** Matches {@link resolveLiveFxRates} fallback toggle (for CNY patch in snapshots). */
+export function isFxProviderFallbackEnabled() {
+  return !fxFallbackDisabled();
 }
 
 export async function getBenchmarkQuotes() {
@@ -112,10 +138,10 @@ export async function getBenchmarkHistory({ fromDate, toDate }) {
 }
 
 export async function buildProviderDiagnosticsForPositions(positions) {
-  const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
+  const [stockQuotes, cryptoQuotes, { rates: fxRates, providerLabel: fxProviderLabel }] = await Promise.all([
     getStockQuoteMapForPositions(positions),
     getCryptoQuoteMapForPositions(positions),
-    getLiveFxRates(),
+    resolveLiveFxRates(),
   ]);
   return [
     {
@@ -135,10 +161,10 @@ export async function buildProviderDiagnosticsForPositions(positions) {
       checkedAt: new Date().toISOString(),
     },
     {
-      provider: FX_PROVIDER,
+      provider: fxProviderLabel,
       status: Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD) ? 'ok' : 'error',
       message: Number.isFinite(fxRates.USD) && Number.isFinite(fxRates.SGD)
-          ? 'Live FX rates received for USD/CNY and SGD/CNY.'
+          ? `Live FX rates received (${fxProviderLabel}).`
           : 'Live FX rates unavailable.',
       checkedAt: new Date().toISOString(),
     },

@@ -34,7 +34,7 @@ Summary of how **cash**, **currencies**, and **crypto assets** (including USDT/U
 
 ### Net worth aggregation
 
-- **FX:** `getLiveFxRates(currenciesFromCash)` – rates are fetched for the **normalized** currency set (so if we ever had USDT/USDC cash, they’d be USD for FX).
+- **FX:** `getLiveFxRates(currenciesFromCash)` – Frankfurter first; **`open.er-api`** fills missing codes when **`FX_PROVIDER_FALLBACK`** is not `none`/`off`/`false`. Rates use the **normalized** currency set (USDT/USDC cash → USD for FX).
 - **Detail rows:** Each cash component becomes a row with `currency = normalizeCurrencyCode(item.currency)` (backend). Totals and “in base currency” values use these normalized currencies and FX.
 
 ---

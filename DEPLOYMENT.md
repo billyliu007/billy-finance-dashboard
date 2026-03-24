@@ -59,6 +59,7 @@ Set secrets in a **Render Environment Group** (e.g. `netpulse-secrets`) and atta
 | **Market data** | | |
 | `FINNHUB_API_KEY` | Yes (for stocks) | From Finnhub. |
 | `FX_PROVIDER` | No | `frankfurter` (default in blueprint). |
+| `FX_PROVIDER_FALLBACK` | No | `open.er-api` when unset; set `none` / `off` / `false` to disable secondary FX. |
 | `CRYPTO_PROVIDER` | No | `coinbase` (default in blueprint). |
 
 Optional: `PORTFOLIO_CONFIG_JSON` (JSON string) for portfolio config overrides.
@@ -77,7 +78,7 @@ Defined in `render.yaml`; override in Render only if needed:
 Uses same DB and market-data env; no OAuth or frontend URL. From group or service:
 
 - `DATABASE_URL`, `DATABASE_SSL`, `DATA_SOURCE`
-- `FINNHUB_API_KEY`, `FX_PROVIDER`, `CRYPTO_PROVIDER`
+- `FINNHUB_API_KEY`, `FX_PROVIDER`, `FX_PROVIDER_FALLBACK` (optional), `CRYPTO_PROVIDER`
 
 ## 4. OAuth callback URLs
 

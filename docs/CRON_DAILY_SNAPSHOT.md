@@ -23,7 +23,7 @@ Code: `backend/src/scripts/runDailySnapshot.js` → `backend/src/services/snapsh
 2. **Canonical snapshot currency is USD** — `buildNetWorthPayload` is called with **`baseCurrency: 'USD'`** for every user. **User display base currency (`users.base_currency`) is not used** for the snapshot total.
 3. **Persist both USD and CNY columns** — `networth_history.total_usd` is the USD net worth; `total_cny` is derived as `total_usd / (USD per 1 CNY)` using the same FX map as valuation, when that rate exists.
 4. **No fabricated CNY fallback** — if the CNY/USD pivot is unavailable, **`total_cny` is stored as `NULL`** (column is nullable; see migrations). `quality_status` is **`partial`** when CNY cannot be derived or when net-worth inputs are incomplete.
-5. **Shared FX for the run** — one Frankfurter-based map per UTC date is upserted into **`fx_daily_rates`**; each daily row stores **`fx_rate_set_id`** pointing at it. If the batch map is missing **`CNY`**, the job merges an extra **`fetchFrankfurterFxRates(['CNY'])`** before writing `fx_daily_rates`, so the pivot is stored when the provider returns it.
+5. **Shared FX for the run** — one map per UTC date is upserted into **`fx_daily_rates`** (Frankfurter first; **`open.er-api`** fills gaps if Frankfurter is incomplete). Set **`FX_PROVIDER_FALLBACK=none`** to disable the secondary. If the batch map is still missing **`CNY`**, the job runs another **full FX fetch** (same fallback rules) and merges before writing `fx_daily_rates`.
 
 ---
 
@@ -92,5 +92,5 @@ Older snapshots (e.g. around commit `b149d00`) used a **CNY-first** `buildNetWor
 | `backend/src/services/dashboardService.js` | `applyTransactionAggregatesToPositions` |
 | `backend/src/repositories/netWorthHistoryRepository.js` | Read/write `networth_history` |
 | `backend/src/repositories/fxRatesRepository.js` | `upsertDailyFxRateSet` |
-| `backend/src/lib/fx.js` | Frankfurter fetch (USD-per-unit rates) |
+| `backend/src/lib/fx.js` | Frankfurter + optional `open.er-api` fallback (USD-per-unit rates) |
 | `backend/tests/snapshotBaseCurrencyContract.test.js` | Regression: cron does not branch on user base currency |

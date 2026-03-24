@@ -8,9 +8,14 @@ import {
   upsertNetWorthSnapshot,
 } from '../repositories/financeRepository.js';
 import { listUsersForSnapshots } from '../repositories/userRepository.js';
-import { getCryptoQuoteMapForPositions, getLiveFxRates, getStockQuoteMapForPositions } from './marketDataService.js';
+import {
+  getCryptoQuoteMapForPositions,
+  getStockQuoteMapForPositions,
+  isFxProviderFallbackEnabled,
+  resolveLiveFxRates,
+} from './marketDataService.js';
 import { applyTransactionAggregatesToPositions } from './dashboardService.js';
-import { fetchFrankfurterFxRates } from '../lib/fx.js';
+import { fetchFxRatesWithFallback, mergeUsdPerUnitRates } from '../lib/fx.js';
 
 function todayUtcDate() {
   return new Date().toISOString().slice(0, 10);
@@ -28,12 +33,12 @@ function fxLooksUsable(fxRates) {
 }
 
 async function fetchFxWithRetry(currenciesFromCash) {
-  let fxRates = await getLiveFxRates(currenciesFromCash);
+  let { rates: fxRates, providerLabel } = await resolveLiveFxRates(currenciesFromCash);
   if (!fxLooksUsable(fxRates)) {
     await new Promise((r) => setTimeout(r, 750));
-    fxRates = await getLiveFxRates(currenciesFromCash);
+    ({ rates: fxRates, providerLabel } = await resolveLiveFxRates(currenciesFromCash));
   }
-  return fxRates;
+  return { rates: fxRates, providerLabel };
 }
 
 export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
@@ -76,27 +81,29 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
   }
 
   // 3. Batch fetch market data ONCE for everyone
-  const [stockQuotes, cryptoQuotes, fxRatesInitial] = await Promise.all([
+  const [stockQuotes, cryptoQuotes, fxBundle] = await Promise.all([
     getStockQuoteMapForPositions([...activeUserData.flatMap(d => d.positions)]),
     getCryptoQuoteMapForPositions([...activeUserData.flatMap(d => d.positions)]),
     fetchFxWithRetry([...allCurrencies]),
   ]);
 
-  let fxRates = fxRatesInitial;
+  let fxRates = fxBundle.rates;
+  let fxProvider = fxBundle.providerLabel;
 
   if (!fxLooksUsable(fxRates)) {
     return [{ status: 'error', message: 'FX rates unavailable, aborting snapshots' }];
   }
 
-  // Persist CNY/USD pivot in fx_daily_rates: merge a Frankfurter fetch if the batch map is missing CNY.
+  // Persist CNY/USD pivot in fx_daily_rates: merge a full FX fetch if the batch map is missing CNY.
   let cnyUsdPivot = Number(fxRates.CNY);
   if (!Number.isFinite(cnyUsdPivot) || cnyUsdPivot <= 0) {
-    const cnyPatch = await fetchFrankfurterFxRates(['CNY']);
-    fxRates = { ...fxRates, ...cnyPatch };
+    const { rates: cnyPatch } = await fetchFxRatesWithFallback([], {
+      disableFallback: !isFxProviderFallbackEnabled(),
+    });
+    fxRates = mergeUsdPerUnitRates(fxRates, cnyPatch);
     cnyUsdPivot = Number(fxRates.CNY);
   }
 
-  const fxProvider = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase() || 'frankfurter';
   const fxRateSetId = await upsertDailyFxRateSet({ dateUtc, provider: fxProvider, rates: fxRates });
 
   // 4. Process each user using the shared market data.
