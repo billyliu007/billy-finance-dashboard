@@ -10,6 +10,7 @@ import {
 import { listUsersForSnapshots } from '../repositories/userRepository.js';
 import { getCryptoQuoteMapForPositions, getLiveFxRates, getStockQuoteMapForPositions } from './marketDataService.js';
 import { applyTransactionAggregatesToPositions } from './dashboardService.js';
+import { fetchFrankfurterFxRates } from '../lib/fx.js';
 
 function todayUtcDate() {
   return new Date().toISOString().slice(0, 10);
@@ -75,23 +76,40 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
   }
 
   // 3. Batch fetch market data ONCE for everyone
-  const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
+  const [stockQuotes, cryptoQuotes, fxRatesInitial] = await Promise.all([
     getStockQuoteMapForPositions([...activeUserData.flatMap(d => d.positions)]),
     getCryptoQuoteMapForPositions([...activeUserData.flatMap(d => d.positions)]),
     fetchFxWithRetry([...allCurrencies]),
   ]);
 
+  let fxRates = fxRatesInitial;
+
   if (!fxLooksUsable(fxRates)) {
     return [{ status: 'error', message: 'FX rates unavailable, aborting snapshots' }];
+  }
+
+  // Persist CNY/USD pivot in fx_daily_rates: merge a Frankfurter fetch if the batch map is missing CNY.
+  let cnyUsdPivot = Number(fxRates.CNY);
+  if (!Number.isFinite(cnyUsdPivot) || cnyUsdPivot <= 0) {
+    const cnyPatch = await fetchFrankfurterFxRates(['CNY']);
+    fxRates = { ...fxRates, ...cnyPatch };
+    cnyUsdPivot = Number(fxRates.CNY);
   }
 
   const fxProvider = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase() || 'frankfurter';
   const fxRateSetId = await upsertDailyFxRateSet({ dateUtc, provider: fxProvider, rates: fxRates });
 
-  // 4. Process each user using the shared market data
+  // 4. Process each user using the shared market data.
+  // Snapshots are canonical USD + CNY (same math for every user). User display base currency is ignored here.
+  // Multi-currency FX used for valuation is stored once per day in fx_daily_rates (fxRateSetId).
+  const usdPerCny = Number.isFinite(cnyUsdPivot) && cnyUsdPivot > 0 ? cnyUsdPivot : null;
+  const cnyFromUsd = (usdTotal) => {
+    if (!Number.isFinite(usdTotal) || usdPerCny == null) return null;
+    return usdTotal / usdPerCny;
+  };
+
   for (const { user, cashComponents, positions, history } of activeUserData) {
     try {
-      const baseCurrency = String(user.baseCurrency || 'USD').trim().toUpperCase() || 'USD';
       const payload = buildNetWorthPayload({
         cashComponents,
         positions,
@@ -99,38 +117,18 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
         stockQuotes,
         cryptoQuotes,
         fxRatesOverride: fxRates,
-        baseCurrency,
+        baseCurrency: 'USD',
       });
 
-      const totalUsd = payload.overview.totalNetWorth * (fxRates[baseCurrency] || 1);
-      // Wait, buildNetWorthPayload returns totalNetWorth in baseCurrency. 
-      // If baseCurrency is USD, totalNetWorth is USD.
-      // If baseCurrency is CNY, totalNetWorth is CNY.
-      // We want to store totalUsd and totalCny.
-      
-      const usdToCny = 1 / (fxRates.CNY || 0.14);
-      const totalNetWorthInBase = payload.overview.totalNetWorth;
-      const base = baseCurrency;
-      
-      let finalTotalUsd = 0;
-      let finalTotalCny = 0;
-
-      if (base === 'USD') {
-        finalTotalUsd = totalNetWorthInBase;
-        finalTotalCny = totalNetWorthInBase * usdToCny;
-      } else if (base === 'CNY') {
-        finalTotalCny = totalNetWorthInBase;
-        finalTotalUsd = totalNetWorthInBase * (fxRates.CNY || 0);
-      } else {
-        // Base is something else (e.g. EUR)
-        // totalInBase = totalUsd * (1 / rateToUsd) => totalUsd = totalInBase * rateToUsd
-        const rateToUsd = fxRates[base] || 0;
-        finalTotalUsd = totalNetWorthInBase * rateToUsd;
-        finalTotalCny = finalTotalUsd * usdToCny;
-      }
+      const totalNetWorthUsd = payload.overview.totalNetWorth;
+      const finalTotalUsd = Number.isFinite(totalNetWorthUsd) ? totalNetWorthUsd : null;
+      const finalTotalCny = finalTotalUsd != null ? cnyFromUsd(finalTotalUsd) : null;
 
       const holdings = hasMeaningfulHoldings(cashComponents, positions);
-      if (holdings && (!Number.isFinite(finalTotalUsd) || Math.abs(finalTotalUsd) < 1e-9)) {
+      if (
+        holdings
+        && (finalTotalUsd == null || !Number.isFinite(finalTotalUsd) || Math.abs(finalTotalUsd) < 1e-9)
+      ) {
         results.push({
           userId: user.id,
           status: 'skipped',
@@ -139,13 +137,17 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
         continue;
       }
 
+      const missingCnyRate = finalTotalCny == null || !Number.isFinite(finalTotalCny);
+      const qualityStatus =
+        payload.overview.missingInputs.length > 0 || missingCnyRate ? 'partial' : 'full';
+
       await upsertNetWorthSnapshot({
         userId: user.id,
         dateUtc,
-        totalCny: finalTotalCny,
+        totalCny: Number.isFinite(finalTotalCny) ? finalTotalCny : null,
         totalUsd: finalTotalUsd,
         fxRateSetId,
-        qualityStatus: payload.overview.missingInputs.length > 0 ? 'partial' : 'full',
+        qualityStatus,
       });
 
       results.push({ userId: user.id, status: 'ok' });

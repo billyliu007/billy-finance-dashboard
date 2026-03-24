@@ -14,18 +14,23 @@ test('listUsersForSnapshots aliases base_currency as baseCurrency', () => {
   );
 });
 
-test('runDailySnapshots reads user.baseCurrency (not user.base_currency)', () => {
+test('runDailySnapshots ignores user base currency (canonical USD snapshot, not user.base_currency)', () => {
   const filePath = resolve(process.cwd(), 'src/services/snapshotService.js');
   const source = readFileSync(filePath, 'utf8');
 
   assert.match(
     source,
-    /user\.baseCurrency/,
-    'Expected snapshot service to use user.baseCurrency.',
+    /baseCurrency:\s*'USD'/,
+    'Expected daily snapshots to compute net worth in USD for all users.',
   );
   assert.doesNotMatch(
     source,
     /user\.base_currency/,
     'snapshot service should not reference user.base_currency.',
+  );
+  assert.doesNotMatch(
+    source,
+    /user\.baseCurrency/,
+    'snapshot service should not branch on user display base currency.',
   );
 });

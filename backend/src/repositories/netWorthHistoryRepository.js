@@ -55,10 +55,11 @@ export async function upsertNetWorthSnapshot({
       [userId, dateUtc],
     );
     const usdVal = totalUsd != null && Number.isFinite(Number(totalUsd)) ? Number(totalUsd) : null;
+    const cnyVal = totalCny != null && Number.isFinite(Number(totalCny)) ? Number(totalCny) : null;
     await client.query(
       `INSERT INTO networth_history (user_id, date_utc, recorded_at_utc, source, total_cny, total_usd, fx_rate_set_id, quality_status, computed_at)
        VALUES ($1, $2, NOW(), 'daily', $3, $4, $5, $6, NOW())`,
-      [userId, dateUtc, Number(totalCny || 0), usdVal, fxRateSetId, qualityStatus],
+      [userId, dateUtc, cnyVal, usdVal, fxRateSetId, qualityStatus],
     );
   });
 }

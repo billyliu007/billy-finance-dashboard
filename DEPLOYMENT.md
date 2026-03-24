@@ -98,6 +98,8 @@ Ensure `FRONTEND_BASE_URL` and `VITE_API_BASE_URL` match the URLs you use (see `
 - **Schedule:** `0 0 * * *` (UTC midnight).
 - **Command:** `npm run cron:daily-snapshot --prefix backend` (writes net worth history to the shared DB).
 
+**Behavior, schema (`fx_daily_rates`, nullable `total_cny`), skip rules, and comparison to older cron logic:** [`docs/CRON_DAILY_SNAPSHOT.md`](docs/CRON_DAILY_SNAPSHOT.md).
+
 **Re-run / repair a bad row (e.g. `total_cny = 0` when FX failed):**
 
 1. Deploy or run locally with valid `DATABASE_URL` and market env (so Frankfurter/Finnhub can succeed).

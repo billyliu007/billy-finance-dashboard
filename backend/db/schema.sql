@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS networth_history (
   date_utc DATE NOT NULL,
   recorded_at_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'imported', 'daily')),
-  total_cny NUMERIC(20, 6) NOT NULL,
+  total_cny NUMERIC(20, 6),
   total_usd NUMERIC(20, 6),
   quality_status TEXT NOT NULL DEFAULT 'full' CHECK (quality_status IN ('full', 'partial', 'failed')),
   computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

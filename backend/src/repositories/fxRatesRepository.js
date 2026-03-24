@@ -7,6 +7,8 @@ export async function upsertDailyFxRateSet({ dateUtc, provider = 'frankfurter', 
   }
 
   const providerName = String(provider || 'frankfurter').trim().toLowerCase() || 'frankfurter';
+  // Rates map: USD per 1 unit of each currency (Frankfurter-derived). USD is always 1.
+  // CNY should be present when the provider returns it so snapshots can derive total_cny from total_usd.
   const normalizedRates = Object.entries(rates || {}).reduce((acc, [code, value]) => {
     const currency = String(code || '').trim().toUpperCase();
     const numeric = Number(value);

@@ -122,6 +122,7 @@ Use Neon's **serverless** driver when the runtime **cannot hold a TCP connection
 | [`DEPLOYMENT.md`](../DEPLOYMENT.md) | Render blueprint, env vars |
 | [`render.yaml`](../render.yaml) | Infrastructure as code for Render |
 | [`OPTIMIZATION_AND_REFACTOR.md`](./OPTIMIZATION_AND_REFACTOR.md) | DRY refactors, N+1, error middleware, indexes |
+| [`CRON_DAILY_SNAPSHOT.md`](./CRON_DAILY_SNAPSHOT.md) | Daily net worth cron: USD/CNY storage, `fx_daily_rates`, vs legacy behavior |
 | **This file** | Layering, DB/Neon, state, config consistency |
 
 ---
