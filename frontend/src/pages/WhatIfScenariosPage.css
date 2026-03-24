@@ -313,8 +313,13 @@
 
   .whatIfTableTarget td[data-label] .profitabilityInput,
   .whatIfTableTarget td[data-label] .strategyRebalanceTargetWrap {
-    width: min(220px, 100%);
+    width: min(143px, 100%);
     justify-self: start;
+  }
+
+  .whatIfTableTarget td[data-label] .profitabilityInput {
+    padding-left: 0;
+    padding-right: 8px;
   }
 
   .whatIfTable td > * {

@@ -396,6 +396,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const hypotheticalCostBase = num(results?.portfolioBaseTotals?.hypotheticalCostBase);
   const scenarioNetWorth = baselineNetWorth + portfolioDeltaInBase - (deductHypotheticalFromCash ? hypotheticalCostBase : 0);
   const netWorthDelta = scenarioNetWorth - baselineNetWorth;
+  const netWorthDeltaPct = baselineNetWorth > 0 ? (netWorthDelta / baselineNetWorth) * 100 : 0;
 
   return (
     <section className="contentWrap">
@@ -825,6 +826,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
                         {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
                       </span>
+                      <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                        {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
+                      </small>
                     </div>
                   </div>
 
