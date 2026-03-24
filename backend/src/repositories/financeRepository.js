@@ -8,3 +8,4 @@ export * from './fxRatesRepository.js';
 export * from './netWorthHistoryRepository.js';
 export * from './marketReferenceRepository.js';
 export * from './portfolioRepository.js';
+export * from './whatIfScenarioRepository.js';

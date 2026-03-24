@@ -1,0 +1,220 @@
+.whatIfPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.whatIfSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.whatIfScenarioControls {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(420px, 1.6fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.whatIfScenarioControls .profitabilityInput {
+  min-width: 320px;
+}
+
+.whatIfScenarioPicker {
+  display: grid;
+  gap: 6px;
+}
+
+.whatIfScenarioPickerLabel {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9dd7ff;
+}
+
+.whatIfScenarioPicker .profitabilitySelect {
+  height: 36px;
+}
+
+.whatIfScenarioNameActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  justify-self: start;
+  width: auto;
+}
+
+.whatIfScenarioNameActions .profitabilityInput {
+  width: min(420px, 45vw);
+  min-width: 220px;
+  height: 36px;
+}
+
+.whatIfFooterActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.whatIfBuyForms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.whatIfBuyCard {
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.whatIfBuyCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.whatIfBuyCardHeader h3 {
+  margin: 0;
+}
+
+.whatIfBuyCard .modalLabel {
+  font-size: 0.82rem;
+}
+
+.whatIfBuyCard .profitabilityInput {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  font-size: 0.9rem;
+}
+
+.whatIfBuyCard .modalGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.whatIfBuyCard .modalProductList {
+  margin: 0;
+  max-height: 170px;
+}
+
+.whatIfIconBtn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  line-height: 1;
+  padding: 0;
+}
+
+.whatIfPricePrefix {
+  color: #94a3b8;
+  font-size: 0.86rem;
+  font-weight: 600;
+  min-width: 2ch;
+  text-align: right;
+}
+
+.whatIfToggleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.whatIfToggleInput {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.whatIfToggleSwitch {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.8);
+  position: relative;
+  transition: all 140ms ease;
+}
+
+.whatIfToggleSwitch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: transform 140ms ease;
+}
+
+.whatIfToggleInput:checked + .whatIfToggleSwitch {
+  background: linear-gradient(120deg, rgba(14, 116, 144, 0.28), rgba(7, 89, 133, 0.2));
+  border-color: rgba(94, 234, 212, 0.6);
+}
+
+.whatIfToggleInput:checked + .whatIfToggleSwitch::after {
+  transform: translateX(16px);
+  background: #ecfeff;
+}
+
+.whatIfToggleText {
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+/* Keep scenario KPI cards aligned and prevent number overflow */
+.whatIfPanel .strategyKpiRow {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.whatIfPanel .strategyKpiRow .profitabilityCard {
+  min-width: 0;
+  height: 100%;
+}
+
+.whatIfPanel .strategyKpiRow .profitabilityCardLabel {
+  min-height: 2.35em;
+  align-items: flex-start;
+  line-height: 1.25;
+}
+
+.whatIfPanel .strategyKpiRow .profitabilityCardValue {
+  margin-top: 6px;
+  font-size: clamp(1.1rem, 1.8vw, 2rem);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+  .whatIfScenarioControls {
+    grid-template-columns: 1fr;
+  }
+
+  .whatIfScenarioNameActions {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .whatIfBuyForms {
+    grid-template-columns: 1fr;
+  }
+
+  .whatIfBuyCard .modalGrid {
+    grid-template-columns: 1fr;
+  }
+}

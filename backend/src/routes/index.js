@@ -9,6 +9,7 @@ import currenciesRouter from './currencies.js';
 import internalRouter from './internal.js';
 import devRouter from './dev.js';
 import profitabilityRouter from './profitability.js';
+import whatIfRouter from './whatif.js';
 
 export function mountRoutes(app) {
   app.use('/api/auth', authRouter);
@@ -17,6 +18,7 @@ export function mountRoutes(app) {
   app.use('/api/portfolio', portfolioRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/trading-performance', profitabilityRouter);
+  app.use('/api/whatif', whatIfRouter);
   app.use('/api/user', userRouter);
   app.use('/api/cash', cashRouter);
   app.use('/api/currencies', currenciesRouter);

@@ -35,6 +35,12 @@ export default function SideNav() {
         >
           {t('nav.strategySimulator')}
         </NavLink>
+        <NavLink
+          to="/what-if-scenarios"
+          className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
+        >
+          {t('nav.whatIfScenarios')}
+        </NavLink>
         {SHOW_DEVELOPMENT_PAGE && (
           <NavLink
             to="/development"
