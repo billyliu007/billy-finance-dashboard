@@ -12,9 +12,9 @@
 
 .whatIfScenarioControls {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(420px, 1.6fr);
+  grid-template-columns: minmax(220px, 1fr) auto;
   gap: 8px;
-  align-items: center;
+  align-items: end;
 }
 
 .whatIfScenarioControls .profitabilityInput {
@@ -43,7 +43,7 @@
   align-items: center;
   gap: 8px;
   align-self: end;
-  justify-self: start;
+  justify-self: end;
   width: auto;
 }
 
@@ -202,12 +202,45 @@
 }
 
 @media (max-width: 900px) {
+  .whatIfPanel {
+    overflow: visible;
+  }
+
+  .whatIfPanel,
+  .whatIfSection,
+  .whatIfSection .profitabilityTableWrap,
+  .whatIfSection .profitabilityTable,
+  .whatIfSection .profitabilityTable tbody,
+  .whatIfSection .profitabilityTable tr,
+  .whatIfSection .profitabilityTable td {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .whatIfSection h2,
+  .whatIfSection .profitabilitySectionDesc {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
   .whatIfScenarioControls {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
   }
 
   .whatIfScenarioNameActions {
-    grid-template-columns: 1fr auto auto;
+    display: inline-flex;
+    justify-self: end;
+    align-self: end;
+    gap: 8px;
+  }
+
+  .whatIfScenarioNameActions .profitabilityInput {
+    min-width: 140px;
+    width: min(180px, 42vw);
   }
 
   .whatIfBuyForms {
@@ -251,7 +284,7 @@
 
   .whatIfTable td {
     display: grid;
-    grid-template-columns: minmax(108px, 38%) 1fr;
+    grid-template-columns: minmax(96px, 42%) minmax(0, 1fr);
     align-items: center;
     column-gap: 10px;
     padding: 9px 0;
@@ -276,5 +309,30 @@
   .whatIfTable td .profitabilityInput {
     width: 100%;
     min-width: 0;
+  }
+
+  .whatIfTableTarget td[data-label] .profitabilityInput,
+  .whatIfTableTarget td[data-label] .strategyRebalanceTargetWrap {
+    width: min(220px, 100%);
+    justify-self: start;
+  }
+
+  .whatIfTable td > * {
+    min-width: 0;
+  }
+
+  .whatIfTable .strategyRebalanceTargetWrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    display: block;
+  }
+
+  .whatIfPanel .strategyKpiRow .profitabilityCardValue {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }

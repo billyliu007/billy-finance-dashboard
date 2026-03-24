@@ -12,6 +12,14 @@ function num(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function formatPriceNumber(value, currency = 'USD') {
+  const code = String(currency || 'USD').trim().toUpperCase();
+  const locale = code === 'CNY' || code === 'RMB' ? 'zh-CN' : 'en-US';
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+  }).format(num(value));
+}
+
 function emptyStockForm() {
   return { query: '', selectedSymbol: '', qty: '', buyPrice: '' };
 }
@@ -24,11 +32,6 @@ function inferAssetClass(row) {
   const currency = String(row?.currency || '').trim().toUpperCase();
   if (currency === 'USDT' || currency === 'USDC') return 'crypto';
   return 'stock';
-}
-
-function isDollarCurrency(code) {
-  const c = String(code || '').trim().toUpperCase();
-  return c === 'USD' || c === 'USDT' || c === 'USDC';
 }
 
 export default function WhatIfScenariosPage({ hideValues }) {
@@ -499,23 +502,22 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <thead>
                         <tr>
                           <th>{t('portfolio.asset')}</th>
-                          <th>{t('whatif.currentPrice')}</th>
+                          <th>{`${t('whatif.currentPrice')} $`}</th>
                           <th>{t('whatif.targetDeltaVsCurrentPct')}</th>
-                          <th>{t('whatif.targetPrice')}</th>
+                          <th>{`${t('whatif.targetPrice')} $`}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {resultRows.map((row) => {
                           const targetRow = targetPrices.find((x) => String(x.symbol).toUpperCase() === String(row.symbol).toUpperCase());
                           const targetCurrency = targetRow?.currency || row.currency || 'USD';
-                          const pricePrefix = isDollarCurrency(targetCurrency) ? '$' : `${targetCurrency} `;
                           return (
                             <tr key={row.symbol}>
                               <td data-label={t('portfolio.asset')}>{row.symbol}</td>
-                              <td data-label={t('whatif.currentPrice')}>
+                              <td data-label={`${t('whatif.currentPrice')} $`}>
                                 {hideValues
                                   ? '—'
-                                  : formatCurrencyValue(num(row.baselinePrice), targetCurrency)}
+                                  : formatPriceNumber(row.baselinePrice, targetCurrency)}
                               </td>
                               <td data-label={t('whatif.targetDeltaVsCurrentPct')}>
                                 <input
@@ -535,9 +537,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   disabled={num(row.baselinePrice) <= 0}
                                 />
                               </td>
-                              <td data-label={t('whatif.targetPrice')}>
+                              <td data-label={`${t('whatif.targetPrice')} $`}>
                                 <span className="strategyRebalanceTargetWrap">
-                                  <span className="whatIfPricePrefix">{pricePrefix}</span>
                                   <input
                                     type="number"
                                     min="0"
