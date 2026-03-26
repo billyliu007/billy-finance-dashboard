@@ -20,6 +20,30 @@ export class TtlCache {
       expiresAt: Date.now() + ttlMs,
     });
   }
+
+  /**
+   * Return a best-effort snapshot of non-expired entries.
+   * Intended for diagnostics only (e.g. /api/dev/status).
+   */
+  dump({ limit = 200 } = {}) {
+    const now = Date.now();
+    const entries = [];
+    for (const [key, item] of this.cache.entries()) {
+      if (!item) continue;
+      if (now > item.expiresAt) {
+        this.cache.delete(key);
+        continue;
+      }
+      entries.push({
+        key,
+        expiresAt: item.expiresAt,
+        ttlRemainingMs: Math.max(0, item.expiresAt - now),
+        value: item.value,
+      });
+    }
+    entries.sort((a, b) => a.ttlRemainingMs - b.ttlRemainingMs);
+    return entries.slice(0, Math.max(0, limit));
+  }
 }
 
 export const marketDataCache = new TtlCache(60000); // 1 minute default

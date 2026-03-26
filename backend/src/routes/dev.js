@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Router } from 'express';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { fxCache, marketDataCache } from '../lib/ttlCache.js';
 import { listPortfolioPositions } from '../repositories/financeRepository.js';
 import { buildProviderDiagnosticsForPositions } from '../services/marketDataService.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -23,6 +24,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const positions = await listPortfolioPositions(req.auth.user.userId);
     const providerDiagnostics = await buildProviderDiagnosticsForPositions(positions);
+    const fxCacheEntries = fxCache.dump({ limit: 200 });
+    const marketDataCacheEntries = marketDataCache.dump({ limit: 200 });
     res.json({
       backendVersion: resolveBackendVersion(),
       storage: {
@@ -37,6 +40,16 @@ router.get(
         onboardingCompleted: req.auth.user.onboardingCompleted,
       },
       providerDiagnostics,
+      caches: {
+        fx: {
+          count: fxCacheEntries.length,
+          entries: fxCacheEntries,
+        },
+        marketData: {
+          count: marketDataCacheEntries.length,
+          entries: marketDataCacheEntries,
+        },
+      },
     });
   }),
 );

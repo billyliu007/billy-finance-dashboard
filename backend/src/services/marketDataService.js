@@ -111,10 +111,12 @@ export async function getBenchmarkHistory({ fromDate, toDate }) {
 }
 
 export async function buildProviderDiagnosticsForPositions(positions) {
+  // Fetch a stable baseline set so diagnostics don't false-fail when called with no cash currencies.
+  const fxDiagnosticsCurrencies = ['CNY', 'SGD', 'EUR', 'GBP', 'JPY', 'HKD'];
   const [stockQuotes, cryptoQuotes, { rates: fxRates, providerLabel: fxProviderLabel }] = await Promise.all([
     getStockQuoteMapForPositions(positions),
     getCryptoQuoteMapForPositions(positions),
-    resolveLiveFxRates(),
+    resolveLiveFxRates(fxDiagnosticsCurrencies),
   ]);
   return [
     {

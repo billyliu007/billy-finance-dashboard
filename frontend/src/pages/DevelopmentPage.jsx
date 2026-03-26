@@ -2,6 +2,33 @@ import { useMemo } from 'react';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import useApiData from '../hooks/useApiData.js';
 
+function formatMs(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return '-';
+  if (n < 1000) return `${Math.round(n)}ms`;
+  const sec = n / 1000;
+  if (sec < 60) return `${sec.toFixed(1)}s`;
+  const min = sec / 60;
+  if (min < 60) return `${min.toFixed(1)}m`;
+  const hr = min / 60;
+  return `${hr.toFixed(1)}h`;
+}
+
+function summarizeCacheValue(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return `Array(${value.length})`;
+  if (typeof value === 'object') {
+    if (value?.price != null && value?.source) {
+      return `${value.source} price=${value.price}`;
+    }
+    const keys = Object.keys(value);
+    return keys.length <= 6 ? `{${keys.join(', ')}}` : `{${keys.slice(0, 6).join(', ')}, …}`;
+  }
+  return String(value);
+}
+
 function mapAssetSources(rows = []) {
   return rows.map((row) => ({
     name: row.name,
@@ -14,6 +41,9 @@ function mapAssetSources(rows = []) {
 export default function DevelopmentPage({ frontendVersion }) {
   const status = useApiData('/api/dev/status');
   const { portfolio, isLoading: isDashboardLoading, error: dashboardError } = useDashboard();
+
+  const fxCache = status.data?.caches?.fx?.entries || [];
+  const marketDataCache = status.data?.caches?.marketData?.entries || [];
 
   const assetSources = useMemo(
     () => mapAssetSources(portfolio?.tableRows || []),
@@ -129,6 +159,47 @@ export default function DevelopmentPage({ frontendVersion }) {
                       <td>{item.asOf}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        )}
+
+        {!status.isLoading && !status.error && (
+          <article className="tableCard">
+            <h2>Cache Snapshot</h2>
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cache</th>
+                    <th>Key</th>
+                    <th>TTL Remaining</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fxCache.map((item) => (
+                    <tr key={`fx:${item.key}`}>
+                      <td>fx</td>
+                      <td>{item.key}</td>
+                      <td>{formatMs(item.ttlRemainingMs)}</td>
+                      <td>{summarizeCacheValue(item.value)}</td>
+                    </tr>
+                  ))}
+                  {marketDataCache.map((item) => (
+                    <tr key={`mkt:${item.key}`}>
+                      <td>marketData</td>
+                      <td>{item.key}</td>
+                      <td>{formatMs(item.ttlRemainingMs)}</td>
+                      <td>{summarizeCacheValue(item.value)}</td>
+                    </tr>
+                  ))}
+                  {fxCache.length === 0 && marketDataCache.length === 0 && (
+                    <tr>
+                      <td colSpan={4}>No cache entries.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
