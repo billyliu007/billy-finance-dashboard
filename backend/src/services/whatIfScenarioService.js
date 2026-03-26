@@ -11,6 +11,28 @@ import { listPortfolioPositions, listPositionTransactionAggregates } from '../re
 
 const WHATIF_RESULTS_CACHE_TTL_MS = 15000;
 const whatIfResultsCache = new Map();
+const WHATIF_TIMING_LOG = ['1', 'true', 'yes', 'on'].includes(String(process.env.WHATIF_TIMING_LOG || '').trim().toLowerCase());
+
+function nowMs() {
+  return Number(process.hrtime.bigint() / 1000000n);
+}
+
+function logTiming(meta, steps) {
+  if (!WHATIF_TIMING_LOG) return;
+  // eslint-disable-next-line no-console
+  console.log(
+    JSON.stringify(
+      {
+        tag: 'whatif_timing',
+        at: new Date().toISOString(),
+        ...meta,
+        steps,
+      },
+      null,
+      0,
+    ),
+  );
+}
 
 function cacheGet(key) {
   const hit = whatIfResultsCache.get(key);
@@ -310,19 +332,33 @@ export function computeWhatIfFromData({
 }
 
 export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCurrency = 'USD' }) {
+  const t0 = nowMs();
   const scenario = await getWhatIfScenarioById({ userId, scenarioId });
   if (!scenario) throw new Error('Scenario not found.');
 
+  const tScenario = nowMs();
   const [targetPrices, hypotheticalPurchases] = await Promise.all([
     listWhatIfTargetPrices({ userId, scenarioId }),
     listWhatIfHypotheticalPurchases({ userId, scenarioId }),
   ]);
+  const tInputs = nowMs();
 
   const base = toUpper(baseCurrency || 'USD') || 'USD';
   const inputsHash = stableInputsHash({ targetPrices, hypotheticalPurchases });
   const cacheKey = `${String(userId)}:${String(scenarioId)}:${base}:${inputsHash}`;
   const cached = cacheGet(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    logTiming(
+      { userId, scenarioId, baseCurrency: base, cached: true },
+      {
+        totalMs: nowMs() - t0,
+        getScenarioMs: tScenario - t0,
+        loadInputsMs: tInputs - tScenario,
+        cacheHitMs: nowMs() - tInputs,
+      },
+    );
+    return cached;
+  }
 
   // What-if results don't need the full dashboard payload (cash/history/benchmarks).
   // Load only what we need: positions + live quotes for baseline prices, and FX for base conversion.
@@ -330,12 +366,15 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
     listPortfolioPositions(userId),
     listPositionTransactionAggregates(userId),
   ]);
+  const tPositions = nowMs();
   const effectivePositions = applyTransactionAggregatesToPositions(positions, txAggRows);
   const [stockQuotes, cryptoQuotes] = await Promise.all([
     getStockQuoteMapForPositions(effectivePositions),
     getCryptoQuoteMapForPositions(effectivePositions),
   ]);
+  const tQuotes = nowMs();
   const portfolio = buildPortfolioPayload({ positions: effectivePositions, stockQuotes, cryptoQuotes });
+  const tPortfolio = nowMs();
 
   const baselineRows = Array.isArray(portfolio?.tableRows) ? portfolio.tableRows : [];
   const baselineTotalValue = numberOrZero(portfolio?.totals?.value);
@@ -351,13 +390,27 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
     ),
   ];
   const fxRates = await getLiveFxRates(fxCurrencies);
-  const symbolsMissingBaselinePrice = [
-    ...new Set([
-      ...baselineRows.filter((row) => numberOrZero(row.currentPrice) <= 0).map((row) => toUpper(row.symbol)),
-      ...hypotheticalPurchases.map((row) => toUpper(row.symbol)),
-    ]),
-  ].filter(Boolean);
+  const tFx = nowMs();
+  const baselinePriceBySymbol = new Map(
+    baselineRows.map((row) => [toUpper(row.symbol), numberOrZero(row.currentPrice)]),
+  );
+  const symbolsMissingBaselinePrice = Array.from(
+    new Set(
+      [
+        // Baseline holdings with no price (true missing)
+        ...baselineRows.filter((row) => numberOrZero(row.currentPrice) <= 0).map((row) => toUpper(row.symbol)),
+        // Hypothetical purchase symbols should only be fetched if they are not already priced by baseline
+        ...hypotheticalPurchases
+          .map((row) => toUpper(row.symbol))
+          .filter((sym) => {
+            const baselinePrice = baselinePriceBySymbol.get(sym);
+            return !Number.isFinite(baselinePrice) || baselinePrice <= 0;
+          }),
+      ].filter(Boolean),
+    ),
+  );
   const fetchedPriceMap = await fetchMarketPriceCandidatesBatch(symbolsMissingBaselinePrice);
+  const tMissing = nowMs();
 
   const computed = computeWhatIfFromData({
     scenario,
@@ -370,6 +423,35 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
     fxRates,
     fetchedPriceMap,
   });
+  const tCompute = nowMs();
   cacheSet(cacheKey, computed);
+  logTiming(
+    {
+      userId,
+      scenarioId,
+      baseCurrency: base,
+      cached: false,
+      counts: {
+        positions: Array.isArray(effectivePositions) ? effectivePositions.length : 0,
+        baselineRows: baselineRows.length,
+        targetPrices: Array.isArray(targetPrices) ? targetPrices.length : 0,
+        hypotheticalPurchases: Array.isArray(hypotheticalPurchases) ? hypotheticalPurchases.length : 0,
+        missingSymbols: symbolsMissingBaselinePrice.length,
+      },
+      missingSymbolsSample: symbolsMissingBaselinePrice.slice(0, 30),
+      missingSymbolsTruncated: symbolsMissingBaselinePrice.length > 30,
+    },
+    {
+      totalMs: tCompute - t0,
+      getScenarioMs: tScenario - t0,
+      loadInputsMs: tInputs - tScenario,
+      loadPositionsMs: tPositions - tInputs,
+      liveQuotesMs: tQuotes - tPositions,
+      buildPortfolioMs: tPortfolio - tQuotes,
+      fxMs: tFx - tPortfolio,
+      fetchMissingPricesMs: tMissing - tFx,
+      computeMs: tCompute - tMissing,
+    },
+  );
   return computed;
 }

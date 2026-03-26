@@ -418,11 +418,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setIsSaving(true);
       setError('');
       try {
-        await Promise.all([
-          putJson(`/api/whatif/scenarios/${scenarioId}/target-prices`, { rows: targetRows }),
-          putJson(`/api/whatif/scenarios/${scenarioId}/hypothetical-purchases`, { rows: purchaseRows }),
-        ]);
-        const nextResults = await fetchJson(`/api/whatif/scenarios/${scenarioId}/results`);
+        const nextResults = await putJson(`/api/whatif/scenarios/${scenarioId}/inputs`, {
+          targetPrices: targetRows,
+          hypotheticalPurchases: purchaseRows,
+        });
         setResults(nextResults);
       } finally {
         setIsSaving(false);

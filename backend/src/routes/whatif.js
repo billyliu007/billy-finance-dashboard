@@ -89,6 +89,27 @@ router.delete(
 );
 
 router.put(
+  '/scenarios/:id/inputs',
+  asyncHandler(async (req, res) => {
+    try {
+      const userId = req.auth.user.userId;
+      const scenarioId = req.params?.id;
+      const targetRows = Array.isArray(req.body?.targetPrices) ? req.body.targetPrices : [];
+      const buyRows = Array.isArray(req.body?.hypotheticalPurchases) ? req.body.hypotheticalPurchases : [];
+      await Promise.all([
+        replaceWhatIfTargetPrices({ userId, scenarioId, rows: targetRows }),
+        replaceWhatIfHypotheticalPurchases({ userId, scenarioId, rows: buyRows }),
+      ]);
+      const baseCurrency = req.auth.user.baseCurrency || 'USD';
+      const results = await computeWhatIfScenarioResults({ userId, scenarioId, baseCurrency });
+      return res.json(results);
+    } catch (error) {
+      rethrowAsNotFoundOr400(error);
+    }
+  }),
+);
+
+router.put(
   '/scenarios/:id/target-prices',
   asyncHandler(async (req, res) => {
     try {
@@ -150,10 +171,22 @@ router.get(
   '/scenarios/:id/results',
   asyncHandler(async (req, res) => {
     try {
+      const t0 = Number(process.hrtime.bigint() / 1000000n);
       const userId = req.auth.user.userId;
       const scenarioId = req.params?.id;
       const baseCurrency = req.auth.user.baseCurrency || 'USD';
       const results = await computeWhatIfScenarioResults({ userId, scenarioId, baseCurrency });
+      const t1 = Number(process.hrtime.bigint() / 1000000n);
+      if (['1', 'true', 'yes', 'on'].includes(String(process.env.WHATIF_TIMING_LOG || '').trim().toLowerCase())) {
+        // eslint-disable-next-line no-console
+        console.log(
+          JSON.stringify(
+            { tag: 'whatif_route_timing', route: 'GET /results', userId, scenarioId, ms: t1 - t0, at: new Date().toISOString() },
+            null,
+            0,
+          ),
+        );
+      }
       return res.json(results);
     } catch (error) {
       rethrowAsNotFoundOr400(error);
