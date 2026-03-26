@@ -1,7 +1,7 @@
 import { applyTransactionAggregatesToPositions } from './dashboardService.js';
 import { buildPortfolioPayload } from './portfolioService.js';
-import { getCryptoQuoteMapForPositions, getLiveFxRates, getStockQuoteMapForPositions } from './marketDataService.js';
-import { stockProviders, cryptoProviders } from '../lib/marketDataProviders.js';
+import { getCryptoQuoteMapForPositions, getStockQuoteMapForPositions, resolveLiveFxRates } from './marketDataService.js';
+import { getCryptoQuotes, getStockQuotes } from './pricingGateway.js';
 import {
   getWhatIfScenarioById,
   listWhatIfTargetPrices,
@@ -89,25 +89,24 @@ function numberOrZero(value) {
 }
 
 async function fetchMarketPriceCandidates(symbol) {
-  const stockProvider = stockProviders.finnhub;
-  if (stockProvider) {
-    const stock = await stockProvider.getQuotes([{ assetSymbol: symbol, providerSymbol: symbol }]);
-    const stockPrice = Number(stock?.[symbol]?.price);
-    if (Number.isFinite(stockPrice) && stockPrice > 0) {
-      return { price: stockPrice, source: 'market-stock' };
+  const sym = toUpper(symbol);
+  if (!sym) return null;
+
+  const stock = await getStockQuotes([sym]);
+  const stockPrice = Number(stock?.[sym]?.price);
+  if (Number.isFinite(stockPrice) && stockPrice > 0) {
+    return { price: stockPrice, source: 'market-stock' };
+  }
+
+  for (const quoteCur of ['USD', 'USDT', 'USDC']) {
+    const providerSymbol = `${sym}-${quoteCur}`;
+    const crypto = await getCryptoQuotes([{ assetSymbol: sym, providerName: 'coinbase', providerSymbol }]);
+    const price = Number(crypto?.[sym]?.price);
+    if (Number.isFinite(price) && price > 0) {
+      return { price, source: 'market-crypto' };
     }
   }
 
-  const coinbase = cryptoProviders.coinbase;
-  if (coinbase) {
-    for (const providerSymbol of [`${symbol}-USD`, `${symbol}-USDT`, `${symbol}-USDC`]) {
-      const crypto = await coinbase.getQuotes([{ assetSymbol: symbol, providerSymbol }]);
-      const price = Number(crypto?.[symbol]?.price);
-      if (Number.isFinite(price) && price > 0) {
-        return { price, source: 'market-crypto' };
-      }
-    }
-  }
   return null;
 }
 
@@ -118,12 +117,7 @@ async function fetchMarketPriceCandidatesBatch(symbols = []) {
   const fetchedPriceMap = new Map();
   if (unique.length === 0) return fetchedPriceMap;
 
-  const stockProvider = stockProviders.finnhub;
-  const coinbase = cryptoProviders.coinbase;
-
-  const stockQuotes = stockProvider
-    ? await stockProvider.getQuotes(unique.map((symbol) => ({ assetSymbol: symbol, providerSymbol: symbol })))
-    : {};
+  const stockQuotes = await getStockQuotes(unique);
 
   const missingAfterStock = [];
   for (const symbol of unique) {
@@ -135,17 +129,31 @@ async function fetchMarketPriceCandidatesBatch(symbols = []) {
     }
   }
 
-  if (coinbase && missingAfterStock.length > 0) {
-    const cryptoQuotes = await coinbase.getQuotes(
-      missingAfterStock.map((symbol) => ({ assetSymbol: symbol, providerSymbol: `${symbol}-USD` })),
-    );
-    for (const symbol of missingAfterStock) {
+  // Coinbase fallback sweep: USD → USDT → USDC (batched), only for still-missing symbols.
+  const tryCoinbaseQuote = async (quoteCur, remaining) => {
+    if (!remaining || remaining.length === 0) return [];
+    const targets = remaining.map((symbol) => ({
+      assetSymbol: symbol,
+      providerName: 'coinbase',
+      providerSymbol: `${symbol}-${quoteCur}`,
+    }));
+    const cryptoQuotes = await getCryptoQuotes(targets);
+    const stillMissing = [];
+    for (const symbol of remaining) {
       const cryptoPrice = Number(cryptoQuotes?.[symbol]?.price);
       if (Number.isFinite(cryptoPrice) && cryptoPrice > 0) {
         fetchedPriceMap.set(symbol, { price: cryptoPrice, source: 'market-crypto' });
+      } else {
+        stillMissing.push(symbol);
       }
     }
-  }
+    return stillMissing;
+  };
+
+  let remaining = missingAfterStock;
+  remaining = await tryCoinbaseQuote('USD', remaining);
+  remaining = await tryCoinbaseQuote('USDT', remaining);
+  remaining = await tryCoinbaseQuote('USDC', remaining);
 
   return fetchedPriceMap;
 }
@@ -389,7 +397,9 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
       ].filter(Boolean),
     ),
   ];
-  const fxRates = await getLiveFxRates(fxCurrencies);
+  const fxBundle = await resolveLiveFxRates(fxCurrencies);
+  const fxRates = fxBundle?.rates || {};
+  const fxProviderLabel = String(fxBundle?.providerLabel || '');
   const tFx = nowMs();
   const baselinePriceBySymbol = new Map(
     baselineRows.map((row) => [toUpper(row.symbol), numberOrZero(row.currentPrice)]),
@@ -431,6 +441,7 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
       scenarioId,
       baseCurrency: base,
       cached: false,
+      fxProvider: fxProviderLabel || null,
       counts: {
         positions: Array.isArray(effectivePositions) ? effectivePositions.length : 0,
         baselineRows: baselineRows.length,

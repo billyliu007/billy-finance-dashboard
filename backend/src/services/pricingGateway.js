@@ -11,6 +11,10 @@ function fxFallbackDisabled() {
   return ['none', 'off', 'false'].includes(FX_PROVIDER_FALLBACK);
 }
 
+// Last-known-good FX cache (never expires during process lifetime).
+// Used to avoid blocking interactive requests on slow FX providers.
+const fxLastGood = new Map(); // code -> { rate: number, at: number }
+
 // In-flight request de-dupe to prevent stampedes.
 const inflight = new Map();
 
@@ -46,6 +50,21 @@ function uniqueNonEmpty(list, normalizer = (x) => x) {
     out.push(n);
   }
   return out;
+}
+
+function rememberFx(code, rate) {
+  const c = String(code || '').trim().toUpperCase();
+  const v = Number(rate);
+  if (!c || c === 'USD') return;
+  if (!Number.isFinite(v) || v <= 0) return;
+  fxLastGood.set(c, { rate: v, at: Date.now() });
+}
+
+function getLastGoodFx(code) {
+  const c = String(code || '').trim().toUpperCase();
+  const hit = fxLastGood.get(c);
+  const v = Number(hit?.rate);
+  return Number.isFinite(v) && v > 0 ? v : null;
 }
 
 /**
@@ -164,7 +183,9 @@ export async function getLiveFxBundle(currencies = []) {
     const key = `fx:usdPerUnit:${code}`;
     const cached = fxCache.get(key);
     if (cached && Number.isFinite(Number(cached)) && Number(cached) > 0) {
-      rates[code] = Number(cached);
+      const v = Number(cached);
+      rates[code] = v;
+      rememberFx(code, v);
     } else {
       missing.push(code);
     }
@@ -173,10 +194,55 @@ export async function getLiveFxBundle(currencies = []) {
   let providerLabel = 'frankfurter';
 
   if (missing.length > 0) {
+    // 1) If we have last-known-good values for all missing currencies, return immediately (fast path),
+    // and refresh asynchronously in the background.
+    const staleResolved = [];
+    const stillMissing = [];
+    for (const code of missing) {
+      const v = getLastGoodFx(code);
+      if (v != null) {
+        rates[code] = v;
+        staleResolved.push(code);
+      } else {
+        stillMissing.push(code);
+      }
+    }
+
+    if (stillMissing.length === 0 && staleResolved.length > 0) {
+      providerLabel = 'cache-stale';
+      const refreshKey = inflightKey('fxBundleRefresh', missing.sort().join(','));
+      // Fire-and-forget refresh: do not block the request.
+      void withInflight(refreshKey, async () => {
+        const fetched = await fetchFxRatesWithFallback(missing, { disableFallback: fxFallbackDisabled() });
+        const fetchedRates = fetched?.rates || {};
+        for (const code of missing) {
+          const v = Number(fetchedRates?.[code]);
+          if (Number.isFinite(v) && v > 0) {
+            fxCache.set(`fx:usdPerUnit:${code}`, v);
+            rememberFx(code, v);
+          }
+        }
+        return true;
+      });
+      return { rates, providerLabel };
+    }
+
+    // 2) Otherwise, fetch missing rates but cap how long we wait (avoid the 10s HTTP timeout stalling UI).
     const batchKey = inflightKey('fxBundle', missing.sort().join(','));
-    const fetched = await withInflight(batchKey, async () => fetchFxRatesWithFallback(missing, {
+    const fetchPromise = withInflight(batchKey, async () => fetchFxRatesWithFallback(missing, {
       disableFallback: fxFallbackDisabled(),
     }));
+    const timeoutMs = 1200;
+    const fetched = await Promise.race([
+      fetchPromise,
+      new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+
+    if (!fetched) {
+      providerLabel = Object.keys(rates).length > 1 ? 'cache-partial-timeout' : 'fx-timeout';
+      return { rates, providerLabel };
+    }
+
     const fetchedRates = fetched?.rates || {};
     providerLabel = Array.isArray(fetched?.providersUsed) ? fetched.providersUsed.join('+') : providerLabel;
 
@@ -185,6 +251,7 @@ export async function getLiveFxBundle(currencies = []) {
       const v = Number(fetchedRates?.[code]);
       if (Number.isFinite(v) && v > 0) {
         fxCache.set(`fx:usdPerUnit:${code}`, v);
+        rememberFx(code, v);
         rates[code] = v;
       }
     }
@@ -196,5 +263,42 @@ export async function getLiveFxBundle(currencies = []) {
 export async function getLiveFxRates(currencies = []) {
   const { rates } = await getLiveFxBundle(currencies);
   return rates;
+}
+
+/**
+ * Warm FX cache in the background so the first interactive request after restart is fast.
+ * Uses the underlying provider fetch (no short interactive cap).
+ * @param {string[]} currencies
+ */
+export async function warmFxCache(currencies = []) {
+  const supported = filterToSupportedCurrencyCodes(currencies);
+  const normalized = uniqueNonEmpty(supported, (c) => String(c || '').trim().toUpperCase())
+    .filter((c) => c && c !== 'USD');
+
+  // Stablecoins are treated as USD in-app; FX providers won't return them.
+  const toFetch = normalized.filter((c) => c !== 'USDT' && c !== 'USDC');
+  if (toFetch.length === 0) return { ok: true, fetched: 0 };
+
+  if (FX_PROVIDER !== 'frankfurter') {
+    return { ok: false, fetched: 0, reason: 'FX_PROVIDER not frankfurter' };
+  }
+
+  const key = inflightKey('fxWarm', toFetch.sort().join(','));
+  return withInflight(key, async () => {
+    const fetched = await fetchFxRatesWithFallback(toFetch, {
+      disableFallback: fxFallbackDisabled(),
+    });
+    const fetchedRates = fetched?.rates || {};
+    let count = 0;
+    for (const code of toFetch) {
+      const v = Number(fetchedRates?.[code]);
+      if (Number.isFinite(v) && v > 0) {
+        fxCache.set(`fx:usdPerUnit:${code}`, v);
+        rememberFx(code, v);
+        count += 1;
+      }
+    }
+    return { ok: true, fetched: count, providerLabel: Array.isArray(fetched?.providersUsed) ? fetched.providersUsed.join('+') : null };
+  });
 }
 
