@@ -1,5 +1,6 @@
 import { fetchFxRatesWithFallback } from '../lib/fx.js';
 import { stockProviders, cryptoProviders } from '../lib/marketDataProviders.js';
+import { filterToSupportedCurrencyCodes } from '../lib/supportedCurrencies.js';
 
 const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
 /** Set to `none`, `off`, or `false` to use Frankfurter only. Any other value keeps secondary FX enabled. */
@@ -78,9 +79,8 @@ export async function getCryptoQuoteMapForPositions(positions) {
  * @returns {Promise<{ rates: Record<string, number>, providerLabel: string }>}
  */
 export async function resolveLiveFxRates(currenciesFromCash = []) {
-  const normalized = (currenciesFromCash || [])
-    .map((c) => String(c || '').trim().toUpperCase())
-    .filter((c) => c && c !== 'CNY');
+  const supported = filterToSupportedCurrencyCodes(currenciesFromCash);
+  const normalized = supported.filter((c) => c && c !== 'CNY');
 
   if (FX_PROVIDER !== 'frankfurter') {
     return { rates: {}, providerLabel: FX_PROVIDER || 'unknown' };

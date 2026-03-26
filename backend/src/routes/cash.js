@@ -4,6 +4,7 @@ import { rethrowAsBadRequest } from '../lib/mapRouteErrors.js';
 import { replaceCashComponents } from '../repositories/financeRepository.js';
 import { getCrossFxRate, runCashTransfer } from '../services/cashTransferService.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { assertSupportedCurrencyCode } from '../lib/supportedCurrencies.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -16,6 +17,12 @@ router.get(
     const toCur = String(req.query.to || '').trim();
     if (!fromCur || !toCur) {
       return res.status(400).json({ message: 'Query parameters "from" and "to" (currency codes) are required.' });
+    }
+    try {
+      assertSupportedCurrencyCode(fromCur, { fieldName: 'from' });
+      assertSupportedCurrencyCode(toCur, { fieldName: 'to' });
+    } catch (error) {
+      return res.status(400).json({ message: error?.message || 'Unsupported currency code.' });
     }
     const { rate, from, to } = await getCrossFxRate(fromCur, toCur);
     return res.json({ from, to, rate });
@@ -55,7 +62,7 @@ router.put(
       const list = Array.isArray(req.body?.cashComponents) ? req.body.cashComponents : [];
       const normalized = list.map((item, index) => {
         const name = String(item?.name ?? `Component ${index + 1}`).trim() || 'Cash';
-        const currency = String(item?.currency || 'CNY').trim().toUpperCase();
+        const currency = assertSupportedCurrencyCode(item?.currency || 'CNY', { fieldName: `cashComponents[${index}].currency` });
         const balance = Number(item?.balance ?? item?.amount ?? 0);
         if (!Number.isFinite(balance)) {
           throw new Error('Each cash component must have a valid balance (number).');

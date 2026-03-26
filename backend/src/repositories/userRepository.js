@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { query, withDbClient } from '../db/client.js';
+import { assertSupportedCurrencyCode } from '../lib/supportedCurrencies.js';
 
 function buildPublicId() {
   return `usr_${randomUUID().replace(/-/g, '').slice(0, 10)}`;
@@ -74,7 +75,7 @@ export async function markOnboardingCompleted(userId, displayName) {
 }
 
 export async function updateUserBaseCurrency(userId, baseCurrency) {
-  const code = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
+  const code = assertSupportedCurrencyCode(baseCurrency || 'USD', { fieldName: 'baseCurrency' });
   await query(
     `UPDATE users SET base_currency = $2, updated_at = NOW() WHERE id = $1`,
     [userId, code],

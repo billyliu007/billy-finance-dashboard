@@ -16,6 +16,7 @@ import {
 } from './marketDataService.js';
 import { applyTransactionAggregatesToPositions } from './dashboardService.js';
 import { fetchFxRatesWithFallback, mergeUsdPerUnitRates } from '../lib/fx.js';
+import { filterToSupportedCurrencyCodes } from '../lib/supportedCurrencies.js';
 
 function todayUtcDate() {
   return new Date().toISOString().slice(0, 10);
@@ -81,10 +82,11 @@ export async function runDailySnapshots({ dateUtc = todayUtcDate() } = {}) {
   }
 
   // 3. Batch fetch market data ONCE for everyone
+  const supportedCashCurrencies = filterToSupportedCurrencyCodes([...allCurrencies]);
   const [stockQuotes, cryptoQuotes, fxBundle] = await Promise.all([
     getStockQuoteMapForPositions([...activeUserData.flatMap(d => d.positions)]),
     getCryptoQuoteMapForPositions([...activeUserData.flatMap(d => d.positions)]),
-    fetchFxWithRetry([...allCurrencies]),
+    fetchFxWithRetry(supportedCashCurrencies),
   ]);
 
   let fxRates = fxBundle.rates;
