@@ -23,11 +23,22 @@ services:
       # Database (same DB as localhost; set in group or here)
       - key: DATABASE_URL
         sync: false
+      # If your DATABASE_URL includes sslmode, prefer `sslmode=verify-full` to keep current
+      # pg behavior and avoid future semantic changes (see pg-connection-string warning).
       - key: DATABASE_SSL
         value: "true"
       # Optional: cap pg pool size per instance (Neon / small max_connections)
       # - key: PGPOOL_MAX
       #   value: "5"
+      # Postgres resiliency for transient connection issues (cron + managed DBs)
+      - key: PG_RETRY_ATTEMPTS
+        value: "3"
+      - key: PG_RETRY_BASE_DELAY_MS
+        value: "750"
+      - key: PG_CONNECTION_TIMEOUT_MS
+        value: "30000"
+      - key: PG_IDLE_TIMEOUT_MS
+        value: "30000"
 
       # App & auth
       - key: FRONTEND_BASE_URL
@@ -91,11 +102,22 @@ services:
       - fromGroup: netpulse-secrets
       - key: DATABASE_URL
         sync: false
+      # If your DATABASE_URL includes sslmode, prefer `sslmode=verify-full` to keep current
+      # pg behavior and avoid future semantic changes (see pg-connection-string warning).
       - key: DATABASE_SSL
         value: "true"
       # Optional: cap pg pool size per instance (Neon / small max_connections)
       # - key: PGPOOL_MAX
       #   value: "5"
+      # Postgres resiliency for transient connection issues (cron + managed DBs)
+      - key: PG_RETRY_ATTEMPTS
+        value: "3"
+      - key: PG_RETRY_BASE_DELAY_MS
+        value: "750"
+      - key: PG_CONNECTION_TIMEOUT_MS
+        value: "30000"
+      - key: PG_IDLE_TIMEOUT_MS
+        value: "30000"
       - key: FINNHUB_API_KEY
         sync: false
       - key: FX_PROVIDER

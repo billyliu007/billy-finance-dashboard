@@ -44,14 +44,56 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [targetPrices, setTargetPrices] = useState([]);
   const [targetPricePctBySymbol, setTargetPricePctBySymbol] = useState({});
   const [buyRows, setBuyRows] = useState([]);
-  const [deductHypotheticalFromCash, setDeductHypotheticalFromCash] = useState(false);
+  const [deductHypotheticalFromCash, setDeductHypotheticalFromCash] = useState(true);
   const [stockForm, setStockForm] = useState(emptyStockForm());
   const [cryptoForm, setCryptoForm] = useState(emptyCryptoForm());
   const [results, setResults] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isScenarioLoading, setIsScenarioLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const skipNextAutoSaveRef = useRef(false);
+  const [lastSavedHash, setLastSavedHash] = useState('');
+
+  function resetScenarioEditorState() {
+    setTargetPrices([]);
+    setTargetPricePctBySymbol({});
+    setBuyRows([]);
+    setStockForm(emptyStockForm());
+    setCryptoForm(emptyCryptoForm());
+    setResults(null);
+  }
+
+  function computeInputsHash(nextTargetPrices, nextBuyRows) {
+    const targetRows = (nextTargetPrices || [])
+      .map((row) => ({
+        symbol: String(row?.symbol || '').trim().toUpperCase(),
+        targetPrice: num(row?.targetPrice),
+        currency: String(row?.currency || '').trim().toUpperCase() || null,
+      }))
+      .filter((row) => row.symbol && row.targetPrice > 0)
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+    const purchaseRows = (nextBuyRows || [])
+      .map((row) => ({
+        symbol: String(row?.symbol || '').trim().toUpperCase(),
+        qty: num(row?.qty),
+        buyPrice: num(row?.buyPrice),
+        currency:
+          row?.assetClass === 'stock'
+            ? 'USD'
+            : String(row?.currency || '').trim().toUpperCase() || 'USD',
+      }))
+      .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0)
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+    return JSON.stringify({ targetRows, purchaseRows });
+  }
+
+  function confirmDiscardIfDirty(isDirty) {
+    if (!isDirty) return true;
+    return window.confirm('You have unsaved changes. Continue without saving?');
+  }
 
   const fetchStockSymbols = useCallback(async (q) => {
     const res = await fetchJson('/api/market/us-stock-symbols', {
@@ -94,6 +136,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   async function loadScenarioPayload(scenarioId) {
+    setIsScenarioLoading(true);
     if (!scenarioId) {
       setTargetPrices([]);
       setTargetPricePctBySymbol({});
@@ -101,62 +144,77 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setStockForm(emptyStockForm());
       setCryptoForm(emptyCryptoForm());
       setResults(null);
+      setLastSavedHash('');
+      setIsScenarioLoading(false);
       return;
     }
-    const [targetsRes, buysRes, resultRes] = await Promise.all([
-      fetchJson(`/api/whatif/scenarios/${scenarioId}/target-prices`),
-      fetchJson(`/api/whatif/scenarios/${scenarioId}/hypothetical-purchases`),
-      fetchJson(`/api/whatif/scenarios/${scenarioId}/results`),
-    ]);
-    const resultRows = Array.isArray(resultRes?.rows) ? resultRes.rows : [];
-    const savedTargets = Array.isArray(targetsRes?.targetPrices) ? targetsRes.targetPrices : [];
-    const savedBySymbol = new Map(savedTargets.map((row) => [String(row.symbol || '').toUpperCase(), row]));
-    const prefilledTargets = resultRows.map((row) => {
-      const symbol = String(row.symbol || '').toUpperCase();
-      const saved = savedBySymbol.get(symbol);
-      if (saved) {
+    try {
+      const resultRes = await fetchJson(`/api/whatif/scenarios/${scenarioId}/results`);
+      const resultRows = Array.isArray(resultRes?.rows) ? resultRes.rows : [];
+      const savedTargets = Array.isArray(resultRes?.targetPrices) ? resultRes.targetPrices : [];
+      const savedBySymbol = new Map(savedTargets.map((row) => [String(row.symbol || '').toUpperCase(), row]));
+      const prefilledTargets = resultRows.map((row) => {
+        const symbol = String(row.symbol || '').toUpperCase();
+        const saved = savedBySymbol.get(symbol);
+        if (saved) {
+          return {
+            symbol,
+            targetPrice: saved.targetPrice,
+            currency: saved.currency || row.currency || 'USD',
+          };
+        }
         return {
           symbol,
-          targetPrice: saved.targetPrice,
-          currency: saved.currency || row.currency || 'USD',
+          targetPrice: num(row.baselinePrice) > 0 ? row.baselinePrice : '',
+          currency: row.currency || 'USD',
         };
+      });
+      const pctBySymbol = {};
+      for (const row of resultRows) {
+        const symbol = String(row.symbol || '').toUpperCase();
+        const baseline = num(row.baselinePrice);
+        const saved = savedBySymbol.get(symbol);
+        const target = prefilledTargets.find((x) => String(x.symbol).toUpperCase() === symbol)?.targetPrice;
+        const targetNum = num(target);
+        // Keep % input empty by default; only prefill when a saved target price exists.
+        pctBySymbol[symbol] =
+          saved && baseline > 0 && target !== ''
+            ? (((targetNum - baseline) / baseline) * 100).toFixed(2)
+            : '';
       }
-      return {
-        symbol,
-        targetPrice: num(row.baselinePrice) > 0 ? row.baselinePrice : '',
-        currency: row.currency || 'USD',
-      };
-    });
-    const pctBySymbol = {};
-    for (const row of resultRows) {
-      const symbol = String(row.symbol || '').toUpperCase();
-      const baseline = num(row.baselinePrice);
-      const saved = savedBySymbol.get(symbol);
-      const target = prefilledTargets.find((x) => String(x.symbol).toUpperCase() === symbol)?.targetPrice;
-      const targetNum = num(target);
-      // Keep % input empty by default; only prefill when a saved target price exists.
-      pctBySymbol[symbol] =
-        saved && baseline > 0 && target !== ''
-          ? (((targetNum - baseline) / baseline) * 100).toFixed(2)
-          : '';
+      setTargetPrices(prefilledTargets);
+      setTargetPricePctBySymbol(pctBySymbol);
+      const fetchedBuys = Array.isArray(resultRes?.hypotheticalPurchases) ? resultRes.hypotheticalPurchases : [];
+      setBuyRows(
+        fetchedBuys.map((row, index) => ({
+          id: row.id || `saved-${index}`,
+          assetClass: inferAssetClass(row),
+          symbol: String(row.symbol || '').toUpperCase(),
+          qty: row.qty,
+          buyPrice: row.buyPrice,
+          currency: String(row.currency || '').toUpperCase() || null,
+        })),
+      );
+      setStockForm(emptyStockForm());
+      setCryptoForm(emptyCryptoForm());
+      setResults(resultRes);
+      skipNextAutoSaveRef.current = true;
+      setLastSavedHash(
+        computeInputsHash(
+          prefilledTargets,
+          fetchedBuys.map((row, index) => ({
+            id: row.id || `saved-${index}`,
+            assetClass: inferAssetClass(row),
+            symbol: String(row.symbol || '').toUpperCase(),
+            qty: row.qty,
+            buyPrice: row.buyPrice,
+            currency: String(row.currency || '').toUpperCase() || null,
+          })),
+        ),
+      );
+    } finally {
+      setIsScenarioLoading(false);
     }
-    setTargetPrices(prefilledTargets);
-    setTargetPricePctBySymbol(pctBySymbol);
-    const fetchedBuys = Array.isArray(buysRes?.hypotheticalPurchases) ? buysRes.hypotheticalPurchases : [];
-    setBuyRows(
-      fetchedBuys.map((row, index) => ({
-        id: row.id || `saved-${index}`,
-        assetClass: inferAssetClass(row),
-        symbol: String(row.symbol || '').toUpperCase(),
-        qty: row.qty,
-        buyPrice: row.buyPrice,
-        currency: String(row.currency || '').toUpperCase() || null,
-      })),
-    );
-    setStockForm(emptyStockForm());
-    setCryptoForm(emptyCryptoForm());
-    setResults(resultRes);
-    skipNextAutoSaveRef.current = true;
   }
 
   useEffect(() => {
@@ -190,10 +248,14 @@ export default function WhatIfScenariosPage({ hideValues }) {
     try {
       setIsSaving(true);
       setError('');
+      if (!confirmDiscardIfDirty(isDirty)) return;
       const created = await postJson('/api/whatif/scenarios', { name, makeActive: true });
       const id = created?.scenario?.id;
       setNewScenarioName('');
       setIsAddingScenario(false);
+      // Prevent autosave from writing the previously loaded scenario inputs while switching.
+      skipNextAutoSaveRef.current = true;
+      resetScenarioEditorState();
       await loadScenarios();
       if (id) {
         setActiveScenarioId(id);
@@ -211,6 +273,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
     try {
       setIsSaving(true);
       setError('');
+      if (!confirmDiscardIfDirty(isDirty)) return;
+      // Prevent autosave from persisting stale inputs during active scenario swap.
+      skipNextAutoSaveRef.current = true;
+      resetScenarioEditorState();
       await postJson(`/api/whatif/scenarios/${nextId}/activate`, {});
       setActiveScenarioId(nextId);
       await loadScenarios();
@@ -227,6 +293,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     try {
       setIsSaving(true);
       setError('');
+      if (!confirmDiscardIfDirty(isDirty)) return;
       await deleteJson(`/api/whatif/scenarios/${activeScenarioId}`);
       const nextId = await loadScenarios();
       await refreshCurrentScenario(nextId);
@@ -329,13 +396,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const persistScenarioInputs = useCallback(
     async (scenarioId, nextTargetPrices, nextBuyRows) => {
       if (!scenarioId) return;
-      const targetRows = nextTargetPrices
-        .map((row) => ({
-          symbol: String(row.symbol || '').trim().toUpperCase(),
-          targetPrice: num(row.targetPrice),
-          currency: String(row.currency || '').trim().toUpperCase() || null,
-        }))
-        .filter((row) => row.symbol && row.targetPrice > 0);
+      const dedupedTargetRows = new Map();
+      for (const row of nextTargetPrices || []) {
+        const symbol = String(row?.symbol || '').trim().toUpperCase();
+        const targetPrice = num(row?.targetPrice);
+        const currency = String(row?.currency || '').trim().toUpperCase() || null;
+        if (!symbol || targetPrice <= 0) continue;
+        // Last writer wins for duplicate symbols, preventing unique-key failures server-side.
+        dedupedTargetRows.set(symbol, { symbol, targetPrice, currency });
+      }
+      const targetRows = Array.from(dedupedTargetRows.values());
       const purchaseRows = nextBuyRows
         .map((row) => ({
           symbol: String(row.symbol || '').trim().toUpperCase(),
@@ -361,22 +431,29 @@ export default function WhatIfScenariosPage({ hideValues }) {
     [],
   );
 
+  const currentInputsHash = useMemo(() => computeInputsHash(targetPrices, buyRows), [buyRows, targetPrices]);
+  const isDirty = Boolean(activeScenarioId) && currentInputsHash !== lastSavedHash;
+
   useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
+
+  async function handleManualSave() {
     if (!activeScenarioId) return;
-    if (isLoading) return;
-    if (skipNextAutoSaveRef.current) {
-      skipNextAutoSaveRef.current = false;
-      return;
+    try {
+      await persistScenarioInputs(activeScenarioId, targetPrices, buyRows);
+      setLastSavedHash(currentInputsHash);
+    } catch (err) {
+      setError(err?.message || t('errors.failedUpdate'));
     }
-    const timer = window.setTimeout(async () => {
-      try {
-        await persistScenarioInputs(activeScenarioId, targetPrices, buyRows);
-      } catch (err) {
-        setError(err?.message || t('errors.failedUpdate'));
-      }
-    }, 400);
-    return () => window.clearTimeout(timer);
-  }, [activeScenarioId, buyRows, isLoading, persistScenarioInputs, t, targetPrices]);
+  }
 
   const resultRows = Array.isArray(results?.rows) ? results.rows : [];
   const baselineTotal = num(results?.baseline?.totalValue);
@@ -398,6 +475,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const netWorthDelta = scenarioNetWorth - baselineNetWorth;
   const netWorthDeltaPct = baselineNetWorth > 0 ? (netWorthDelta / baselineNetWorth) * 100 : 0;
 
+  const isBusy = isLoading || isScenarioLoading || isSaving;
+
   return (
     <section className="contentWrap">
       <header className="pageHeader">
@@ -409,6 +488,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
         {!isLoading && error && <p className="error">{error}</p>}
         {!isLoading && (
           <>
+            {isBusy && (
+              <div className="whatIfBusyOverlay" role="status" aria-live="polite">
+                <div className="whatIfBusyOverlayCard">
+                  <div className="whatIfBusySpinner" aria-hidden="true" />
+                  <div className="whatIfBusyText">
+                    {isSaving ? t('modals.saving') : t('app.loadingDashboard')}
+                  </div>
+                </div>
+              </div>
+            )}
             <section className="whatIfSection">
               <h2>{t('whatif.scenarios')}</h2>
               <div className="whatIfScenarioControls">
@@ -418,6 +507,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     className="profitabilitySelect"
                     value={activeScenarioId}
                     onChange={(e) => handleActivateScenario(e.target.value)}
+                    disabled={isBusy}
                   >
                     <option value="">{t('whatif.selectScenario')}</option>
                     {scenarios.map((row) => (
@@ -428,6 +518,19 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </select>
                 </label>
                 <div className="whatIfScenarioNameActions">
+                  {activeScenarioId && (
+                    <button
+                      type="button"
+                      className="headerIconBtn whatIfIconBtn"
+                      onClick={handleManualSave}
+                      disabled={isBusy || !isDirty}
+                      aria-label="Save scenario"
+                      title={isDirty ? 'Save changes' : 'No changes to save'}
+                    >
+                      ✓
+                    </button>
+                  )}
+                  {activeScenarioId && isDirty && <span className="whatIfUnsavedPill">Unsaved</span>}
                   {isAddingScenario ? (
                     <>
                       <input
@@ -447,7 +550,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         type="button"
                         className="headerIconBtn whatIfIconBtn"
                         onClick={handleCreateScenario}
-                        disabled={isSaving || !String(newScenarioName || '').trim()}
+                        disabled={isBusy || !String(newScenarioName || '').trim()}
                         aria-label={t('modals.save')}
                         title={t('modals.save')}
                       >
@@ -460,7 +563,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           setIsAddingScenario(false);
                           setNewScenarioName('');
                         }}
-                        disabled={isSaving}
+                        disabled={isBusy}
                         aria-label={t('modals.cancel')}
                         title={t('modals.cancel')}
                       >
@@ -472,7 +575,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       type="button"
                       className="headerIconBtn whatIfIconBtn"
                       onClick={() => setIsAddingScenario(true)}
-                      disabled={isSaving}
+                      disabled={isBusy}
                       aria-label={t('whatif.createScenario')}
                       title={t('whatif.createScenario')}
                     >
@@ -483,7 +586,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     type="button"
                     className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
                     onClick={handleDeleteScenario}
-                    disabled={!activeScenarioId || isSaving}
+                    disabled={!activeScenarioId || isBusy}
                     aria-label={t('whatif.deleteScenario')}
                     title={t('whatif.deleteScenario')}
                   >

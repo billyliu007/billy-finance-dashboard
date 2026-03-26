@@ -14,6 +14,54 @@ function parsePoolMax() {
   return Math.min(n, 50);
 }
 
+function parseIntEnv(name, fallback, { min = 0, max = Number.POSITIVE_INFINITY } = {}) {
+  const raw = process.env[name];
+  if (raw == null || String(raw).trim() === '') return fallback;
+  const n = Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientPgError(error) {
+  const msg = String(error?.message || '');
+  const code = String(error?.code || '');
+
+  // Connection churn / transient network hiccups (common for cron + managed DBs)
+  if (
+    msg.includes('Connection terminated due to connection timeout') ||
+    msg.includes('Connection terminated unexpectedly') ||
+    msg.includes('timeout') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('EAI_AGAIN')
+  ) {
+    return true;
+  }
+
+  // Postgres/server-side transient errors.
+  // 57P01 admin_shutdown, 57P02 crash_shutdown, 57P03 cannot_connect_now, 53300 too_many_connections
+  if (code === '57P01' || code === '57P02' || code === '57P03' || code === '53300') {
+    return true;
+  }
+
+  return false;
+}
+
+async function resetPool() {
+  if (!pool) return;
+  const toClose = pool;
+  pool = undefined;
+  try {
+    await toClose.end();
+  } catch {
+    // ignore - we're already in an error path
+  }
+}
+
 /**
  * Singleton connection pool for Postgres (Neon, Render Postgres, local).
  * Use {@link withTransaction} for ACID transactions; {@link withDbClient} when you need a client without wrapping BEGIN/COMMIT; {@link query} for one-off statements.
@@ -31,24 +79,51 @@ export function getPool() {
     throw new Error('Missing DATABASE_URL in environment.');
   }
 
+  const connectionTimeoutMillis = parseIntEnv('PG_CONNECTION_TIMEOUT_MS', 30_000, {
+    min: 1_000,
+    max: 120_000,
+  });
+  const idleTimeoutMillis = parseIntEnv('PG_IDLE_TIMEOUT_MS', 30_000, { min: 1_000, max: 300_000 });
+
   pool = new Pool({
     connectionString,
     ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
     max: parsePoolMax(),
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 15_000,
+    idleTimeoutMillis,
+    connectionTimeoutMillis,
   });
   return pool;
 }
 
 export async function withDbClient(task) {
-  const db = getPool();
-  const client = await db.connect();
-  try {
-    return await task(client);
-  } finally {
-    client.release();
+  const attempts = parseIntEnv('PG_RETRY_ATTEMPTS', 3, { min: 1, max: 10 });
+  const baseDelayMs = parseIntEnv('PG_RETRY_BASE_DELAY_MS', 750, { min: 0, max: 30_000 });
+
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const db = getPool();
+    let client;
+    try {
+      client = await db.connect();
+      return await task(client);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || !isTransientPgError(error)) {
+        throw error;
+      }
+      await resetPool();
+      const delay = Math.round(baseDelayMs * attempt);
+      await sleep(delay);
+    } finally {
+      try {
+        client?.release?.();
+      } catch {
+        // ignore
+      }
+    }
   }
+
+  throw lastError;
 }
 
 /**
@@ -72,6 +147,24 @@ export async function withTransaction(task) {
 }
 
 export async function query(text, params = []) {
-  const db = getPool();
-  return db.query(text, params);
+  const attempts = parseIntEnv('PG_RETRY_ATTEMPTS', 3, { min: 1, max: 10 });
+  const baseDelayMs = parseIntEnv('PG_RETRY_BASE_DELAY_MS', 750, { min: 0, max: 30_000 });
+
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const db = getPool();
+      return await db.query(text, params);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || !isTransientPgError(error)) {
+        throw error;
+      }
+      await resetPool();
+      const delay = Math.round(baseDelayMs * attempt);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
 }

@@ -149,7 +149,9 @@ export async function replaceWhatIfTargetPrices({ userId, scenarioId, rows }) {
   const scenario = await getWhatIfScenarioById({ userId, scenarioId });
   if (!scenario) throw new Error('Scenario not found.');
 
-  const normalized = resolvedRows.map((item, index) => {
+  // Deduplicate by symbol to avoid unique-key violations (last writer wins).
+  const bySymbol = new Map();
+  resolvedRows.forEach((item, index) => {
     const symbol = normalizeSymbol(item?.symbol);
     const targetPrice = Number(item?.targetPrice);
     const currency = normalizeCurrency(item?.currency);
@@ -157,8 +159,9 @@ export async function replaceWhatIfTargetPrices({ userId, scenarioId, rows }) {
     if (!Number.isFinite(targetPrice) || targetPrice < 0) {
       throw new Error(`Target price row ${index + 1}: targetPrice must be 0 or greater.`);
     }
-    return { symbol, targetPrice, currency };
+    bySymbol.set(symbol, { symbol, targetPrice, currency });
   });
+  const normalized = Array.from(bySymbol.values());
 
   return withTransaction(async (client) => {
     await client.query(`DELETE FROM whatif_target_prices WHERE scenario_id = $1`, [scenarioId]);
