@@ -1,15 +1,7 @@
-import { fetchFxRatesWithFallback } from '../lib/fx.js';
 import { stockProviders, cryptoProviders } from '../lib/marketDataProviders.js';
-import { filterToSupportedCurrencyCodes } from '../lib/supportedCurrencies.js';
+import { getCryptoQuotes, getLiveFxBundle, getLiveFxRates as getFxRates, getStockQuotes } from './pricingGateway.js';
 
-const FX_PROVIDER = String(process.env.FX_PROVIDER || 'frankfurter').trim().toLowerCase();
-/** Set to `none`, `off`, or `false` to use Frankfurter only. Any other value keeps secondary FX enabled. */
-const FX_PROVIDER_FALLBACK = String(process.env.FX_PROVIDER_FALLBACK ?? 'open.er-api').trim().toLowerCase();
 const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'coinbase').trim().toLowerCase();
-
-function fxFallbackDisabled() {
-  return ['none', 'off', 'false'].includes(FX_PROVIDER_FALLBACK);
-}
 
 function isStock(position) {
   return /stock/i.test(String(position?.category || ''));
@@ -37,9 +29,7 @@ function toStockTargets(positions) {
 
 export async function getStockQuoteMapForPositions(positions) {
   const stockTargets = toStockTargets(positions);
-  const provider = stockProviders['finnhub']; // Or dynamically load from env if needed
-  if (!provider) return {};
-  return provider.getQuotes(stockTargets);
+  return getStockQuotes(stockTargets.map((t) => t.assetSymbol));
 }
 
 export async function getCryptoQuoteMapForPositions(positions) {
@@ -57,21 +47,13 @@ export async function getCryptoQuoteMapForPositions(positions) {
     }
     targetsByProvider[providerStr].set(`${symbol}:${instrumentId}`, {
       assetSymbol: symbol,
+      providerName: providerStr,
       providerSymbol: instrumentId,
     });
   }
 
-  const allQuotes = {};
-  for (const [providerName, targetMap] of Object.entries(targetsByProvider)) {
-    const provider = cryptoProviders[providerName];
-    if (provider) {
-      const targets = Array.from(targetMap.values());
-      const quotes = await provider.getQuotes(targets);
-      Object.assign(allQuotes, quotes);
-    }
-  }
-
-  return allQuotes;
+  const flattened = Object.values(targetsByProvider).flatMap((m) => Array.from(m.values()));
+  return getCryptoQuotes(flattened);
 }
 
 /**
@@ -79,23 +61,14 @@ export async function getCryptoQuoteMapForPositions(positions) {
  * @returns {Promise<{ rates: Record<string, number>, providerLabel: string }>}
  */
 export async function resolveLiveFxRates(currenciesFromCash = []) {
-  const supported = filterToSupportedCurrencyCodes(currenciesFromCash);
-  const normalized = supported.filter((c) => c && c !== 'CNY');
-
-  if (FX_PROVIDER !== 'frankfurter') {
-    return { rates: {}, providerLabel: FX_PROVIDER || 'unknown' };
-  }
-
-  const { rates, providersUsed } = await fetchFxRatesWithFallback(normalized, {
-    disableFallback: fxFallbackDisabled(),
-  });
-
-  return { rates, providerLabel: providersUsed.join('+') };
+  // Keep legacy compatibility: return { rates, providerLabel }.
+  // pricingGateway already respects FX_PROVIDER and FX_PROVIDER_FALLBACK.
+  return getLiveFxBundle(currenciesFromCash);
 }
 
 export async function getLiveFxRates(currenciesFromCash = []) {
-  const { rates } = await resolveLiveFxRates(currenciesFromCash);
-  return rates;
+  // Expose rates-only helper for existing call sites.
+  return getFxRates(currenciesFromCash);
 }
 
 /** Matches {@link resolveLiveFxRates} fallback toggle (for CNY patch in snapshots). */
