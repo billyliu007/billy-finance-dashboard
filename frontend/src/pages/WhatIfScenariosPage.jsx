@@ -54,6 +54,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [error, setError] = useState('');
   const skipNextAutoSaveRef = useRef(false);
   const [lastSavedHash, setLastSavedHash] = useState('');
+  const resultsHeaderRef = useRef(null);
 
   function resetScenarioEditorState() {
     setTargetPrices([]);
@@ -449,6 +450,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
     try {
       await persistScenarioInputs(activeScenarioId, targetPrices, buyRows);
       setLastSavedHash(currentInputsHash);
+      // Bring results into view after save so users see the updated simulation immediately.
+      requestAnimationFrame(() => {
+        resultsHeaderRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      });
     } catch (err) {
       setError(err?.message || t('errors.failedUpdate'));
     }
@@ -899,7 +904,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                 </section>
 
                 <section className="whatIfSection">
-                  <h2>{t('whatif.resultsTitle')}</h2>
+                  <h2 ref={resultsHeaderRef}>{t('whatif.resultsTitle')}</h2>
                   <label className="whatIfToggleRow">
                     <input
                       type="checkbox"
@@ -1030,6 +1035,27 @@ export default function WhatIfScenariosPage({ hideValues }) {
           </>
         )}
       </div>
+      {activeScenarioId && (
+        <div className="whatIfStickySaveBar" aria-live="polite">
+          <div className="whatIfStickySaveBarInner">
+            <div className="whatIfStickySaveLeft">
+              {isDirty ? (
+                <span className="whatIfUnsavedPill">Unsaved</span>
+              ) : (
+                <span className="whatIfStickySavedText">Saved</span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="whatIfStickySaveBtn"
+              onClick={handleManualSave}
+              disabled={isBusy || !isDirty}
+            >
+              Save & refresh results
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

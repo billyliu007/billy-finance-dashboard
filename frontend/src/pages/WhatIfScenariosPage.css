@@ -106,6 +106,51 @@
   border: 1px solid rgba(94, 234, 212, 0.75);
 }
 
+.whatIfStickySaveBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin-top: 10px;
+  padding: 10px 0 0;
+  background: linear-gradient(to top, rgba(2, 6, 23, 0.92), rgba(2, 6, 23, 0));
+}
+
+.whatIfStickySaveBarInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+}
+
+.whatIfStickySavedText {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgba(203, 213, 225, 0.9);
+}
+
+.whatIfStickySaveBtn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(94, 234, 212, 0.6);
+  background: linear-gradient(120deg, rgba(14, 116, 144, 0.35), rgba(7, 89, 133, 0.25));
+  color: #ecfeff;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.whatIfStickySaveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: saturate(0.6);
+}
+
 .whatIfScenarioNameActions .profitabilityInput {
   width: min(420px, 45vw);
   min-width: 220px;
