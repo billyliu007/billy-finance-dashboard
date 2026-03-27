@@ -2788,10 +2788,6 @@ tbody tr:hover td {
 }
 
 @media (max-width: 980px) {
-  .sideNav {
-    position: relative;
-  }
-
   .sideNavTabs {
     display: flex;
     flex-wrap: nowrap;
@@ -2808,22 +2804,6 @@ tbody tr:hover td {
   .sideNavTabs .navLink {
     flex: 0 0 auto;
     min-width: 124px;
-  }
-
-  .sideNav::after {
-    content: 'Swipe';
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 0.68rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: rgba(191, 219, 254, 0.9);
-    background: linear-gradient(90deg, rgba(6, 12, 25, 0), rgba(6, 12, 25, 0.92) 30%);
-    pointer-events: none;
   }
 
   .mainContent {
