@@ -2795,6 +2795,10 @@ tbody tr:hover td {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    padding-right: 18px;
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 22px), transparent 100%);
   }
 
   .sideNavTabs::-webkit-scrollbar {
@@ -2804,6 +2808,7 @@ tbody tr:hover td {
   .sideNavTabs .navLink {
     flex: 0 0 auto;
     min-width: 124px;
+    scroll-snap-align: start;
   }
 
   .mainContent {
