@@ -11,6 +11,10 @@ function fxFallbackDisabled() {
   return ['none', 'off', 'false'].includes(FX_PROVIDER_FALLBACK);
 }
 
+export function isFxFallbackDisabled() {
+  return fxFallbackDisabled();
+}
+
 // Last-known-good FX cache (never expires during process lifetime).
 // Used to avoid blocking interactive requests on slow FX providers.
 const fxLastGood = new Map(); // code -> { rate: number, at: number }

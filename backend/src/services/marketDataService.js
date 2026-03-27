@@ -1,5 +1,11 @@
 import { stockProviders, cryptoProviders } from '../lib/marketDataProviders.js';
-import { getCryptoQuotes, getLiveFxBundle, getLiveFxRates as getFxRates, getStockQuotes } from './pricingGateway.js';
+import {
+  getCryptoQuotes,
+  getLiveFxBundle,
+  getLiveFxRates as getFxRates,
+  getStockQuotes,
+  isFxFallbackDisabled,
+} from './pricingGateway.js';
 
 const CRYPTO_PROVIDER = String(process.env.CRYPTO_PROVIDER || 'coinbase').trim().toLowerCase();
 
@@ -73,7 +79,7 @@ export async function getLiveFxRates(currenciesFromCash = []) {
 
 /** Matches {@link resolveLiveFxRates} fallback toggle (for CNY patch in snapshots). */
 export function isFxProviderFallbackEnabled() {
-  return !fxFallbackDisabled();
+  return !isFxFallbackDisabled();
 }
 
 export async function getBenchmarkQuotes() {
