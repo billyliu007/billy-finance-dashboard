@@ -20,6 +20,14 @@ function num(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Match RecordSaleModal: floor qty at 8 dp so slider % does not overshoot max sellable. */
+function roundDownSellQty(value, decimals = 8) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  const factor = 10 ** decimals;
+  return Math.floor(n * factor) / factor;
+}
+
 /** Same positive-target rule as `computeInputsHash` target slice: only prices > 0 count. */
 function normalizedPositiveTargetFromRows(rows, symbol) {
   const sym = String(symbol || '').trim().toUpperCase();
@@ -109,9 +117,7 @@ function aggregateHypotheticalSellRows(rows) {
     const quoteCcy = row?.assetClass === 'stock' ? 'USD' : String(row?.currency || 'USD').trim().toUpperCase() || 'USD';
     const bucketCcy = aggregateHypotheticalQuoteBucket(quoteCcy);
     const key = `${sym}\0${bucketCcy}`;
-    const fee = num(row.feeFlat);
-    const feeAdj = Number.isFinite(fee) && fee > 0 ? fee : 0;
-    const proceeds = Math.max(0, q * num(row.sellPrice) - feeAdj);
+    const proceeds = Math.max(0, q * num(row.sellPrice));
     if (!Number.isFinite(proceeds)) continue;
     const prev = map.get(key);
     if (!prev) {
@@ -130,11 +136,11 @@ function aggregateHypotheticalSellRows(rows) {
 }
 
 function emptyStockSellForm() {
-  return { query: '', selectedSymbol: '', qty: '', sellPrice: '', feeFlat: '' };
+  return { selectedSymbol: '', qty: '', sellPrice: '', sellPct: 0 };
 }
 
 function emptyCryptoSellForm() {
-  return { query: '', selectedSymbol: '', qty: '', sellPrice: '', feeFlat: '' };
+  return { selectedSymbol: '', qty: '', sellPrice: '', sellPct: 0 };
 }
 
 function mapApiHypotheticalPurchasesToBuyRows(rows) {
@@ -155,7 +161,6 @@ function mapApiHypotheticalSalesToSellRows(rows) {
     symbol: String(row.symbol || '').toUpperCase(),
     qty: row.qty,
     sellPrice: row.sellPrice,
-    feeFlat: row.feeFlat == null || row.feeFlat === '' ? '' : row.feeFlat,
     currency: String(row.currency || '').toUpperCase() || null,
   }));
 }
@@ -248,7 +253,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         symbol: String(row?.symbol || '').trim().toUpperCase(),
         qty: num(row?.qty),
         sellPrice: num(row?.sellPrice),
-        feeFlat: row?.feeFlat === '' || row?.feeFlat == null ? null : num(row.feeFlat),
+        feeFlat: null,
         currency:
           row?.assetClass === 'stock'
             ? 'USD'
@@ -269,72 +274,21 @@ export default function WhatIfScenariosPage({ hideValues }) {
     [portfolioTableRows],
   );
 
-  /** Holdings plus stock symbols that only appear via hypothetical buys but are sellable in this scenario. */
-  const stockSellCandidateRows = useMemo(() => {
-    const map = new Map();
-    for (const row of stockHoldingsForSell) {
-      map.set(String(row.symbol || '').toUpperCase(), row);
-    }
-    for (const br of buyRows) {
-      if (br.assetClass === 'crypto') continue;
-      const sym = String(br.symbol || '').trim().toUpperCase();
-      if (!sym || map.has(sym)) continue;
-      const baselineRow = portfolioTableRows.find((r) => String(r.symbol || '').trim().toUpperCase() === sym);
-      const baseQty = num(baselineRow?.qty);
-      let fromBuys = 0;
-      for (const r of buyRows) {
-        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
-        fromBuys += num(r.qty);
-      }
-      let fromSells = 0;
-      for (const r of sellRows) {
-        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
-        fromSells += num(r.qty);
-      }
-      const maxQ = Math.max(0, baseQty + fromBuys - fromSells);
-      if (maxQ > 0) {
-        map.set(sym, { symbol: sym, name: sym, category: 'Stock', currency: 'USD', qty: baseQty });
-      }
-    }
-    return [...map.values()];
-  }, [stockHoldingsForSell, buyRows, sellRows, portfolioTableRows]);
+  const stockSellHoldingsOptions = useMemo(
+    () =>
+      [...stockHoldingsForSell].sort((a, b) =>
+        String(a.symbol || '').localeCompare(String(b.symbol || '')),
+      ),
+    [stockHoldingsForSell],
+  );
 
-  const cryptoSellCandidateRows = useMemo(() => {
-    const map = new Map();
-    for (const row of cryptoHoldingsForSell) {
-      map.set(String(row.symbol || '').toUpperCase(), row);
-    }
-    for (const br of buyRows) {
-      if (br.assetClass !== 'crypto') continue;
-      const sym = String(br.symbol || '').trim().toUpperCase();
-      if (!sym || map.has(sym)) continue;
-      const baselineRow = portfolioTableRows.find((r) => String(r.symbol || '').trim().toUpperCase() === sym);
-      const baseQty = num(baselineRow?.qty);
-      let fromBuys = 0;
-      for (const r of buyRows) {
-        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
-        fromBuys += num(r.qty);
-      }
-      let fromSells = 0;
-      for (const r of sellRows) {
-        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
-        fromSells += num(r.qty);
-      }
-      const maxQ = Math.max(0, baseQty + fromBuys - fromSells);
-      if (maxQ > 0) {
-        const currency =
-          String(br.currency || baselineRow?.currency || 'USD').trim().toUpperCase() || 'USD';
-        map.set(sym, {
-          symbol: sym,
-          name: sym,
-          category: 'Crypto',
-          currency,
-          qty: baseQty,
-        });
-      }
-    }
-    return [...map.values()];
-  }, [cryptoHoldingsForSell, buyRows, sellRows, portfolioTableRows]);
+  const cryptoSellHoldingsOptions = useMemo(
+    () =>
+      [...cryptoHoldingsForSell].sort((a, b) =>
+        String(a.symbol || '').localeCompare(String(b.symbol || '')),
+      ),
+    [cryptoHoldingsForSell],
+  );
 
   function maxSellableQtyForSymbol(symbol, excludeRowId = null) {
     const sym = String(symbol || '').trim().toUpperCase();
@@ -355,33 +309,94 @@ export default function WhatIfScenariosPage({ hideValues }) {
     return Math.max(0, baseQty + fromBuys - fromSells);
   }
 
-  const stockSellMatches = useMemo(() => {
-    const raw = normalizeText(stockSellForm.query);
-    if (!raw) return [];
-    const q = raw.toUpperCase();
-    const ql = raw.toLowerCase();
-    return stockSellCandidateRows
-      .filter((row) => {
-        const sym = String(row.symbol || '').toUpperCase();
-        const name = String(row.name || '').toLowerCase();
-        return sym.includes(q) || name.includes(ql);
-      })
-      .slice(0, 50);
-  }, [stockSellCandidateRows, stockSellForm.query]);
+  /** Live dashboard qty only (excludes hypothetical buys)—for sell UI copy. */
+  function livePortfolioQtyForSymbol(symbol) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    if (!sym) return 0;
+    const baselineRow = portfolioTableRows.find((r) => String(r.symbol || '').trim().toUpperCase() === sym);
+    return Math.max(0, num(baselineRow?.qty));
+  }
 
-  const cryptoSellMatches = useMemo(() => {
-    const raw = normalizeText(cryptoSellForm.query);
-    if (!raw) return [];
-    const q = raw.toUpperCase();
-    const ql = raw.toLowerCase();
-    return cryptoSellCandidateRows
-      .filter((row) => {
-        const sym = String(row.symbol || '').toUpperCase();
-        const name = String(row.name || '').toLowerCase();
-        return sym.includes(q) || name.includes(ql);
-      })
-      .slice(0, 50);
-  }, [cryptoSellCandidateRows, cryptoSellForm.query]);
+  /**
+   * Cap for sell % / quantity inputs: when you hold the asset, use live portfolio qty only (not base + simulated buys),
+   * still clamped by scenario max (e.g. after other simulated sales). If no live position, use full scenario max.
+   */
+  function sellFormAvailableQtyForSymbol(symbol) {
+    const live = livePortfolioQtyForSymbol(symbol);
+    const scenario = maxSellableQtyForSymbol(symbol);
+    if (live > 0) return Math.min(live, scenario);
+    return scenario;
+  }
+
+  function handleStockSellPctChange(e) {
+    const pct = Number(e.target.value);
+    const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+    setStockSellForm((prev) => {
+      const sym = normalizeText(prev.selectedSymbol).toUpperCase();
+      const availableQty = sellFormAvailableQtyForSymbol(sym);
+      if (!(availableQty > 0)) return { ...prev, sellPct: safePct, qty: '' };
+      const nextQty =
+        safePct >= 100 - 1e-9 ? availableQty : roundDownSellQty((availableQty * safePct) / 100, 8);
+      return { ...prev, sellPct: safePct, qty: nextQty > 0 ? String(nextQty) : '' };
+    });
+  }
+
+  function handleStockSellQtyChange(e) {
+    const nextRaw = sanitizeDecimalInput(e.target.value, { allowNegative: false });
+    setStockSellForm((prev) => {
+      const sym = normalizeText(prev.selectedSymbol).toUpperCase();
+      const availableQty = sellFormAvailableQtyForSymbol(sym);
+      if (!(availableQty > 0)) return { ...prev, qty: nextRaw, sellPct: 0 };
+      const qtyNum = Number(nextRaw);
+      if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+        return { ...prev, qty: nextRaw, sellPct: 0 };
+      }
+      const clamped = Math.min(qtyNum, availableQty);
+      let qtyStr = nextRaw;
+      if (qtyNum > availableQty + 1e-12) qtyStr = String(availableQty);
+      const pctDerived = availableQty > 0 ? (clamped / availableQty) * 100 : 0;
+      return {
+        ...prev,
+        qty: qtyStr,
+        sellPct: Number(Math.max(0, Math.min(100, pctDerived)).toFixed(1)),
+      };
+    });
+  }
+
+  function handleCryptoSellPctChange(e) {
+    const pct = Number(e.target.value);
+    const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+    setCryptoSellForm((prev) => {
+      const sym = normalizeText(prev.selectedSymbol).toUpperCase();
+      const availableQty = sellFormAvailableQtyForSymbol(sym);
+      if (!(availableQty > 0)) return { ...prev, sellPct: safePct, qty: '' };
+      const nextQty =
+        safePct >= 100 - 1e-9 ? availableQty : roundDownSellQty((availableQty * safePct) / 100, 8);
+      return { ...prev, sellPct: safePct, qty: nextQty > 0 ? String(nextQty) : '' };
+    });
+  }
+
+  function handleCryptoSellQtyChange(e) {
+    const nextRaw = sanitizeDecimalInput(e.target.value, { allowNegative: false });
+    setCryptoSellForm((prev) => {
+      const sym = normalizeText(prev.selectedSymbol).toUpperCase();
+      const availableQty = sellFormAvailableQtyForSymbol(sym);
+      if (!(availableQty > 0)) return { ...prev, qty: nextRaw, sellPct: 0 };
+      const qtyNum = Number(nextRaw);
+      if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+        return { ...prev, qty: nextRaw, sellPct: 0 };
+      }
+      const clamped = Math.min(qtyNum, availableQty);
+      let qtyStr = nextRaw;
+      if (qtyNum > availableQty + 1e-12) qtyStr = String(availableQty);
+      const pctDerived = availableQty > 0 ? (clamped / availableQty) * 100 : 0;
+      return {
+        ...prev,
+        qty: qtyStr,
+        sellPct: Number(Math.max(0, Math.min(100, pctDerived)).toFixed(1)),
+      };
+    });
+  }
 
   function confirmDiscardIfDirty(isDirty) {
     if (!isDirty) return true;
@@ -640,7 +655,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           symbol: String(row.symbol || '').trim().toUpperCase(),
           qty: num(row.qty),
           sellPrice: num(row.sellPrice),
-          feeFlat: row.feeFlat === '' || row.feeFlat == null ? null : num(row.feeFlat),
+          feeFlat: null,
           currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
         }))
         .filter((row) => row.symbol && row.qty > 0 && row.sellPrice >= 0);
@@ -880,33 +895,26 @@ export default function WhatIfScenariosPage({ hideValues }) {
     const symbol = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
     const qty = num(stockSellForm.qty);
     const sellPrice = num(stockSellForm.sellPrice);
-    const feeNum = stockSellForm.feeFlat.trim() === '' ? 0 : num(stockSellForm.feeFlat);
     if (!symbol) {
       setError(t('errors.selectStockSymbol'));
       return;
     }
-    const inCandidates = stockSellCandidateRows.some(
-      (h) => String(h.symbol || '').toUpperCase() === symbol,
-    );
-    if (!inCandidates) {
+    const inHoldings = stockHoldingsForSell.some((h) => String(h.symbol || '').toUpperCase() === symbol);
+    if (!inHoldings) {
       setError(t('whatif.selectHoldingToSell'));
       return;
     }
-    const maxQ = maxSellableQtyForSymbol(symbol);
+    const uiMax = sellFormAvailableQtyForSymbol(symbol);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError(t('errors.quantityGreaterZero'));
       return;
     }
-    if (qty > maxQ + 1e-9) {
+    if (qty > uiMax + 1e-9) {
       setError(t('whatif.sellQtyExceedsAvailable'));
       return;
     }
     if (!Number.isFinite(sellPrice) || sellPrice < 0) {
       setError(t('errors.sellPricePerUnitNonNegative'));
-      return;
-    }
-    if (stockSellForm.feeFlat.trim() !== '' && (!Number.isFinite(feeNum) || feeNum < 0)) {
-      setError(t('errors.feePerUnitNonNegative'));
       return;
     }
     setError('');
@@ -919,7 +927,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
           symbol,
           qty,
           sellPrice,
-          feeFlat: stockSellForm.feeFlat.trim() === '' ? '' : feeNum,
           currency: 'USD',
         },
       ];
@@ -928,35 +935,30 @@ export default function WhatIfScenariosPage({ hideValues }) {
       });
       return next;
     });
-    setStockSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', feeFlat: '' }));
+    setStockSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0 }));
     requestAnimationFrame(() => stockSellQtyRef.current?.focus?.());
   }
 
   function addCryptoHypotheticalSellToList() {
     const symbol = normalizeText(cryptoSellForm.selectedSymbol).toUpperCase();
-    const holding = cryptoSellCandidateRows.find((h) => String(h.symbol || '').toUpperCase() === symbol);
+    const holding = cryptoHoldingsForSell.find((h) => String(h.symbol || '').toUpperCase() === symbol);
     const qty = num(cryptoSellForm.qty);
     const sellPrice = num(cryptoSellForm.sellPrice);
-    const feeNum = cryptoSellForm.feeFlat.trim() === '' ? 0 : num(cryptoSellForm.feeFlat);
     if (!holding || !symbol) {
       setError(t('whatif.selectHoldingToSell'));
       return;
     }
-    const maxQ = maxSellableQtyForSymbol(symbol);
+    const uiMax = sellFormAvailableQtyForSymbol(symbol);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError(t('errors.quantityGreaterZero'));
       return;
     }
-    if (qty > maxQ + 1e-9) {
+    if (qty > uiMax + 1e-9) {
       setError(t('whatif.sellQtyExceedsAvailable'));
       return;
     }
     if (!Number.isFinite(sellPrice) || sellPrice < 0) {
       setError(t('errors.sellPricePerUnitNonNegative'));
-      return;
-    }
-    if (cryptoSellForm.feeFlat.trim() !== '' && (!Number.isFinite(feeNum) || feeNum < 0)) {
-      setError(t('errors.feePerUnitNonNegative'));
       return;
     }
     const currency = String(holding.currency || 'USD').toUpperCase();
@@ -970,7 +972,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
           symbol,
           qty,
           sellPrice,
-          feeFlat: cryptoSellForm.feeFlat.trim() === '' ? '' : feeNum,
           currency,
         },
       ];
@@ -979,7 +980,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       });
       return next;
     });
-    setCryptoSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', feeFlat: '' }));
+    setCryptoSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0 }));
     requestAnimationFrame(() => cryptoSellQtyRef.current?.focus?.());
   }
 
@@ -1129,11 +1130,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
 
             {activeScenarioId && (
               <>
-                <section className="whatIfSection">
-                  <h2>{t('whatif.featureBTitle')}</h2>
-                  <p className="profitabilitySectionDesc">{t('whatif.featureBDesc')}</p>
+                <section className="whatIfSection whatIfSection--hypoBuy">
+                  <header className="whatIfHypoSectionHead">
+                    <span className="whatIfHypoBadge whatIfHypoBadge--buy">{t('whatif.hypoSectionBadgeBuy')}</span>
+                  </header>
                   <div className="whatIfBuyForms">
-                    <div className="whatIfBuyCard">
+                    <div className="whatIfBuyCard whatIfBuyCard--hypoBuy">
                       <div className="whatIfBuyCardHeader">
                         <h3>{t('portfolio.stockPosition')}</h3>
                         <button
@@ -1223,14 +1225,14 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       </div>
                       <button
                         type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoBuy"
                         onClick={addStockHypotheticalBuyToList}
                       >
                         {t('whatif.addHypotheticalBuyToList')}
                       </button>
                     </div>
 
-                    <div className="whatIfBuyCard">
+                    <div className="whatIfBuyCard whatIfBuyCard--hypoBuy">
                       <div className="whatIfBuyCardHeader">
                         <h3>{t('portfolio.cryptoPosition')}</h3>
                         <button
@@ -1322,7 +1324,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       </div>
                       <button
                         type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoBuy"
                         onClick={addCryptoHypotheticalBuyToList}
                       >
                         {t('whatif.addHypotheticalBuyToList')}
@@ -1331,7 +1333,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
 
                   <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTablePurchases">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchases whatIfTable--hypoBuy">
                       <thead>
                         <tr>
                           <th>{t('portfolio.assetClass')}</th>
@@ -1380,9 +1382,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     </table>
                   </div>
 
-                  <h3 className="whatIfHypotheticalAggregateTitle">{t('whatif.hypotheticalAggregateTitle')}</h3>
+                  <h3 className="whatIfHypotheticalAggregateTitle whatIfHypotheticalAggregateTitle--hypoBuy">
+                    {t('whatif.hypotheticalAggregateTitle')}
+                  </h3>
                   <div className="profitabilityTableWrap whatIfHypotheticalAggregateWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate whatIfTable--hypoBuy">
                       <thead>
                         <tr>
                           <th>{t('portfolio.asset')}</th>
@@ -1434,11 +1438,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
                 </section>
 
-                <section className="whatIfSection">
-                  <h2>{t('whatif.featureCTitle')}</h2>
-                  <p className="profitabilitySectionDesc">{t('whatif.featureCDesc')}</p>
+                <section className="whatIfSection whatIfSection--hypoSell">
+                  <header className="whatIfHypoSectionHead">
+                    <span className="whatIfHypoBadge whatIfHypoBadge--sell">{t('whatif.hypoSectionBadgeSell')}</span>
+                  </header>
                   <div className="whatIfBuyForms">
-                    <div className="whatIfBuyCard">
+                    <div className="whatIfBuyCard whatIfBuyCard--hypoSell">
                       <div className="whatIfBuyCardHeader">
                         <h3>{t('portfolio.stockPosition')}</h3>
                         <button
@@ -1453,49 +1458,56 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       </div>
                       <label className="modalLabel">
                         {t('modals.asset')}
-                        <input
+                        <select
                           className="profitabilityInput"
-                          value={stockSellForm.query}
+                          value={(() => {
+                            const sym = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
+                            if (!sym) return '';
+                            return stockSellHoldingsOptions.some(
+                              (r) => String(r.symbol || '').toUpperCase() === sym,
+                            )
+                              ? sym
+                              : '';
+                          })()}
                           onChange={(e) => {
-                            const nextQuery = e.target.value;
-                            setStockSellForm((prev) => ({ ...prev, query: nextQuery, selectedSymbol: '' }));
+                            const sym = normalizeText(e.target.value).toUpperCase();
+                            if (!sym) {
+                              setStockSellForm((prev) => ({
+                                ...prev,
+                                selectedSymbol: '',
+                                qty: '',
+                                sellPct: 0,
+                              }));
+                              return;
+                            }
+                            const avail = sellFormAvailableQtyForSymbol(sym);
+                            setStockSellForm((prev) => ({
+                              ...prev,
+                              selectedSymbol: sym,
+                              sellPct: avail > 0 ? 100 : 0,
+                              qty: avail > 0 ? String(avail) : '',
+                            }));
                           }}
-                          placeholder={t('whatif.sellSearchHoldingsPlaceholder')}
-                        />
+                        >
+                          <option value="">{t('whatif.sellSelectHoldingPlaceholder')}</option>
+                          {stockSellHoldingsOptions.map((row) => {
+                            const sym = String(row.symbol || '').toUpperCase();
+                            const labelName = row.name && String(row.name) !== sym ? String(row.name) : '';
+                            return (
+                              <option key={sym} value={sym}>
+                                {labelName ? `${sym} — ${labelName}` : sym} ({formatQty(num(row.qty))})
+                              </option>
+                            );
+                          })}
+                        </select>
                       </label>
-                      {!stockSellForm.selectedSymbol && normalizeText(stockSellForm.query) && (
-                        <div className="modalProductList">
-                          {stockSellMatches.length === 0 && (
-                            <p className="modalHint">{t('whatif.noMatchingHoldings')}</p>
-                          )}
-                          {stockSellMatches.length > 0 && (
-                            <ul>
-                              {stockSellMatches.map((item) => (
-                                <li key={item.symbol}>
-                                  <button
-                                    type="button"
-                                    className="modalProductItem"
-                                    onClick={() =>
-                                      setStockSellForm((prev) => ({
-                                        ...prev,
-                                        selectedSymbol: item.symbol,
-                                        query: item.symbol,
-                                      }))
-                                    }
-                                  >
-                                    <span className="modalProductMain">{item.symbol}</span>
-                                    {item.name && <span className="modalProductSub">{item.name}</span>}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                      {stockSellForm.selectedSymbol ? (
+                      {stockSellHoldingsOptions.length === 0 ? (
+                        <p className="modalHint">{t('whatif.sellNoHoldingsWithQty')}</p>
+                      ) : null}
+                      {normalizeText(stockSellForm.selectedSymbol) ? (
                         <p className="modalHint">
-                          {t('whatif.maxSellableQtyHint', {
-                            qty: formatQty(maxSellableQtyForSymbol(stockSellForm.selectedSymbol)),
+                          {t('whatif.holdingQtyForSalesHint', {
+                            qty: formatQty(livePortfolioQtyForSymbol(stockSellForm.selectedSymbol)),
                           })}
                         </p>
                       ) : null}
@@ -1507,14 +1519,41 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             className="profitabilityInput"
                             type="text"
                             inputMode="decimal"
+                            autoComplete="off"
                             value={stockSellForm.qty}
-                            onChange={(e) =>
-                              setStockSellForm((prev) => ({
-                                ...prev,
-                                qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
+                            onChange={handleStockSellQtyChange}
+                            disabled={!(sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol) > 0)}
+                            placeholder={
+                              (() => {
+                                const avail = sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol);
+                                if (!(avail > 0)) return '0';
+                                return `≤ ${formatQty(avail)}`;
+                              })()
                             }
                           />
+                        </label>
+                        <label className="modalLabel">
+                          {t('modals.sellPct')}
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={stockSellForm.sellPct}
+                            onChange={handleStockSellPctChange}
+                            className="modalRange"
+                            disabled={!(sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol) > 0)}
+                          />
+                          <div className="modalRangeMeta">
+                            <strong>
+                              {Number.isFinite(stockSellForm.sellPct)
+                                ? `${Number(stockSellForm.sellPct).toFixed(1)}%`
+                                : '0.0%'}
+                            </strong>
+                            <span>
+                              {t('modals.qtyShort')} {stockSellForm.qty || '0'}
+                            </span>
+                          </div>
                         </label>
                         <label className="modalLabel">
                           {t('whatif.sellPricePerUnit')}
@@ -1531,32 +1570,17 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             }
                           />
                         </label>
-                        <label className="modalLabel">
-                          {t('whatif.sellFeeFlatOptional')}
-                          <input
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={stockSellForm.feeFlat}
-                            onChange={(e) =>
-                              setStockSellForm((prev) => ({
-                                ...prev,
-                                feeFlat: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
                       </div>
                       <button
                         type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoSell"
                         onClick={addStockHypotheticalSellToList}
                       >
                         {t('whatif.addHypotheticalSellToList')}
                       </button>
                     </div>
 
-                    <div className="whatIfBuyCard">
+                    <div className="whatIfBuyCard whatIfBuyCard--hypoSell">
                       <div className="whatIfBuyCardHeader">
                         <h3>{t('portfolio.cryptoPosition')}</h3>
                         <button
@@ -1571,49 +1595,56 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       </div>
                       <label className="modalLabel">
                         {t('modals.asset')}
-                        <input
+                        <select
                           className="profitabilityInput"
-                          value={cryptoSellForm.query}
+                          value={(() => {
+                            const sym = normalizeText(cryptoSellForm.selectedSymbol).toUpperCase();
+                            if (!sym) return '';
+                            return cryptoSellHoldingsOptions.some(
+                              (r) => String(r.symbol || '').toUpperCase() === sym,
+                            )
+                              ? sym
+                              : '';
+                          })()}
                           onChange={(e) => {
-                            const nextQuery = e.target.value;
-                            setCryptoSellForm((prev) => ({ ...prev, query: nextQuery, selectedSymbol: '' }));
+                            const sym = normalizeText(e.target.value).toUpperCase();
+                            if (!sym) {
+                              setCryptoSellForm((prev) => ({
+                                ...prev,
+                                selectedSymbol: '',
+                                qty: '',
+                                sellPct: 0,
+                              }));
+                              return;
+                            }
+                            const avail = sellFormAvailableQtyForSymbol(sym);
+                            setCryptoSellForm((prev) => ({
+                              ...prev,
+                              selectedSymbol: sym,
+                              sellPct: avail > 0 ? 100 : 0,
+                              qty: avail > 0 ? String(avail) : '',
+                            }));
                           }}
-                          placeholder={t('whatif.sellSearchHoldingsPlaceholder')}
-                        />
+                        >
+                          <option value="">{t('whatif.sellSelectHoldingPlaceholder')}</option>
+                          {cryptoSellHoldingsOptions.map((row) => {
+                            const sym = String(row.symbol || '').toUpperCase();
+                            const labelName = row.name && String(row.name) !== sym ? String(row.name) : '';
+                            return (
+                              <option key={sym} value={sym}>
+                                {labelName ? `${sym} — ${labelName}` : sym} ({formatQty(num(row.qty))})
+                              </option>
+                            );
+                          })}
+                        </select>
                       </label>
-                      {!cryptoSellForm.selectedSymbol && normalizeText(cryptoSellForm.query) && (
-                        <div className="modalProductList">
-                          {cryptoSellMatches.length === 0 && (
-                            <p className="modalHint">{t('whatif.noMatchingHoldings')}</p>
-                          )}
-                          {cryptoSellMatches.length > 0 && (
-                            <ul>
-                              {cryptoSellMatches.map((item) => (
-                                <li key={item.symbol}>
-                                  <button
-                                    type="button"
-                                    className="modalProductItem"
-                                    onClick={() =>
-                                      setCryptoSellForm((prev) => ({
-                                        ...prev,
-                                        selectedSymbol: item.symbol,
-                                        query: item.symbol,
-                                      }))
-                                    }
-                                  >
-                                    <span className="modalProductMain">{item.symbol}</span>
-                                    {item.name && <span className="modalProductSub">{item.name}</span>}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                      {cryptoSellForm.selectedSymbol ? (
+                      {cryptoSellHoldingsOptions.length === 0 ? (
+                        <p className="modalHint">{t('whatif.sellNoHoldingsWithQty')}</p>
+                      ) : null}
+                      {normalizeText(cryptoSellForm.selectedSymbol) ? (
                         <p className="modalHint">
-                          {t('whatif.maxSellableQtyHint', {
-                            qty: formatQty(maxSellableQtyForSymbol(cryptoSellForm.selectedSymbol)),
+                          {t('whatif.holdingQtyForSalesHint', {
+                            qty: formatQty(livePortfolioQtyForSymbol(cryptoSellForm.selectedSymbol)),
                           })}
                         </p>
                       ) : null}
@@ -1625,14 +1656,41 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             className="profitabilityInput"
                             type="text"
                             inputMode="decimal"
+                            autoComplete="off"
                             value={cryptoSellForm.qty}
-                            onChange={(e) =>
-                              setCryptoSellForm((prev) => ({
-                                ...prev,
-                                qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
+                            onChange={handleCryptoSellQtyChange}
+                            disabled={!(sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol) > 0)}
+                            placeholder={
+                              (() => {
+                                const avail = sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol);
+                                if (!(avail > 0)) return '0';
+                                return `≤ ${formatQty(avail)}`;
+                              })()
                             }
                           />
+                        </label>
+                        <label className="modalLabel">
+                          {t('modals.sellPct')}
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={cryptoSellForm.sellPct}
+                            onChange={handleCryptoSellPctChange}
+                            className="modalRange"
+                            disabled={!(sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol) > 0)}
+                          />
+                          <div className="modalRangeMeta">
+                            <strong>
+                              {Number.isFinite(cryptoSellForm.sellPct)
+                                ? `${Number(cryptoSellForm.sellPct).toFixed(1)}%`
+                                : '0.0%'}
+                            </strong>
+                            <span>
+                              {t('modals.qtyShort')} {cryptoSellForm.qty || '0'}
+                            </span>
+                          </div>
                         </label>
                         <label className="modalLabel">
                           {t('whatif.sellPricePerUnit')}
@@ -1649,25 +1707,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             }
                           />
                         </label>
-                        <label className="modalLabel">
-                          {t('whatif.sellFeeFlatOptional')}
-                          <input
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={cryptoSellForm.feeFlat}
-                            onChange={(e) =>
-                              setCryptoSellForm((prev) => ({
-                                ...prev,
-                                feeFlat: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
                       </div>
                       <button
                         type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoSell"
                         onClick={addCryptoHypotheticalSellToList}
                       >
                         {t('whatif.addHypotheticalSellToList')}
@@ -1676,14 +1719,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
 
                   <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTablePurchases">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchases whatIfTable--hypoSell">
                       <thead>
                         <tr>
                           <th>{t('portfolio.assetClass')}</th>
                           <th>{t('portfolio.asset')}</th>
                           <th>{t('portfolio.quantity')}</th>
                           <th>{t('whatif.sellPricePerUnit')}</th>
-                          <th>{t('whatif.sellFeeFlatOptional')}</th>
                           <th>{t('whatif.estimatedProceeds')}</th>
                           <th>{t('netWorth.actions')}</th>
                         </tr>
@@ -1691,9 +1733,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <tbody>
                         {sellRows.map((row, index) => {
                           const quoteCcy = hypotheticalBuyQuoteCurrency(row);
-                          const fee = num(row.feeFlat);
-                          const feeAdj = Number.isFinite(fee) && fee > 0 ? fee : 0;
-                          const proceeds = Math.max(0, num(row.qty) * num(row.sellPrice) - feeAdj);
+                          const proceeds = Math.max(0, num(row.qty) * num(row.sellPrice));
                           return (
                             <tr key={`${row.id || index}-sell-${row.symbol}`}>
                               <td data-label={t('portfolio.assetClass')}>
@@ -1702,7 +1742,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                               <td data-label={t('portfolio.asset')}>{row.symbol}</td>
                               <td data-label={t('portfolio.quantity')}>{row.qty}</td>
                               <td data-label={t('whatif.sellPricePerUnit')}>{row.sellPrice}</td>
-                              <td data-label={t('whatif.sellFeeFlatOptional')}>{row.feeFlat === '' ? '—' : row.feeFlat}</td>
                               <td data-label={t('whatif.estimatedProceeds')}>
                                 {hideValues ? '—' : formatCurrencyValue(proceeds, quoteCcy)}
                               </td>
@@ -1722,16 +1761,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         })}
                         {sellRows.length === 0 && (
                           <tr>
-                            <td colSpan={7}>{t('whatif.noHypotheticalSales')}</td>
+                            <td colSpan={6}>{t('whatif.noHypotheticalSales')}</td>
                           </tr>
                         )}
                       </tbody>
                     </table>
                   </div>
 
-                  <h3 className="whatIfHypotheticalAggregateTitle">{t('whatif.hypotheticalSalesAggregateTitle')}</h3>
+                  <h3 className="whatIfHypotheticalAggregateTitle whatIfHypotheticalAggregateTitle--hypoSell">
+                    {t('whatif.hypotheticalSalesAggregateTitle')}
+                  </h3>
                   <div className="profitabilityTableWrap whatIfHypotheticalAggregateWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate whatIfTable--hypoSell">
                       <thead>
                         <tr>
                           <th>{t('portfolio.asset')}</th>

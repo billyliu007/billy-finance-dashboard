@@ -240,7 +240,6 @@ export function computeWhatIfFromData({
     const symbol = toUpper(sale.symbol);
     const qty = numberOrZero(sale.qty);
     const sellPrice = numberOrZero(sale.sellPrice);
-    const feeFlat = sale?.feeFlat == null || sale?.feeFlat === '' ? 0 : numberOrZero(sale.feeFlat);
     if (qty <= 0) continue;
     const existing = rowsBySymbol.get(symbol);
     if (!existing || numberOrZero(existing.scenarioQty) <= 0) {
@@ -361,9 +360,7 @@ export function computeWhatIfFromData({
   portfolioBaseTotals.hypotheticalProceedsBase = (hypotheticalSales || []).reduce((sum, item) => {
     const qty = numberOrZero(item?.qty);
     const sellPrice = numberOrZero(item?.sellPrice);
-    const fee =
-      item?.feeFlat == null || item?.feeFlat === '' ? 0 : numberOrZero(item.feeFlat);
-    const proceeds = Math.max(0, qty * sellPrice - fee);
+    const proceeds = Math.max(0, qty * sellPrice);
     const currency = toUpper(item?.currency || 'USD');
     const proceedsBase = toBaseValue(proceeds, currency);
     return sum + (proceedsBase == null ? 0 : proceedsBase);

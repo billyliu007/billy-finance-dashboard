@@ -92,7 +92,7 @@ test('computeWhatIfFromData applies hypothetical sale: qty, cost basis, proceeds
     scenario: { id: 's1', name: 'Base', isActive: true },
     targetPrices: [],
     hypotheticalPurchases: [],
-    hypotheticalSales: [{ symbol: 'AAPL', qty: 4, sellPrice: 200, feeFlat: 10, currency: 'USD' }],
+    hypotheticalSales: [{ symbol: 'AAPL', qty: 4, sellPrice: 200, currency: 'USD' }],
     baselineRows: [
       {
         symbol: 'AAPL',
@@ -115,7 +115,7 @@ test('computeWhatIfFromData applies hypothetical sale: qty, cost basis, proceeds
   assert.equal(aapl.qty, 6);
   assert.equal(Math.round(aapl.costBasis), 600);
   assert.equal(aapl.avgCost, 100);
-  assert.equal(result.portfolioBaseTotals.hypotheticalProceedsBase, 790);
+  assert.equal(result.portfolioBaseTotals.hypotheticalProceedsBase, 800);
 });
 
 test('computeWhatIfFromData rejects sale exceeding scenario qty', () => {
