@@ -50,6 +50,13 @@ function inferAssetClass(row) {
   return 'stock';
 }
 
+/** Prefer portfolio row category for stock vs crypto (aligns with dashboard table). */
+function holdingAssetClass(row) {
+  if (/crypto/i.test(String(row?.category || ''))) return 'crypto';
+  if (/stock/i.test(String(row?.category || ''))) return 'stock';
+  return inferAssetClass(row);
+}
+
 function hypotheticalBuyQuoteCurrency(row) {
   if (row?.assetClass === 'stock') return 'USD';
   return String(row?.currency || 'USD').trim().toUpperCase() || 'USD';
@@ -91,9 +98,71 @@ function aggregateHypotheticalBuyRows(rows) {
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
 
+/** Proceeds per (symbol, quote bucket) for hypothetical sales lines. */
+function aggregateHypotheticalSellRows(rows) {
+  const map = new Map();
+  for (const row of rows || []) {
+    const sym = String(row?.symbol || '').trim().toUpperCase();
+    if (!sym) continue;
+    const q = num(row.qty);
+    if (!(q > 0)) continue;
+    const quoteCcy = row?.assetClass === 'stock' ? 'USD' : String(row?.currency || 'USD').trim().toUpperCase() || 'USD';
+    const bucketCcy = aggregateHypotheticalQuoteBucket(quoteCcy);
+    const key = `${sym}\0${bucketCcy}`;
+    const fee = num(row.feeFlat);
+    const feeAdj = Number.isFinite(fee) && fee > 0 ? fee : 0;
+    const proceeds = Math.max(0, q * num(row.sellPrice) - feeAdj);
+    if (!Number.isFinite(proceeds)) continue;
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { symbol: sym, currency: bucketCcy, totalQty: q, totalProceeds: proceeds });
+    } else {
+      prev.totalQty += q;
+      prev.totalProceeds += proceeds;
+    }
+  }
+  return Array.from(map.values())
+    .map((r) => ({
+      ...r,
+      avgSell: r.totalQty > 0 ? r.totalProceeds / r.totalQty : 0,
+    }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
+function emptyStockSellForm() {
+  return { query: '', selectedSymbol: '', qty: '', sellPrice: '', feeFlat: '' };
+}
+
+function emptyCryptoSellForm() {
+  return { query: '', selectedSymbol: '', qty: '', sellPrice: '', feeFlat: '' };
+}
+
+function mapApiHypotheticalPurchasesToBuyRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row, index) => ({
+    id: row.id || `saved-${index}`,
+    assetClass: inferAssetClass(row),
+    symbol: String(row.symbol || '').toUpperCase(),
+    qty: row.qty,
+    buyPrice: row.buyPrice,
+    currency: String(row.currency || '').toUpperCase() || null,
+  }));
+}
+
+function mapApiHypotheticalSalesToSellRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row, index) => ({
+    id: row.id || `sale-saved-${index}`,
+    assetClass: inferAssetClass({ currency: row.currency }),
+    symbol: String(row.symbol || '').toUpperCase(),
+    qty: row.qty,
+    sellPrice: row.sellPrice,
+    feeFlat: row.feeFlat == null || row.feeFlat === '' ? '' : row.feeFlat,
+    currency: String(row.currency || '').toUpperCase() || null,
+  }));
+}
+
 export default function WhatIfScenariosPage({ hideValues }) {
   const { t } = useLanguage();
-  const { netWorth, baseCurrency } = useDashboard();
+  const { netWorth, baseCurrency, portfolio } = useDashboard();
   const [scenarios, setScenarios] = useState([]);
   const [activeScenarioId, setActiveScenarioId] = useState('');
   const [newScenarioName, setNewScenarioName] = useState('');
@@ -103,9 +172,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [lastSyncedTargetPrices, setLastSyncedTargetPrices] = useState([]);
   const [targetPricePctBySymbol, setTargetPricePctBySymbol] = useState({});
   const [buyRows, setBuyRows] = useState([]);
-  const [deductHypotheticalFromCash, setDeductHypotheticalFromCash] = useState(true);
+  const [sellRows, setSellRows] = useState([]);
+  const [adjustScenarioCashForHypotheticals, setAdjustScenarioCashForHypotheticals] = useState(true);
   const [stockForm, setStockForm] = useState(emptyStockForm());
   const [cryptoForm, setCryptoForm] = useState(emptyCryptoForm());
+  const [stockSellForm, setStockSellForm] = useState(emptyStockSellForm());
+  const [cryptoSellForm, setCryptoSellForm] = useState(emptyCryptoSellForm());
   const [results, setResults] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isScenarioLoading, setIsScenarioLoading] = useState(false);
@@ -113,31 +185,42 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [isPersistingInputs, setIsPersistingInputs] = useState(false);
   const [error, setError] = useState('');
   const blockInputPersistRef = useRef(false);
+  /** Bumps when starting a scenario load so stale in-flight GET /results cannot apply wrong buys/sales. */
+  const whatIfLoadSeqRef = useRef(0);
+  /** Serializes PUT /inputs so overlapping saves cannot race server-side (e.g. target price unique index). */
+  const persistQueueTailRef = useRef(Promise.resolve());
   const persistSeqRef = useRef(0);
   const activeScenarioIdRef = useRef('');
   const targetPricesRef = useRef([]);
   const lastSyncedTargetPricesRef = useRef([]);
   const buyRowsRef = useRef([]);
+  const sellRowsRef = useRef([]);
   const [lastSavedHash, setLastSavedHash] = useState('');
   const stockHypotheticalQtyRef = useRef(null);
   const cryptoHypotheticalQtyRef = useRef(null);
+  const stockSellQtyRef = useRef(null);
+  const cryptoSellQtyRef = useRef(null);
 
   activeScenarioIdRef.current = activeScenarioId;
   targetPricesRef.current = targetPrices;
   lastSyncedTargetPricesRef.current = lastSyncedTargetPrices;
   buyRowsRef.current = buyRows;
+  sellRowsRef.current = sellRows;
 
   function resetScenarioEditorState() {
     setTargetPrices([]);
     setTargetPricePctBySymbol({});
     setBuyRows([]);
+    setSellRows([]);
     setLastSyncedTargetPrices([]);
     setStockForm(emptyStockForm());
     setCryptoForm(emptyCryptoForm());
+    setStockSellForm(emptyStockSellForm());
+    setCryptoSellForm(emptyCryptoSellForm());
     setResults(null);
   }
 
-  function computeInputsHash(nextTargetPrices, nextBuyRows) {
+  function computeInputsHash(nextTargetPrices, nextBuyRows, nextSellRows = []) {
     const targetRows = (nextTargetPrices || [])
       .map((row) => ({
         symbol: String(row?.symbol || '').trim().toUpperCase(),
@@ -160,8 +243,145 @@ export default function WhatIfScenariosPage({ hideValues }) {
       .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0)
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
-    return JSON.stringify({ targetRows, purchaseRows });
+    const saleRows = (nextSellRows || [])
+      .map((row) => ({
+        symbol: String(row?.symbol || '').trim().toUpperCase(),
+        qty: num(row?.qty),
+        sellPrice: num(row?.sellPrice),
+        feeFlat: row?.feeFlat === '' || row?.feeFlat == null ? null : num(row.feeFlat),
+        currency:
+          row?.assetClass === 'stock'
+            ? 'USD'
+            : String(row?.currency || '').trim().toUpperCase() || 'USD',
+      }))
+      .filter((row) => row.symbol && row.qty > 0 && row.sellPrice >= 0);
+
+    return JSON.stringify({ targetRows, purchaseRows, saleRows });
   }
+
+  const portfolioTableRows = Array.isArray(portfolio?.tableRows) ? portfolio.tableRows : [];
+  const stockHoldingsForSell = useMemo(
+    () => portfolioTableRows.filter((row) => holdingAssetClass(row) === 'stock' && num(row.qty) > 0),
+    [portfolioTableRows],
+  );
+  const cryptoHoldingsForSell = useMemo(
+    () => portfolioTableRows.filter((row) => holdingAssetClass(row) === 'crypto' && num(row.qty) > 0),
+    [portfolioTableRows],
+  );
+
+  /** Holdings plus stock symbols that only appear via hypothetical buys but are sellable in this scenario. */
+  const stockSellCandidateRows = useMemo(() => {
+    const map = new Map();
+    for (const row of stockHoldingsForSell) {
+      map.set(String(row.symbol || '').toUpperCase(), row);
+    }
+    for (const br of buyRows) {
+      if (br.assetClass === 'crypto') continue;
+      const sym = String(br.symbol || '').trim().toUpperCase();
+      if (!sym || map.has(sym)) continue;
+      const baselineRow = portfolioTableRows.find((r) => String(r.symbol || '').trim().toUpperCase() === sym);
+      const baseQty = num(baselineRow?.qty);
+      let fromBuys = 0;
+      for (const r of buyRows) {
+        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
+        fromBuys += num(r.qty);
+      }
+      let fromSells = 0;
+      for (const r of sellRows) {
+        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
+        fromSells += num(r.qty);
+      }
+      const maxQ = Math.max(0, baseQty + fromBuys - fromSells);
+      if (maxQ > 0) {
+        map.set(sym, { symbol: sym, name: sym, category: 'Stock', currency: 'USD', qty: baseQty });
+      }
+    }
+    return [...map.values()];
+  }, [stockHoldingsForSell, buyRows, sellRows, portfolioTableRows]);
+
+  const cryptoSellCandidateRows = useMemo(() => {
+    const map = new Map();
+    for (const row of cryptoHoldingsForSell) {
+      map.set(String(row.symbol || '').toUpperCase(), row);
+    }
+    for (const br of buyRows) {
+      if (br.assetClass !== 'crypto') continue;
+      const sym = String(br.symbol || '').trim().toUpperCase();
+      if (!sym || map.has(sym)) continue;
+      const baselineRow = portfolioTableRows.find((r) => String(r.symbol || '').trim().toUpperCase() === sym);
+      const baseQty = num(baselineRow?.qty);
+      let fromBuys = 0;
+      for (const r of buyRows) {
+        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
+        fromBuys += num(r.qty);
+      }
+      let fromSells = 0;
+      for (const r of sellRows) {
+        if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
+        fromSells += num(r.qty);
+      }
+      const maxQ = Math.max(0, baseQty + fromBuys - fromSells);
+      if (maxQ > 0) {
+        const currency =
+          String(br.currency || baselineRow?.currency || 'USD').trim().toUpperCase() || 'USD';
+        map.set(sym, {
+          symbol: sym,
+          name: sym,
+          category: 'Crypto',
+          currency,
+          qty: baseQty,
+        });
+      }
+    }
+    return [...map.values()];
+  }, [cryptoHoldingsForSell, buyRows, sellRows, portfolioTableRows]);
+
+  function maxSellableQtyForSymbol(symbol, excludeRowId = null) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    if (!sym) return 0;
+    const baselineRow = portfolioTableRows.find((r) => String(r.symbol || '').trim().toUpperCase() === sym);
+    let baseQty = num(baselineRow?.qty);
+    let fromBuys = 0;
+    for (const r of buyRows) {
+      if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
+      fromBuys += num(r.qty);
+    }
+    let fromSells = 0;
+    for (const r of sellRows) {
+      if (excludeRowId != null && r.id === excludeRowId) continue;
+      if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
+      fromSells += num(r.qty);
+    }
+    return Math.max(0, baseQty + fromBuys - fromSells);
+  }
+
+  const stockSellMatches = useMemo(() => {
+    const raw = normalizeText(stockSellForm.query);
+    if (!raw) return [];
+    const q = raw.toUpperCase();
+    const ql = raw.toLowerCase();
+    return stockSellCandidateRows
+      .filter((row) => {
+        const sym = String(row.symbol || '').toUpperCase();
+        const name = String(row.name || '').toLowerCase();
+        return sym.includes(q) || name.includes(ql);
+      })
+      .slice(0, 50);
+  }, [stockSellCandidateRows, stockSellForm.query]);
+
+  const cryptoSellMatches = useMemo(() => {
+    const raw = normalizeText(cryptoSellForm.query);
+    if (!raw) return [];
+    const q = raw.toUpperCase();
+    const ql = raw.toLowerCase();
+    return cryptoSellCandidateRows
+      .filter((row) => {
+        const sym = String(row.symbol || '').toUpperCase();
+        const name = String(row.name || '').toLowerCase();
+        return sym.includes(q) || name.includes(ql);
+      })
+      .slice(0, 50);
+  }, [cryptoSellCandidateRows, cryptoSellForm.query]);
 
   function confirmDiscardIfDirty(isDirty) {
     if (!isDirty) return true;
@@ -212,20 +432,26 @@ export default function WhatIfScenariosPage({ hideValues }) {
     blockInputPersistRef.current = true;
     setIsScenarioLoading(true);
     if (!scenarioId) {
+      whatIfLoadSeqRef.current += 1;
       setTargetPrices([]);
       setLastSyncedTargetPrices([]);
       setTargetPricePctBySymbol({});
       setBuyRows([]);
+      setSellRows([]);
       setStockForm(emptyStockForm());
       setCryptoForm(emptyCryptoForm());
+      setStockSellForm(emptyStockSellForm());
+      setCryptoSellForm(emptyCryptoSellForm());
       setResults(null);
       setLastSavedHash('');
       setIsScenarioLoading(false);
       blockInputPersistRef.current = false;
       return;
     }
+    const loadSeq = ++whatIfLoadSeqRef.current;
     try {
       const resultRes = await fetchJson(`/api/whatif/scenarios/${scenarioId}/results`);
+      if (loadSeq !== whatIfLoadSeqRef.current) return;
       const resultRows = Array.isArray(resultRes?.rows) ? resultRes.rows : [];
       const savedTargets = Array.isArray(resultRes?.targetPrices) ? resultRes.targetPrices : [];
       const savedBySymbol = new Map(savedTargets.map((row) => [String(row.symbol || '').toUpperCase(), row]));
@@ -261,33 +487,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setTargetPrices(prefilledTargets);
       setLastSyncedTargetPrices(cloneSyncedTargetRows(prefilledTargets));
       setTargetPricePctBySymbol(pctBySymbol);
-      const fetchedBuys = Array.isArray(resultRes?.hypotheticalPurchases) ? resultRes.hypotheticalPurchases : [];
-      setBuyRows(
-        fetchedBuys.map((row, index) => ({
-          id: row.id || `saved-${index}`,
-          assetClass: inferAssetClass(row),
-          symbol: String(row.symbol || '').toUpperCase(),
-          qty: row.qty,
-          buyPrice: row.buyPrice,
-          currency: String(row.currency || '').toUpperCase() || null,
-        })),
-      );
+      const mappedBuys = mapApiHypotheticalPurchasesToBuyRows(resultRes?.hypotheticalPurchases);
+      setBuyRows(mappedBuys);
+      const mappedSales = mapApiHypotheticalSalesToSellRows(resultRes?.hypotheticalSales);
+      setSellRows(mappedSales);
       setStockForm(emptyStockForm());
       setCryptoForm(emptyCryptoForm());
+      setStockSellForm(emptyStockSellForm());
+      setCryptoSellForm(emptyCryptoSellForm());
       setResults(resultRes);
-      setLastSavedHash(
-        computeInputsHash(
-          prefilledTargets,
-          fetchedBuys.map((row, index) => ({
-            id: row.id || `saved-${index}`,
-            assetClass: inferAssetClass(row),
-            symbol: String(row.symbol || '').toUpperCase(),
-            qty: row.qty,
-            buyPrice: row.buyPrice,
-            currency: String(row.currency || '').toUpperCase() || null,
-          })),
-        ),
-      );
+      setLastSavedHash(computeInputsHash(prefilledTargets, mappedBuys, mappedSales));
     } finally {
       setIsScenarioLoading(false);
       blockInputPersistRef.current = false;
@@ -404,53 +613,77 @@ export default function WhatIfScenariosPage({ hideValues }) {
     updateTargetPrice(sym, target, currency);
   }
 
-  const persistScenarioInputs = useCallback(async (scenarioId, nextTargetPrices, nextBuyRows) => {
-    if (!scenarioId) return false;
-    const dedupedTargetRows = new Map();
-    for (const row of nextTargetPrices || []) {
-      const symbol = String(row?.symbol || '').trim().toUpperCase();
-      const targetPrice = num(row?.targetPrice);
-      const currency = String(row?.currency || '').trim().toUpperCase() || null;
-      if (!symbol || targetPrice <= 0) continue;
-      // Last writer wins for duplicate symbols, preventing unique-key failures server-side.
-      dedupedTargetRows.set(symbol, { symbol, targetPrice, currency });
-    }
-    const targetRows = Array.from(dedupedTargetRows.values());
-    const purchaseRows = nextBuyRows
-      .map((row) => ({
-        symbol: String(row.symbol || '').trim().toUpperCase(),
-        qty: num(row.qty),
-        buyPrice: num(row.buyPrice),
-        currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
-      }))
-      .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0);
+  const persistScenarioInputs = useCallback(async (scenarioId, nextTargetPrices, nextBuyRows, nextSellRows = []) => {
+    const execute = async () => {
+      if (!scenarioId) return false;
+      const dedupedTargetRows = new Map();
+      for (const row of nextTargetPrices || []) {
+        const symbol = String(row?.symbol || '').trim().toUpperCase();
+        const targetPrice = num(row?.targetPrice);
+        const currency = String(row?.currency || '').trim().toUpperCase() || null;
+        if (!symbol || targetPrice <= 0) continue;
+        // Last writer wins for duplicate symbols, preventing unique-key failures server-side.
+        dedupedTargetRows.set(symbol, { symbol, targetPrice, currency });
+      }
+      const targetRows = Array.from(dedupedTargetRows.values());
+      const purchaseRows = nextBuyRows
+        .map((row) => ({
+          symbol: String(row.symbol || '').trim().toUpperCase(),
+          qty: num(row.qty),
+          buyPrice: num(row.buyPrice),
+          currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
+        }))
+        .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0);
 
-    const seq = ++persistSeqRef.current;
-    setIsPersistingInputs(true);
-    setError('');
-    try {
-      const nextResults = await putJson(`/api/whatif/scenarios/${scenarioId}/inputs`, {
-        targetPrices: targetRows,
-        hypotheticalPurchases: purchaseRows,
-      });
-      if (seq !== persistSeqRef.current || scenarioId !== activeScenarioIdRef.current) {
+      const saleRows = (nextSellRows || [])
+        .map((row) => ({
+          symbol: String(row.symbol || '').trim().toUpperCase(),
+          qty: num(row.qty),
+          sellPrice: num(row.sellPrice),
+          feeFlat: row.feeFlat === '' || row.feeFlat == null ? null : num(row.feeFlat),
+          currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
+        }))
+        .filter((row) => row.symbol && row.qty > 0 && row.sellPrice >= 0);
+
+      const seq = ++persistSeqRef.current;
+      setIsPersistingInputs(true);
+      setError('');
+      try {
+        const nextResults = await putJson(`/api/whatif/scenarios/${scenarioId}/inputs`, {
+          targetPrices: targetRows,
+          hypotheticalPurchases: purchaseRows,
+          hypotheticalSales: saleRows,
+        });
+        if (seq !== persistSeqRef.current || scenarioId !== activeScenarioIdRef.current) {
+          return false;
+        }
+        setResults(nextResults);
+        const syncedBuys = mapApiHypotheticalPurchasesToBuyRows(nextResults?.hypotheticalPurchases);
+        const syncedSales = mapApiHypotheticalSalesToSellRows(nextResults?.hypotheticalSales);
+        setBuyRows(syncedBuys);
+        setSellRows(syncedSales);
+        return computeInputsHash(nextTargetPrices, syncedBuys, syncedSales);
+      } catch (err) {
+        if (seq === persistSeqRef.current && scenarioId === activeScenarioIdRef.current) {
+          throw err;
+        }
         return false;
+      } finally {
+        if (seq === persistSeqRef.current) {
+          setIsPersistingInputs(false);
+        }
       }
-      setResults(nextResults);
-      return true;
-    } catch (err) {
-      if (seq === persistSeqRef.current && scenarioId === activeScenarioIdRef.current) {
-        throw err;
-      }
-      return false;
-    } finally {
-      if (seq === persistSeqRef.current) {
-        setIsPersistingInputs(false);
-      }
-    }
+    };
+
+    const chained = persistQueueTailRef.current.catch(() => {}).then(execute);
+    persistQueueTailRef.current = chained.catch(() => {});
+    return chained;
   }, []);
 
-  const currentInputsHash = useMemo(() => computeInputsHash(targetPrices, buyRows), [buyRows, targetPrices]);
+  const currentInputsHash = useMemo(
+    () => computeInputsHash(targetPrices, buyRows, sellRows),
+    [buyRows, sellRows, targetPrices],
+  );
   const aggregatedHypotheticalBuys = useMemo(() => aggregateHypotheticalBuyRows(buyRows), [buyRows]);
   const hypotheticalAggregateCostSubtotals = useMemo(() => {
     const m = new Map();
@@ -460,11 +693,20 @@ export default function WhatIfScenariosPage({ hideValues }) {
     }
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [aggregatedHypotheticalBuys]);
+  const aggregatedHypotheticalSells = useMemo(() => aggregateHypotheticalSellRows(sellRows), [sellRows]);
+  const hypotheticalAggregateProceedsSubtotals = useMemo(() => {
+    const m = new Map();
+    for (const row of aggregatedHypotheticalSells) {
+      const c = String(row.currency || 'USD').trim().toUpperCase() || 'USD';
+      m.set(c, (m.get(c) ?? 0) + num(row.totalProceeds));
+    }
+    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [aggregatedHypotheticalSells]);
   const isDirty = Boolean(activeScenarioId) && currentInputsHash !== lastSavedHash;
   const hasUnsavedTargetPrices = useMemo(
     () =>
       Boolean(activeScenarioId) &&
-      computeInputsHash(targetPrices, []) !== computeInputsHash(lastSyncedTargetPrices, []),
+      computeInputsHash(targetPrices, [], []) !== computeInputsHash(lastSyncedTargetPrices, [], []),
     [activeScenarioId, lastSyncedTargetPrices, targetPrices],
   );
   const targetSaveUiActive = hasUnsavedTargetPrices && !isPersistingInputs;
@@ -480,15 +722,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty]);
 
-  async function saveAfterHypotheticalChange(nextBuyRows) {
+  async function saveAfterHypotheticalChange(nextBuyRows, nextSellRows) {
     if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
     const sid = activeScenarioIdRef.current;
     const tp = cloneSyncedTargetRows(lastSyncedTargetPricesRef.current);
-    const hashSnapshot = computeInputsHash(tp, nextBuyRows);
+    const sr = nextSellRows ?? sellRowsRef.current;
     try {
-      const committed = await persistScenarioInputs(sid, tp, nextBuyRows);
-      if (!committed || activeScenarioIdRef.current !== sid) return;
-      setLastSavedHash(hashSnapshot);
+      const savedHash = await persistScenarioInputs(sid, tp, nextBuyRows, sr);
+      if (savedHash === false || activeScenarioIdRef.current !== sid) return;
+      setLastSavedHash(savedHash);
       setError('');
     } catch (err) {
       if (activeScenarioIdRef.current === sid) {
@@ -501,14 +743,14 @@ export default function WhatIfScenariosPage({ hideValues }) {
     if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
     const tp = cloneSyncedTargetRows(targetPricesRef.current);
     const synced = lastSyncedTargetPricesRef.current;
-    if (computeInputsHash(tp, []) === computeInputsHash(synced, [])) return;
+    if (computeInputsHash(tp, [], []) === computeInputsHash(synced, [], [])) return;
     const sid = activeScenarioIdRef.current;
     const br = buyRowsRef.current;
-    const hashSnapshot = computeInputsHash(tp, br);
+    const sr = sellRowsRef.current;
     try {
-      const committed = await persistScenarioInputs(sid, tp, br);
-      if (!committed || activeScenarioIdRef.current !== sid) return;
-      setLastSavedHash(hashSnapshot);
+      const savedHash = await persistScenarioInputs(sid, tp, br, sr);
+      if (savedHash === false || activeScenarioIdRef.current !== sid) return;
+      setLastSavedHash(savedHash);
       setLastSyncedTargetPrices(tp);
       setError('');
     } catch (err) {
@@ -528,7 +770,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setBuyRows((prev) => {
       const next = prev.filter((_, i) => i !== index);
       queueMicrotask(() => {
-        void saveAfterHypotheticalChange(next);
+        void saveAfterHypotheticalChange(next, sellRowsRef.current);
       });
       return next;
     });
@@ -557,7 +799,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         { id: `stock-${Date.now()}`, assetClass: 'stock', symbol, qty, buyPrice, currency: 'USD' },
       ];
       queueMicrotask(() => {
-        void saveAfterHypotheticalChange(next);
+        void saveAfterHypotheticalChange(next, sellRowsRef.current);
       });
       return next;
     });
@@ -601,7 +843,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         },
       ];
       queueMicrotask(() => {
-        void saveAfterHypotheticalChange(next);
+        void saveAfterHypotheticalChange(next, sellRowsRef.current);
       });
       return next;
     });
@@ -612,6 +854,133 @@ export default function WhatIfScenariosPage({ hideValues }) {
   function resetCryptoHypotheticalForm() {
     setError('');
     setCryptoForm(emptyCryptoForm());
+  }
+
+  function resetStockSellForm() {
+    setError('');
+    setStockSellForm(emptyStockSellForm());
+  }
+
+  function resetCryptoSellForm() {
+    setError('');
+    setCryptoSellForm(emptyCryptoSellForm());
+  }
+
+  function removeSellRow(index) {
+    setSellRows((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(buyRowsRef.current, next);
+      });
+      return next;
+    });
+  }
+
+  function addStockHypotheticalSellToList() {
+    const symbol = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
+    const qty = num(stockSellForm.qty);
+    const sellPrice = num(stockSellForm.sellPrice);
+    const feeNum = stockSellForm.feeFlat.trim() === '' ? 0 : num(stockSellForm.feeFlat);
+    if (!symbol) {
+      setError(t('errors.selectStockSymbol'));
+      return;
+    }
+    const inCandidates = stockSellCandidateRows.some(
+      (h) => String(h.symbol || '').toUpperCase() === symbol,
+    );
+    if (!inCandidates) {
+      setError(t('whatif.selectHoldingToSell'));
+      return;
+    }
+    const maxQ = maxSellableQtyForSymbol(symbol);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setError(t('errors.quantityGreaterZero'));
+      return;
+    }
+    if (qty > maxQ + 1e-9) {
+      setError(t('whatif.sellQtyExceedsAvailable'));
+      return;
+    }
+    if (!Number.isFinite(sellPrice) || sellPrice < 0) {
+      setError(t('errors.sellPricePerUnitNonNegative'));
+      return;
+    }
+    if (stockSellForm.feeFlat.trim() !== '' && (!Number.isFinite(feeNum) || feeNum < 0)) {
+      setError(t('errors.feePerUnitNonNegative'));
+      return;
+    }
+    setError('');
+    setSellRows((prev) => {
+      const next = [
+        ...prev,
+        {
+          id: `sell-stock-${Date.now()}`,
+          assetClass: 'stock',
+          symbol,
+          qty,
+          sellPrice,
+          feeFlat: stockSellForm.feeFlat.trim() === '' ? '' : feeNum,
+          currency: 'USD',
+        },
+      ];
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(buyRowsRef.current, next);
+      });
+      return next;
+    });
+    setStockSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', feeFlat: '' }));
+    requestAnimationFrame(() => stockSellQtyRef.current?.focus?.());
+  }
+
+  function addCryptoHypotheticalSellToList() {
+    const symbol = normalizeText(cryptoSellForm.selectedSymbol).toUpperCase();
+    const holding = cryptoSellCandidateRows.find((h) => String(h.symbol || '').toUpperCase() === symbol);
+    const qty = num(cryptoSellForm.qty);
+    const sellPrice = num(cryptoSellForm.sellPrice);
+    const feeNum = cryptoSellForm.feeFlat.trim() === '' ? 0 : num(cryptoSellForm.feeFlat);
+    if (!holding || !symbol) {
+      setError(t('whatif.selectHoldingToSell'));
+      return;
+    }
+    const maxQ = maxSellableQtyForSymbol(symbol);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setError(t('errors.quantityGreaterZero'));
+      return;
+    }
+    if (qty > maxQ + 1e-9) {
+      setError(t('whatif.sellQtyExceedsAvailable'));
+      return;
+    }
+    if (!Number.isFinite(sellPrice) || sellPrice < 0) {
+      setError(t('errors.sellPricePerUnitNonNegative'));
+      return;
+    }
+    if (cryptoSellForm.feeFlat.trim() !== '' && (!Number.isFinite(feeNum) || feeNum < 0)) {
+      setError(t('errors.feePerUnitNonNegative'));
+      return;
+    }
+    const currency = String(holding.currency || 'USD').toUpperCase();
+    setError('');
+    setSellRows((prev) => {
+      const next = [
+        ...prev,
+        {
+          id: `sell-crypto-${Date.now()}`,
+          assetClass: 'crypto',
+          symbol,
+          qty,
+          sellPrice,
+          feeFlat: cryptoSellForm.feeFlat.trim() === '' ? '' : feeNum,
+          currency,
+        },
+      ];
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(buyRowsRef.current, next);
+      });
+      return next;
+    });
+    setCryptoSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', feeFlat: '' }));
+    requestAnimationFrame(() => cryptoSellQtyRef.current?.focus?.());
   }
 
   const resultRows = Array.isArray(results?.rows) ? results.rows : [];
@@ -642,7 +1011,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const baselineNetWorth = num(netWorth?.overview?.totalNetWorth);
   const portfolioDeltaInBase = num(results?.portfolioBaseTotals?.deltaValue);
   const hypotheticalCostBase = num(results?.portfolioBaseTotals?.hypotheticalCostBase);
-  const scenarioNetWorth = baselineNetWorth + portfolioDeltaInBase - (deductHypotheticalFromCash ? hypotheticalCostBase : 0);
+  const hypotheticalProceedsBase = num(results?.portfolioBaseTotals?.hypotheticalProceedsBase);
+  const scenarioNetWorth =
+    baselineNetWorth +
+    portfolioDeltaInBase +
+    (adjustScenarioCashForHypotheticals ? hypotheticalProceedsBase - hypotheticalCostBase : 0);
   const netWorthDelta = scenarioNetWorth - baselineNetWorth;
   const netWorthDeltaPct = baselineNetWorth > 0 ? (netWorthDelta / baselineNetWorth) * 100 : 0;
 
@@ -1000,7 +1373,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         })}
                         {buyRows.length === 0 && (
                           <tr>
-                            <td colSpan={6}>{t('whatif.noHypotheticalPurchases')}</td>
+                            <td colSpan={6}>{t('whatif.noHypotheticalBuys')}</td>
                           </tr>
                         )}
                       </tbody>
@@ -1054,6 +1427,355 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 {hideValues ? '—' : formatCurrencyValue(totalCost, currency)}
                               </td>
                               <td data-label={t('portfolio.avgCostPerUnit')}>—</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="whatIfSection">
+                  <h2>{t('whatif.featureCTitle')}</h2>
+                  <p className="profitabilitySectionDesc">{t('whatif.featureCDesc')}</p>
+                  <div className="whatIfBuyForms">
+                    <div className="whatIfBuyCard">
+                      <div className="whatIfBuyCardHeader">
+                        <h3>{t('portfolio.stockPosition')}</h3>
+                        <button
+                          type="button"
+                          className="headerIconBtn whatIfIconBtn"
+                          onClick={resetStockSellForm}
+                          aria-label={t('whatif.newHypotheticalAsset')}
+                          title={t('whatif.newHypotheticalAssetHint')}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <label className="modalLabel">
+                        {t('modals.asset')}
+                        <input
+                          className="profitabilityInput"
+                          value={stockSellForm.query}
+                          onChange={(e) => {
+                            const nextQuery = e.target.value;
+                            setStockSellForm((prev) => ({ ...prev, query: nextQuery, selectedSymbol: '' }));
+                          }}
+                          placeholder={t('whatif.sellSearchHoldingsPlaceholder')}
+                        />
+                      </label>
+                      {!stockSellForm.selectedSymbol && normalizeText(stockSellForm.query) && (
+                        <div className="modalProductList">
+                          {stockSellMatches.length === 0 && (
+                            <p className="modalHint">{t('whatif.noMatchingHoldings')}</p>
+                          )}
+                          {stockSellMatches.length > 0 && (
+                            <ul>
+                              {stockSellMatches.map((item) => (
+                                <li key={item.symbol}>
+                                  <button
+                                    type="button"
+                                    className="modalProductItem"
+                                    onClick={() =>
+                                      setStockSellForm((prev) => ({
+                                        ...prev,
+                                        selectedSymbol: item.symbol,
+                                        query: item.symbol,
+                                      }))
+                                    }
+                                  >
+                                    <span className="modalProductMain">{item.symbol}</span>
+                                    {item.name && <span className="modalProductSub">{item.name}</span>}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                      {stockSellForm.selectedSymbol ? (
+                        <p className="modalHint">
+                          {t('whatif.maxSellableQtyHint', {
+                            qty: formatQty(maxSellableQtyForSymbol(stockSellForm.selectedSymbol)),
+                          })}
+                        </p>
+                      ) : null}
+                      <div className="modalGrid">
+                        <label className="modalLabel">
+                          {t('portfolio.quantity')}
+                          <input
+                            ref={stockSellQtyRef}
+                            className="profitabilityInput"
+                            type="text"
+                            inputMode="decimal"
+                            value={stockSellForm.qty}
+                            onChange={(e) =>
+                              setStockSellForm((prev) => ({
+                                ...prev,
+                                qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="modalLabel">
+                          {t('whatif.sellPricePerUnit')}
+                          <input
+                            className="profitabilityInput"
+                            type="text"
+                            inputMode="decimal"
+                            value={stockSellForm.sellPrice}
+                            onChange={(e) =>
+                              setStockSellForm((prev) => ({
+                                ...prev,
+                                sellPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="modalLabel">
+                          {t('whatif.sellFeeFlatOptional')}
+                          <input
+                            className="profitabilityInput"
+                            type="text"
+                            inputMode="decimal"
+                            value={stockSellForm.feeFlat}
+                            onChange={(e) =>
+                              setStockSellForm((prev) => ({
+                                ...prev,
+                                feeFlat: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        onClick={addStockHypotheticalSellToList}
+                      >
+                        {t('whatif.addHypotheticalSellToList')}
+                      </button>
+                    </div>
+
+                    <div className="whatIfBuyCard">
+                      <div className="whatIfBuyCardHeader">
+                        <h3>{t('portfolio.cryptoPosition')}</h3>
+                        <button
+                          type="button"
+                          className="headerIconBtn whatIfIconBtn"
+                          onClick={resetCryptoSellForm}
+                          aria-label={t('whatif.newHypotheticalAsset')}
+                          title={t('whatif.newHypotheticalAssetHint')}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <label className="modalLabel">
+                        {t('modals.asset')}
+                        <input
+                          className="profitabilityInput"
+                          value={cryptoSellForm.query}
+                          onChange={(e) => {
+                            const nextQuery = e.target.value;
+                            setCryptoSellForm((prev) => ({ ...prev, query: nextQuery, selectedSymbol: '' }));
+                          }}
+                          placeholder={t('whatif.sellSearchHoldingsPlaceholder')}
+                        />
+                      </label>
+                      {!cryptoSellForm.selectedSymbol && normalizeText(cryptoSellForm.query) && (
+                        <div className="modalProductList">
+                          {cryptoSellMatches.length === 0 && (
+                            <p className="modalHint">{t('whatif.noMatchingHoldings')}</p>
+                          )}
+                          {cryptoSellMatches.length > 0 && (
+                            <ul>
+                              {cryptoSellMatches.map((item) => (
+                                <li key={item.symbol}>
+                                  <button
+                                    type="button"
+                                    className="modalProductItem"
+                                    onClick={() =>
+                                      setCryptoSellForm((prev) => ({
+                                        ...prev,
+                                        selectedSymbol: item.symbol,
+                                        query: item.symbol,
+                                      }))
+                                    }
+                                  >
+                                    <span className="modalProductMain">{item.symbol}</span>
+                                    {item.name && <span className="modalProductSub">{item.name}</span>}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                      {cryptoSellForm.selectedSymbol ? (
+                        <p className="modalHint">
+                          {t('whatif.maxSellableQtyHint', {
+                            qty: formatQty(maxSellableQtyForSymbol(cryptoSellForm.selectedSymbol)),
+                          })}
+                        </p>
+                      ) : null}
+                      <div className="modalGrid">
+                        <label className="modalLabel">
+                          {t('portfolio.quantity')}
+                          <input
+                            ref={cryptoSellQtyRef}
+                            className="profitabilityInput"
+                            type="text"
+                            inputMode="decimal"
+                            value={cryptoSellForm.qty}
+                            onChange={(e) =>
+                              setCryptoSellForm((prev) => ({
+                                ...prev,
+                                qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="modalLabel">
+                          {t('whatif.sellPricePerUnit')}
+                          <input
+                            className="profitabilityInput"
+                            type="text"
+                            inputMode="decimal"
+                            value={cryptoSellForm.sellPrice}
+                            onChange={(e) =>
+                              setCryptoSellForm((prev) => ({
+                                ...prev,
+                                sellPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="modalLabel">
+                          {t('whatif.sellFeeFlatOptional')}
+                          <input
+                            className="profitabilityInput"
+                            type="text"
+                            inputMode="decimal"
+                            value={cryptoSellForm.feeFlat}
+                            onChange={(e) =>
+                              setCryptoSellForm((prev) => ({
+                                ...prev,
+                                feeFlat: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        onClick={addCryptoHypotheticalSellToList}
+                      >
+                        {t('whatif.addHypotheticalSellToList')}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="profitabilityTableWrap">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchases">
+                      <thead>
+                        <tr>
+                          <th>{t('portfolio.assetClass')}</th>
+                          <th>{t('portfolio.asset')}</th>
+                          <th>{t('portfolio.quantity')}</th>
+                          <th>{t('whatif.sellPricePerUnit')}</th>
+                          <th>{t('whatif.sellFeeFlatOptional')}</th>
+                          <th>{t('whatif.estimatedProceeds')}</th>
+                          <th>{t('netWorth.actions')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sellRows.map((row, index) => {
+                          const quoteCcy = hypotheticalBuyQuoteCurrency(row);
+                          const fee = num(row.feeFlat);
+                          const feeAdj = Number.isFinite(fee) && fee > 0 ? fee : 0;
+                          const proceeds = Math.max(0, num(row.qty) * num(row.sellPrice) - feeAdj);
+                          return (
+                            <tr key={`${row.id || index}-sell-${row.symbol}`}>
+                              <td data-label={t('portfolio.assetClass')}>
+                                {row.assetClass === 'crypto' ? t('portfolio.cryptoPosition') : t('portfolio.stockPosition')}
+                              </td>
+                              <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                              <td data-label={t('portfolio.quantity')}>{row.qty}</td>
+                              <td data-label={t('whatif.sellPricePerUnit')}>{row.sellPrice}</td>
+                              <td data-label={t('whatif.sellFeeFlatOptional')}>{row.feeFlat === '' ? '—' : row.feeFlat}</td>
+                              <td data-label={t('whatif.estimatedProceeds')}>
+                                {hideValues ? '—' : formatCurrencyValue(proceeds, quoteCcy)}
+                              </td>
+                              <td data-label={t('netWorth.actions')}>
+                                <button
+                                  type="button"
+                                  className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
+                                  onClick={() => removeSellRow(index)}
+                                  aria-label={t('modals.remove')}
+                                  title={t('modals.remove')}
+                                >
+                                  -
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {sellRows.length === 0 && (
+                          <tr>
+                            <td colSpan={7}>{t('whatif.noHypotheticalSales')}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <h3 className="whatIfHypotheticalAggregateTitle">{t('whatif.hypotheticalSalesAggregateTitle')}</h3>
+                  <div className="profitabilityTableWrap whatIfHypotheticalAggregateWrap">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate">
+                      <thead>
+                        <tr>
+                          <th>{t('portfolio.asset')}</th>
+                          <th>{t('portfolio.quantity')}</th>
+                          <th>{t('whatif.estimatedProceeds')}</th>
+                          <th>{t('whatif.avgSellPrice')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aggregatedHypotheticalSells.map((row) => (
+                          <tr key={`sell-agg-${row.symbol}-${row.currency}`}>
+                            <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                            <td data-label={t('portfolio.quantity')}>
+                              {hideValues ? '—' : formatQty(row.totalQty)}
+                            </td>
+                            <td data-label={t('whatif.estimatedProceeds')}>
+                              {hideValues ? '—' : formatCurrencyValue(row.totalProceeds, row.currency)}
+                            </td>
+                            <td data-label={t('whatif.avgSellPrice')}>
+                              {hideValues ? '—' : formatCurrencyValue(row.avgSell, row.currency)}
+                            </td>
+                          </tr>
+                        ))}
+                        {aggregatedHypotheticalSells.length === 0 && (
+                          <tr>
+                            <td colSpan={4}>{t('whatif.hypotheticalSalesAggregateEmpty')}</td>
+                          </tr>
+                        )}
+                        {aggregatedHypotheticalSells.length > 0 &&
+                          hypotheticalAggregateProceedsSubtotals.map(([currency, totalProceeds]) => (
+                            <tr
+                              key={`sell-agg-subtotal-${currency}`}
+                              className="whatIfAggregateSubtotalRow"
+                            >
+                              <td data-label={t('portfolio.asset')}>
+                                {hypotheticalAggregateProceedsSubtotals.length > 1
+                                  ? `${t('whatif.hypotheticalAggregateSubtotal')} (${currency})`
+                                  : t('whatif.hypotheticalAggregateSubtotal')}
+                              </td>
+                              <td data-label={t('portfolio.quantity')}>—</td>
+                              <td data-label={t('whatif.estimatedProceeds')}>
+                                {hideValues ? '—' : formatCurrencyValue(totalProceeds, currency)}
+                              </td>
+                              <td data-label={t('whatif.avgSellPrice')}>—</td>
                             </tr>
                           ))}
                       </tbody>
@@ -1186,11 +1908,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     <input
                       type="checkbox"
                       className="whatIfToggleInput"
-                      checked={deductHypotheticalFromCash}
-                      onChange={(e) => setDeductHypotheticalFromCash(e.target.checked)}
+                      checked={adjustScenarioCashForHypotheticals}
+                      onChange={(e) => setAdjustScenarioCashForHypotheticals(e.target.checked)}
                     />
                     <span className="whatIfToggleSwitch" aria-hidden="true" />
-                    <span className="whatIfToggleText">{t('whatif.netWorthUseCashFunding')}</span>
+                    <span className="whatIfToggleText">{t('whatif.netWorthAdjustHypotheticalCash')}</span>
                   </label>
                   <div className="profitabilitySellDownResult rebalanceKpiRow">
                     <div className="profitabilityCard">

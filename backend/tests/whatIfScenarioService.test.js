@@ -84,4 +84,93 @@ test('computeWhatIfFromData computes base-currency portfolio totals via FX', () 
   assert.equal(result.portfolioBaseTotals.baseCurrency, 'CNY');
   assert.ok(result.portfolioBaseTotals.deltaValue > 70000);
   assert.ok(result.portfolioBaseTotals.hypotheticalCostBase >= 0);
+  assert.equal(result.portfolioBaseTotals.hypotheticalProceedsBase, 0);
+});
+
+test('computeWhatIfFromData applies hypothetical sale: qty, cost basis, proceeds base', () => {
+  const result = computeWhatIfFromData({
+    scenario: { id: 's1', name: 'Base', isActive: true },
+    targetPrices: [],
+    hypotheticalPurchases: [],
+    hypotheticalSales: [{ symbol: 'AAPL', qty: 4, sellPrice: 200, feeFlat: 10, currency: 'USD' }],
+    baselineRows: [
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        category: 'US Stock Assets',
+        currency: 'USD',
+        qty: 10,
+        purchasePrice: 100,
+        totalPurchaseCost: 1000,
+        currentPrice: 180,
+      },
+    ],
+    baselineTotalValue: 1800,
+    baselineTotalCost: 1000,
+    baseCurrency: 'USD',
+    fxRates: { USD: 1 },
+    fetchedPriceMap: new Map(),
+  });
+  const aapl = result.rows.find((r) => r.symbol === 'AAPL');
+  assert.equal(aapl.qty, 6);
+  assert.equal(Math.round(aapl.costBasis), 600);
+  assert.equal(aapl.avgCost, 100);
+  assert.equal(result.portfolioBaseTotals.hypotheticalProceedsBase, 790);
+});
+
+test('computeWhatIfFromData rejects sale exceeding scenario qty', () => {
+  assert.throws(
+    () =>
+      computeWhatIfFromData({
+        scenario: { id: 's1', name: 'Base', isActive: true },
+        targetPrices: [],
+        hypotheticalPurchases: [],
+        hypotheticalSales: [{ symbol: 'AAPL', qty: 11, sellPrice: 1, currency: 'USD' }],
+        baselineRows: [
+          {
+            symbol: 'AAPL',
+            name: 'Apple',
+            category: 'US Stock Assets',
+            currency: 'USD',
+            qty: 10,
+            purchasePrice: 100,
+            totalPurchaseCost: 1000,
+            currentPrice: 100,
+          },
+        ],
+        baselineTotalValue: 1000,
+        baselineTotalCost: 1000,
+        fetchedPriceMap: new Map(),
+      }),
+    /cannot sell 11/,
+  );
+});
+
+test('computeWhatIfFromData sale after hypothetical buy uses combined qty', () => {
+  const result = computeWhatIfFromData({
+    scenario: { id: 's1', name: 'Base', isActive: true },
+    targetPrices: [],
+    hypotheticalPurchases: [{ symbol: 'AAPL', qty: 5, buyPrice: 120, currency: 'USD' }],
+    hypotheticalSales: [{ symbol: 'AAPL', qty: 12, sellPrice: 150, currency: 'USD' }],
+    baselineRows: [
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        category: 'US Stock Assets',
+        currency: 'USD',
+        qty: 10,
+        purchasePrice: 100,
+        totalPurchaseCost: 1000,
+        currentPrice: 100,
+      },
+    ],
+    baselineTotalValue: 1000,
+    baselineTotalCost: 1000,
+    baseCurrency: 'USD',
+    fxRates: { USD: 1 },
+    fetchedPriceMap: new Map(),
+  });
+  const aapl = result.rows.find((r) => r.symbol === 'AAPL');
+  assert.equal(aapl.qty, 3);
+  assert.ok(result.portfolioBaseTotals.hypotheticalProceedsBase > 0);
 });

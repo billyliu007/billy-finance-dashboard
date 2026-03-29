@@ -6,9 +6,12 @@ import {
   createWhatIfScenario,
   deleteWhatIfScenario,
   listWhatIfHypotheticalPurchases,
+  listWhatIfHypotheticalSales,
   listWhatIfScenarios,
   listWhatIfTargetPrices,
   replaceWhatIfHypotheticalPurchases,
+  replaceWhatIfHypotheticalSales,
+  replaceWhatIfScenarioInputs,
   replaceWhatIfTargetPrices,
   setWhatIfScenarioActive,
   updateWhatIfScenario,
@@ -96,10 +99,14 @@ router.put(
       const scenarioId = req.params?.id;
       const targetRows = Array.isArray(req.body?.targetPrices) ? req.body.targetPrices : [];
       const buyRows = Array.isArray(req.body?.hypotheticalPurchases) ? req.body.hypotheticalPurchases : [];
-      await Promise.all([
-        replaceWhatIfTargetPrices({ userId, scenarioId, rows: targetRows }),
-        replaceWhatIfHypotheticalPurchases({ userId, scenarioId, rows: buyRows }),
-      ]);
+      const saleRows = Array.isArray(req.body?.hypotheticalSales) ? req.body.hypotheticalSales : [];
+      await replaceWhatIfScenarioInputs({
+        userId,
+        scenarioId,
+        targetRows,
+        buyRows,
+        saleRows,
+      });
       const baseCurrency = req.auth.user.baseCurrency || 'USD';
       const results = await computeWhatIfScenarioResults({ userId, scenarioId, baseCurrency });
       return res.json(results);
@@ -161,6 +168,35 @@ router.get(
       const scenarioId = req.params?.id;
       const hypotheticalPurchases = await listWhatIfHypotheticalPurchases({ userId, scenarioId });
       return res.json({ hypotheticalPurchases });
+    } catch (error) {
+      rethrowAsNotFoundOr400(error);
+    }
+  }),
+);
+
+router.put(
+  '/scenarios/:id/hypothetical-sales',
+  asyncHandler(async (req, res) => {
+    try {
+      const userId = req.auth.user.userId;
+      const scenarioId = req.params?.id;
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      const hypotheticalSales = await replaceWhatIfHypotheticalSales({ userId, scenarioId, rows });
+      return res.json({ hypotheticalSales });
+    } catch (error) {
+      rethrowAsNotFoundOr400(error);
+    }
+  }),
+);
+
+router.get(
+  '/scenarios/:id/hypothetical-sales',
+  asyncHandler(async (req, res) => {
+    try {
+      const userId = req.auth.user.userId;
+      const scenarioId = req.params?.id;
+      const hypotheticalSales = await listWhatIfHypotheticalSales({ userId, scenarioId });
+      return res.json({ hypotheticalSales });
     } catch (error) {
       rethrowAsNotFoundOr400(error);
     }

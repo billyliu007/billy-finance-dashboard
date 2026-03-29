@@ -6,6 +6,7 @@ import {
   getWhatIfScenarioById,
   listWhatIfTargetPrices,
   listWhatIfHypotheticalPurchases,
+  listWhatIfHypotheticalSales,
 } from '../repositories/whatIfScenarioRepository.js';
 import { listPortfolioPositions, listPositionTransactionAggregates } from '../repositories/financeRepository.js';
 
@@ -48,7 +49,7 @@ function cacheSet(key, value) {
   whatIfResultsCache.set(key, { value, expiresAt: Date.now() + WHATIF_RESULTS_CACHE_TTL_MS });
 }
 
-function stableInputsHash({ targetPrices = [], hypotheticalPurchases = [] }) {
+function stableInputsHash({ targetPrices = [], hypotheticalPurchases = [], hypotheticalSales = [] }) {
   const targets = (targetPrices || [])
     .map((r) => ({
       symbol: toUpper(r?.symbol),
@@ -68,7 +69,18 @@ function stableInputsHash({ targetPrices = [], hypotheticalPurchases = [] }) {
     .filter((r) => r.symbol && r.qty > 0 && r.buyPrice >= 0)
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
-  return JSON.stringify({ targets, buys });
+  // Order matters for sales (cumulative qty cap); preserve array order.
+  const sales = (hypotheticalSales || [])
+    .map((r) => ({
+      symbol: toUpper(r?.symbol),
+      qty: numberOrZero(r?.qty),
+      sellPrice: numberOrZero(r?.sellPrice),
+      feeFlat: r?.feeFlat == null || r?.feeFlat === '' ? null : numberOrZero(r.feeFlat),
+      currency: toUpper(r?.currency || '') || null,
+    }))
+    .filter((r) => r.symbol && r.qty > 0 && r.sellPrice >= 0);
+
+  return JSON.stringify({ targets, buys, sales });
 }
 
 function toUpper(value) {
@@ -162,6 +174,7 @@ export function computeWhatIfFromData({
   scenario,
   targetPrices,
   hypotheticalPurchases,
+  hypotheticalSales = [],
   baselineRows,
   baselineTotalValue,
   baselineTotalCost,
@@ -219,6 +232,37 @@ export function computeWhatIfFromData({
       scenarioCostBasis: qty * buyPrice,
       baselinePrice: 0,
     });
+  }
+
+  let saleIndex = 0;
+  for (const sale of hypotheticalSales || []) {
+    saleIndex += 1;
+    const symbol = toUpper(sale.symbol);
+    const qty = numberOrZero(sale.qty);
+    const sellPrice = numberOrZero(sale.sellPrice);
+    const feeFlat = sale?.feeFlat == null || sale?.feeFlat === '' ? 0 : numberOrZero(sale.feeFlat);
+    if (qty <= 0) continue;
+    const existing = rowsBySymbol.get(symbol);
+    if (!existing || numberOrZero(existing.scenarioQty) <= 0) {
+      throw new Error(
+        `Hypothetical sale row ${saleIndex}: no position or zero quantity for ${symbol} after hypothetical buys.`,
+      );
+    }
+    const available = numberOrZero(existing.scenarioQty);
+    if (qty > available + 1e-9) {
+      throw new Error(
+        `Hypothetical sale row ${saleIndex}: cannot sell ${qty} of ${symbol}; only ${available} available in scenario.`,
+      );
+    }
+    const costBasis = numberOrZero(existing.scenarioCostBasis);
+    const removedCost = available > 0 ? (costBasis * qty) / available : 0;
+    const nextQty = available - qty;
+    const nextCost = Math.max(0, costBasis - removedCost);
+    existing.scenarioQty = nextQty;
+    existing.scenarioCostBasis = nextCost;
+    existing.scenarioAvgCost = nextQty > 0 ? nextCost / nextQty : 0;
+    const rowCur = toUpper(sale.currency || existing.currency || 'USD') || 'USD';
+    existing.currency = rowCur;
   }
 
   const symbolsMissingBaselinePrice = Array.from(rowsBySymbol.values())
@@ -314,6 +358,16 @@ export function computeWhatIfFromData({
     const costBase = toBaseValue(qty * buyPrice, currency);
     return sum + (costBase == null ? 0 : costBase);
   }, 0);
+  portfolioBaseTotals.hypotheticalProceedsBase = (hypotheticalSales || []).reduce((sum, item) => {
+    const qty = numberOrZero(item?.qty);
+    const sellPrice = numberOrZero(item?.sellPrice);
+    const fee =
+      item?.feeFlat == null || item?.feeFlat === '' ? 0 : numberOrZero(item.feeFlat);
+    const proceeds = Math.max(0, qty * sellPrice - fee);
+    const currency = toUpper(item?.currency || 'USD');
+    const proceedsBase = toBaseValue(proceeds, currency);
+    return sum + (proceedsBase == null ? 0 : proceedsBase);
+  }, 0);
 
   const enrichedRows = scenarioRows.map((row) => ({
     ...row,
@@ -335,6 +389,7 @@ export function computeWhatIfFromData({
     portfolioBaseTotals,
     targetPrices,
     hypotheticalPurchases,
+    hypotheticalSales,
     rows: enrichedRows.sort((a, b) => a.symbol.localeCompare(b.symbol)),
   };
 }
@@ -345,14 +400,15 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
   if (!scenario) throw new Error('Scenario not found.');
 
   const tScenario = nowMs();
-  const [targetPrices, hypotheticalPurchases] = await Promise.all([
+  const [targetPrices, hypotheticalPurchases, hypotheticalSales] = await Promise.all([
     listWhatIfTargetPrices({ userId, scenarioId }),
     listWhatIfHypotheticalPurchases({ userId, scenarioId }),
+    listWhatIfHypotheticalSales({ userId, scenarioId }),
   ]);
   const tInputs = nowMs();
 
   const base = toUpper(baseCurrency || 'USD') || 'USD';
-  const inputsHash = stableInputsHash({ targetPrices, hypotheticalPurchases });
+  const inputsHash = stableInputsHash({ targetPrices, hypotheticalPurchases, hypotheticalSales });
   const cacheKey = `${String(userId)}:${String(scenarioId)}:${base}:${inputsHash}`;
   const cached = cacheGet(cacheKey);
   if (cached) {
@@ -394,6 +450,7 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
       [
         ...baselineRows.map((row) => toUpper(row.currency || 'USD')),
         ...hypotheticalPurchases.map((row) => toUpper(row.currency || 'USD')),
+        ...hypotheticalSales.map((row) => toUpper(row.currency || 'USD')),
       ].filter(Boolean),
     ),
   ];
@@ -409,8 +466,14 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
       [
         // Baseline holdings with no price (true missing)
         ...baselineRows.filter((row) => numberOrZero(row.currentPrice) <= 0).map((row) => toUpper(row.symbol)),
-        // Hypothetical purchase symbols should only be fetched if they are not already priced by baseline
+        // Hypothetical buy symbols should only be fetched if they are not already priced by baseline
         ...hypotheticalPurchases
+          .map((row) => toUpper(row.symbol))
+          .filter((sym) => {
+            const baselinePrice = baselinePriceBySymbol.get(sym);
+            return !Number.isFinite(baselinePrice) || baselinePrice <= 0;
+          }),
+        ...hypotheticalSales
           .map((row) => toUpper(row.symbol))
           .filter((sym) => {
             const baselinePrice = baselinePriceBySymbol.get(sym);
@@ -426,6 +489,7 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
     scenario,
     targetPrices,
     hypotheticalPurchases,
+    hypotheticalSales,
     baselineRows,
     baselineTotalValue,
     baselineTotalCost,
@@ -447,6 +511,7 @@ export async function computeWhatIfScenarioResults({ userId, scenarioId, baseCur
         baselineRows: baselineRows.length,
         targetPrices: Array.isArray(targetPrices) ? targetPrices.length : 0,
         hypotheticalPurchases: Array.isArray(hypotheticalPurchases) ? hypotheticalPurchases.length : 0,
+        hypotheticalSales: Array.isArray(hypotheticalSales) ? hypotheticalSales.length : 0,
         missingSymbols: symbolsMissingBaselinePrice.length,
       },
       missingSymbolsSample: symbolsMissingBaselinePrice.slice(0, 30),

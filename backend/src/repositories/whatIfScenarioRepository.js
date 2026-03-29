@@ -9,6 +9,61 @@ function normalizeCurrency(currency) {
   return cur || null;
 }
 
+function normalizeTargetPriceInputRows(resolvedRows) {
+  const bySymbol = new Map();
+  resolvedRows.forEach((item, index) => {
+    const symbol = normalizeSymbol(item?.symbol);
+    const targetPrice = Number(item?.targetPrice);
+    const currency = normalizeCurrency(item?.currency);
+    if (!symbol) throw new Error(`Target price row ${index + 1}: symbol is required.`);
+    if (!Number.isFinite(targetPrice) || targetPrice < 0) {
+      throw new Error(`Target price row ${index + 1}: targetPrice must be 0 or greater.`);
+    }
+    bySymbol.set(symbol, { symbol, targetPrice, currency });
+  });
+  return Array.from(bySymbol.values());
+}
+
+function normalizeHypotheticalPurchaseInputRows(resolvedRows) {
+  return resolvedRows.map((item, index) => {
+    if (item != null && item.sellPrice != null && item.sellPrice !== '') {
+      throw new Error(
+        `Hypothetical buy row ${index + 1}: sellPrice is not allowed on buy rows (use hypothetical sales).`,
+      );
+    }
+    const symbol = normalizeSymbol(item?.symbol);
+    const qty = Number(item?.qty);
+    const buyPrice = Number(item?.buyPrice);
+    const currency = normalizeCurrency(item?.currency);
+    if (!symbol) throw new Error(`Hypothetical buy row ${index + 1}: symbol is required.`);
+    if (!Number.isFinite(qty) || qty <= 0) throw new Error(`Hypothetical buy row ${index + 1}: qty must be > 0.`);
+    if (!Number.isFinite(buyPrice) || buyPrice < 0) {
+      throw new Error(`Hypothetical buy row ${index + 1}: buyPrice must be 0 or greater.`);
+    }
+    return { symbol, qty, buyPrice, currency };
+  });
+}
+
+function normalizeHypotheticalSaleInputRows(resolvedRows) {
+  return resolvedRows.map((item, index) => {
+    const symbol = normalizeSymbol(item?.symbol);
+    const qty = Number(item?.qty);
+    const sellPrice = Number(item?.sellPrice);
+    const feeRaw = item?.feeFlat;
+    const feeFlat = feeRaw == null || feeRaw === '' ? null : Number(feeRaw);
+    const currency = normalizeCurrency(item?.currency);
+    if (!symbol) throw new Error(`Hypothetical sale row ${index + 1}: symbol is required.`);
+    if (!Number.isFinite(qty) || qty <= 0) throw new Error(`Hypothetical sale row ${index + 1}: qty must be > 0.`);
+    if (!Number.isFinite(sellPrice) || sellPrice < 0) {
+      throw new Error(`Hypothetical sale row ${index + 1}: sellPrice must be 0 or greater.`);
+    }
+    if (feeFlat != null && (!Number.isFinite(feeFlat) || feeFlat < 0)) {
+      throw new Error(`Hypothetical sale row ${index + 1}: feeFlat must be 0 or greater when provided.`);
+    }
+    return { symbol, qty, sellPrice, feeFlat, currency };
+  });
+}
+
 export async function listWhatIfScenarios(userId) {
   const resolvedUserId = String(userId || '').trim();
   if (!resolvedUserId) throw new Error('Missing user id.');
@@ -148,20 +203,7 @@ export async function replaceWhatIfTargetPrices({ userId, scenarioId, rows }) {
   const resolvedRows = Array.isArray(rows) ? rows : [];
   const scenario = await getWhatIfScenarioById({ userId, scenarioId });
   if (!scenario) throw new Error('Scenario not found.');
-
-  // Deduplicate by symbol to avoid unique-key violations (last writer wins).
-  const bySymbol = new Map();
-  resolvedRows.forEach((item, index) => {
-    const symbol = normalizeSymbol(item?.symbol);
-    const targetPrice = Number(item?.targetPrice);
-    const currency = normalizeCurrency(item?.currency);
-    if (!symbol) throw new Error(`Target price row ${index + 1}: symbol is required.`);
-    if (!Number.isFinite(targetPrice) || targetPrice < 0) {
-      throw new Error(`Target price row ${index + 1}: targetPrice must be 0 or greater.`);
-    }
-    bySymbol.set(symbol, { symbol, targetPrice, currency });
-  });
-  const normalized = Array.from(bySymbol.values());
+  const normalized = normalizeTargetPriceInputRows(resolvedRows);
 
   return withTransaction(async (client) => {
     await client.query(`DELETE FROM whatif_target_prices WHERE scenario_id = $1`, [scenarioId]);
@@ -204,19 +246,7 @@ export async function replaceWhatIfHypotheticalPurchases({ userId, scenarioId, r
   const resolvedRows = Array.isArray(rows) ? rows : [];
   const scenario = await getWhatIfScenarioById({ userId, scenarioId });
   if (!scenario) throw new Error('Scenario not found.');
-
-  const normalized = resolvedRows.map((item, index) => {
-    const symbol = normalizeSymbol(item?.symbol);
-    const qty = Number(item?.qty);
-    const buyPrice = Number(item?.buyPrice);
-    const currency = normalizeCurrency(item?.currency);
-    if (!symbol) throw new Error(`Hypothetical purchase row ${index + 1}: symbol is required.`);
-    if (!Number.isFinite(qty) || qty <= 0) throw new Error(`Hypothetical purchase row ${index + 1}: qty must be > 0.`);
-    if (!Number.isFinite(buyPrice) || buyPrice < 0) {
-      throw new Error(`Hypothetical purchase row ${index + 1}: buyPrice must be 0 or greater.`);
-    }
-    return { symbol, qty, buyPrice, currency };
-  });
+  const normalized = normalizeHypotheticalPurchaseInputRows(resolvedRows);
 
   return withTransaction(async (client) => {
     await client.query(`DELETE FROM whatif_hypothetical_purchases WHERE scenario_id = $1`, [scenarioId]);
@@ -225,6 +255,96 @@ export async function replaceWhatIfHypotheticalPurchases({ userId, scenarioId, r
         `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency)
          VALUES ($1, $2, $3, $4, $5)`,
         [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency],
+      );
+    }
+    await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);
+    return normalized;
+  });
+}
+
+/**
+ * Replaces target prices, hypothetical buys, and hypothetical sales in one transaction.
+ * Prevents unique-key races from parallel per-table replaces or overlapping PUT /inputs requests.
+ */
+export async function replaceWhatIfScenarioInputs({ userId, scenarioId, targetRows, buyRows, saleRows }) {
+  const scenario = await getWhatIfScenarioById({ userId, scenarioId });
+  if (!scenario) throw new Error('Scenario not found.');
+  const normalizedTargets = normalizeTargetPriceInputRows(Array.isArray(targetRows) ? targetRows : []);
+  const normalizedPurchases = normalizeHypotheticalPurchaseInputRows(Array.isArray(buyRows) ? buyRows : []);
+  const normalizedSales = normalizeHypotheticalSaleInputRows(Array.isArray(saleRows) ? saleRows : []);
+
+  return withTransaction(async (client) => {
+    await client.query(`DELETE FROM whatif_target_prices WHERE scenario_id = $1`, [scenarioId]);
+    for (const row of normalizedTargets) {
+      await client.query(
+        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, currency)
+         VALUES ($1, $2, $3, $4)`,
+        [scenarioId, row.symbol, row.targetPrice, row.currency],
+      );
+    }
+    await client.query(`DELETE FROM whatif_hypothetical_purchases WHERE scenario_id = $1`, [scenarioId]);
+    for (const row of normalizedPurchases) {
+      await client.query(
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency],
+      );
+    }
+    await client.query(`DELETE FROM whatif_hypothetical_sales WHERE scenario_id = $1`, [scenarioId]);
+    for (const row of normalizedSales) {
+      await client.query(
+        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [scenarioId, row.symbol, row.qty, row.sellPrice, row.feeFlat, row.currency],
+      );
+    }
+    await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);
+    return {
+      targetPrices: normalizedTargets,
+      hypotheticalPurchases: normalizedPurchases,
+      hypotheticalSales: normalizedSales,
+    };
+  });
+}
+
+export async function listWhatIfHypotheticalSales({ userId, scenarioId }) {
+  const scenario = await getWhatIfScenarioById({ userId, scenarioId });
+  if (!scenario) throw new Error('Scenario not found.');
+  const result = await query(
+    `SELECT id,
+            symbol,
+            qty::float8 AS qty,
+            sell_price::float8 AS "sellPrice",
+            fee_flat::float8 AS "feeFlat",
+            COALESCE(NULLIF(TRIM(currency), ''), NULL) AS currency
+     FROM whatif_hypothetical_sales
+     WHERE scenario_id = $1
+     ORDER BY created_at ASC`,
+    [scenarioId],
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    symbol: normalizeSymbol(row.symbol),
+    qty: Number(row.qty) || 0,
+    sellPrice: Number(row.sellPrice) || 0,
+    feeFlat: row.feeFlat == null ? null : Number(row.feeFlat),
+    currency: normalizeCurrency(row.currency),
+  }));
+}
+
+export async function replaceWhatIfHypotheticalSales({ userId, scenarioId, rows }) {
+  const resolvedRows = Array.isArray(rows) ? rows : [];
+  const scenario = await getWhatIfScenarioById({ userId, scenarioId });
+  if (!scenario) throw new Error('Scenario not found.');
+  const normalized = normalizeHypotheticalSaleInputRows(resolvedRows);
+
+  return withTransaction(async (client) => {
+    await client.query(`DELETE FROM whatif_hypothetical_sales WHERE scenario_id = $1`, [scenarioId]);
+    for (const row of normalized) {
+      await client.query(
+        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [scenarioId, row.symbol, row.qty, row.sellPrice, row.feeFlat, row.currency],
       );
     }
     await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);

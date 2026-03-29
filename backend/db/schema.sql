@@ -123,6 +123,18 @@ CREATE TABLE IF NOT EXISTS whatif_hypothetical_purchases (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS whatif_hypothetical_sales (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scenario_id UUID NOT NULL REFERENCES whatif_scenarios (id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  qty NUMERIC(20, 8) NOT NULL,
+  sell_price NUMERIC(20, 8) NOT NULL,
+  fee_flat NUMERIC(20, 8),
+  currency TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE networth_history
 ADD COLUMN IF NOT EXISTS fx_rate_set_id UUID REFERENCES fx_daily_rates (id) ON DELETE SET NULL;
 
@@ -173,5 +185,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_whatif_scenarios_user_name ON whatif_scenar
 CREATE INDEX IF NOT EXISTS idx_whatif_scenarios_user_id ON whatif_scenarios (user_id);
 CREATE INDEX IF NOT EXISTS idx_whatif_target_prices_scenario_id ON whatif_target_prices (scenario_id);
 CREATE INDEX IF NOT EXISTS idx_whatif_hypothetical_purchases_scenario_id ON whatif_hypothetical_purchases (scenario_id);
+CREATE INDEX IF NOT EXISTS idx_whatif_hypothetical_sales_scenario_id ON whatif_hypothetical_sales (scenario_id);
 CREATE INDEX IF NOT EXISTS idx_coinbase_products_base_quote ON coinbase_products (base_currency, quote_currency);
 CREATE INDEX IF NOT EXISTS idx_us_stock_symbols_exchange ON us_stock_symbols (exchange);
