@@ -52,31 +52,65 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px 16px;
-  margin-bottom: 12px;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(15, 23, 42, 0.5);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.whatIfTargetToolbarHint {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #94a3b8;
-  line-height: 1.45;
-  max-width: 38rem;
-  min-width: 0;
+.whatIfTargetToolbar--unsaved {
+  border-color: rgba(45, 212, 191, 0.55);
+  background: rgba(13, 148, 136, 0.2);
+  box-shadow:
+    0 0 0 1px rgba(94, 234, 212, 0.12),
+    0 6px 22px rgba(15, 118, 110, 0.2);
 }
 
 .whatIfTargetToolbarActions {
   flex-shrink: 0;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Shown only in responsive layout (see max-width: 900px). Saves all target rows, same as toolbar. */
 .whatIfTargetInlineSaveBtn {
   display: none;
+}
+
+.whatIfTableTarget .whatIfTargetInput--unsaved {
+  border-color: rgba(45, 212, 191, 0.62);
+  background: rgba(13, 148, 136, 0.16);
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.12);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.whatIfTableTarget .whatIfTargetInput--unsaved:focus {
+  border-color: rgba(165, 243, 252, 0.75);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28);
+}
+
+.whatIfTableTarget .whatIfTargetInput--unsaved:focus-visible {
+  border-color: rgba(165, 243, 252, 0.75);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whatIfTableTarget .whatIfTargetInput--unsaved {
+    transition: none;
+  }
 }
 
 .whatIfSection {
@@ -149,9 +183,10 @@
 .whatIfStickySaveLeft {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
+  align-items: stretch;
+  gap: 8px;
   min-width: 0;
+  width: 100%;
 }
 
 .whatIfStickySaveBarInner {
@@ -187,6 +222,23 @@
   font-weight: 750;
   letter-spacing: 0.02em;
   cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    filter 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.whatIfStickySaveBtn--unsaved {
+  border-color: rgba(165, 243, 252, 0.65);
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.72), rgba(8, 145, 178, 0.58));
+  color: #f0fdfa;
+  font-weight: 800;
+  box-shadow:
+    0 0 0 1px rgba(165, 243, 252, 0.22),
+    0 4px 20px rgba(20, 184, 166, 0.28);
 }
 
 .whatIfStickySaveBtn:disabled {
@@ -255,13 +307,49 @@
   box-sizing: border-box;
 }
 
-.whatIfStickySaveHint {
-  margin: 6px 0 0;
-  font-size: 0.78rem;
-  color: #94a3b8;
-  line-height: 1.35;
-  max-width: 42rem;
-  min-width: 0;
+.whatIfStickyProgressTrack {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.whatIfStickyProgressIndeterminate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgba(45, 212, 191, 0.15),
+    rgba(94, 234, 212, 0.95),
+    rgba(34, 211, 238, 0.55)
+  );
+  animation: whatIfStickyProgressSlide 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
+}
+
+@keyframes whatIfStickyProgressSlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whatIfStickyProgressIndeterminate {
+    animation: none;
+    width: 100%;
+    opacity: 0.55;
+    transform: none;
+  }
 }
 
 .whatIfBuyCard .modalProductList {
@@ -343,6 +431,16 @@
   margin: 1.25rem 0 0.65rem;
   font-size: 1rem;
   font-weight: 600;
+  color: #e2e8f0;
+}
+
+.whatIfAggregateSubtotalRow td {
+  font-weight: 700;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+  padding-top: 10px;
+}
+
+.whatIfTablePurchasesAggregate .whatIfAggregateSubtotalRow td {
   color: #e2e8f0;
 }
 
@@ -438,12 +536,6 @@
     margin-right: 0;
     max-width: 100%;
     box-sizing: border-box;
-  }
-
-  .whatIfTargetToolbarHint {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    word-break: break-word;
   }
 
   .whatIfTargetToolbarActions .whatIfStickySaveBtn {
@@ -574,6 +666,21 @@
     cursor: pointer;
     flex-shrink: 0;
     touch-action: manipulation;
+    transition:
+      border-color 0.2s ease,
+      background 0.2s ease,
+      box-shadow 0.2s ease,
+      opacity 0.2s ease,
+      filter 0.2s ease;
+  }
+
+  .whatIfTargetInlineSaveBtn--unsaved {
+    border-color: rgba(165, 243, 252, 0.7);
+    background: linear-gradient(135deg, rgba(20, 184, 166, 0.78), rgba(8, 145, 178, 0.62));
+    color: #f0fdfa;
+    box-shadow:
+      0 0 0 1px rgba(165, 243, 252, 0.2),
+      0 3px 16px rgba(20, 184, 166, 0.3);
   }
 
   .whatIfTargetInlineSaveIcon {
@@ -591,12 +698,6 @@
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  .whatIfStickySaveHint {
-    max-width: 100%;
     overflow-wrap: anywhere;
     word-break: break-word;
   }

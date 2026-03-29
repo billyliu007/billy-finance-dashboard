@@ -381,8 +381,6 @@ export const translations = {
       featureADesc: 'Set target prices for existing holdings and revalue the portfolio.',
       applyTargetPrices: 'Apply target prices',
       saveTargetPricesMobileAria: 'Save target prices (applies all rows)',
-      targetPricesToolbarHint:
-        'Edits in this table are not saved until you apply them. You can also press Enter in a % or price field.',
       targetChangePct: 'Target change %',
       targetDeltaVsCurrentPct: 'Delta vs current %',
       currentPrice: 'Current price',
@@ -395,6 +393,7 @@ export const translations = {
       newHypotheticalAssetHint: 'Clear form to choose another asset',
       noHypotheticalPurchases: 'No hypothetical purchases added yet.',
       hypotheticalAggregateTitle: 'Totals by asset',
+      hypotheticalAggregateSubtotal: 'Sub-total',
       hypotheticalAggregateEmpty: 'No rows to aggregate yet.',
       resultsTitle: 'Scenario results',
       baselineValue: 'Baseline portfolio value',
@@ -416,8 +415,6 @@ export const translations = {
       autosaveSaving: 'Saving…',
       autosaveSaved: 'Saved',
       autosaveUnsaved: 'Unsaved changes',
-      saveStatusHint:
-        'Target prices: use Apply target prices above the table, or press Enter in a field. Hypothetical buys save when you add or remove a row.',
     },
   },
   zh: {
@@ -795,8 +792,6 @@ export const translations = {
       featureADesc: '为现有持仓设置目标价格，并按该价格重算组合市值。',
       applyTargetPrices: '应用目标价格',
       saveTargetPricesMobileAria: '保存目标价格（应用于全部行）',
-      targetPricesToolbarHint:
-        '此表中的修改需点击应用才会保存；也可在「%」或「目标价格」输入框内按 Enter。',
       targetChangePct: '目标变动 %',
       targetDeltaVsCurrentPct: '相对当前变动 %',
       currentPrice: '当前价格',
@@ -809,6 +804,7 @@ export const translations = {
       newHypotheticalAssetHint: '清空表单以选择其他资产',
       noHypotheticalPurchases: '尚未添加假设买入。',
       hypotheticalAggregateTitle: '按资产汇总',
+      hypotheticalAggregateSubtotal: '小计',
       hypotheticalAggregateEmpty: '暂无可汇总的数据。',
       resultsTitle: '方案结果',
       baselineValue: '基线组合市值',
@@ -830,8 +826,6 @@ export const translations = {
       autosaveSaving: '保存中…',
       autosaveSaved: '已保存',
       autosaveUnsaved: '有未保存的更改',
-      saveStatusHint:
-        '目标价格：使用表上方的「应用目标价格」，或在输入框内按 Enter。假设买入在添加或删除一行时保存。',
     },
   },
 };
