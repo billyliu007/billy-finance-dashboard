@@ -1,4 +1,16 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  LabelList,
+  Legend,
+  Rectangle,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { deleteJson, fetchJson, postJson, putJson } from '../utils/api.js';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
@@ -335,6 +347,172 @@ function mapApiHypotheticalSalesToSellRows(rows) {
   }));
 }
 
+function normalizeHypoBuyCsvHeaderCell(cell) {
+  return String(cell || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
+}
+
+function mapHypoBuyCsvHeaderToKey(normalized) {
+  const map = {
+    assetclass: 'assetClass',
+    type: 'assetClass',
+    asset_type: 'assetClass',
+    class: 'assetClass',
+    symbol: 'symbol',
+    ticker: 'symbol',
+    qty: 'qty',
+    quantity: 'qty',
+    buyprice: 'buyPrice',
+    buy_price: 'buyPrice',
+    price: 'buyPrice',
+    avg_cost: 'buyPrice',
+    avgcost: 'buyPrice',
+    cost_per_unit: 'buyPrice',
+    currency: 'currency',
+    ccy: 'currency',
+    quote: 'currency',
+  };
+  return map[normalized] || null;
+}
+
+function parseHypoBuyCsvQuotedLine(line) {
+  const result = [];
+  let i = 0;
+  let field = '';
+  let inQuotes = false;
+  while (i < line.length) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += c;
+      i++;
+    } else if (c === ',') {
+      result.push(field.trim());
+      field = '';
+      i++;
+    } else if (c === '"') {
+      inQuotes = true;
+      i++;
+    } else {
+      field += c;
+      i++;
+    }
+  }
+  result.push(field.trim());
+  return result;
+}
+
+function splitHypoBuyCsvLine(line, delimiter) {
+  if (delimiter === '\t') {
+    return line.split('\t').map((c) => c.trim());
+  }
+  return parseHypoBuyCsvQuotedLine(line);
+}
+
+function detectHypoBuyCsvDelimiter(line) {
+  const hasTab = line.includes('\t');
+  const hasComma = line.includes(',');
+  if (hasTab && !hasComma) return '\t';
+  return ',';
+}
+
+function normalizeHypoBuyCsvAssetClass(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  if (['stock', 'stocks', 'equity', 's'].includes(s)) return 'stock';
+  if (['crypto', 'c', 'coin'].includes(s)) return 'crypto';
+  return '';
+}
+
+/**
+ * Parses simulated-buy bulk CSV/TSV. Header row required: assetClass, symbol, qty, buyPrice; currency optional.
+ * @returns {{ ok: true, rows: Array<{ assetClass: string, symbol: string, qty: number, buyPrice: number, currency: string }> } | { ok: false, messageKey: string, vars: Record<string, string|number> }}
+ */
+function parseHypotheticalBuyCsv(text) {
+  const raw = String(text || '').replace(/^\uFEFF/, '');
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length < 2) {
+    return { ok: false, messageKey: 'whatif.hypoBuyCsvErrNeedRows', vars: {} };
+  }
+  const delim = detectHypoBuyCsvDelimiter(lines[0]);
+  const headerCells = splitHypoBuyCsvLine(lines[0], delim).map(normalizeHypoBuyCsvHeaderCell);
+  const col = {};
+  for (let i = 0; i < headerCells.length; i++) {
+    const key = mapHypoBuyCsvHeaderToKey(headerCells[i]);
+    if (key) col[key] = i;
+  }
+  const required = ['assetClass', 'symbol', 'qty', 'buyPrice'];
+  for (const req of required) {
+    if (col[req] == null) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrMissingHeader', vars: { field: req } };
+    }
+  }
+  const rows = [];
+  for (let li = 1; li < lines.length; li++) {
+    const lineNo = li + 1;
+    const cells = splitHypoBuyCsvLine(lines[li], delim);
+    const assetClass = normalizeHypoBuyCsvAssetClass(cells[col.assetClass] ?? '');
+    const symbol = normalizeText(cells[col.symbol] ?? '').toUpperCase();
+    const qty = num(cells[col.qty]);
+    const buyPrice = num(cells[col.buyPrice]);
+    let currency = col.currency != null ? String(cells[col.currency] ?? '').trim() : '';
+    currency = currency.toUpperCase() || 'USD';
+
+    if (!assetClass) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrBadAssetClass', vars: { line: lineNo } };
+    }
+    if (!symbol) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrBadSymbol', vars: { line: lineNo } };
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrBadQty', vars: { line: lineNo } };
+    }
+    if (!Number.isFinite(buyPrice) || buyPrice < 0) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrBadPrice', vars: { line: lineNo } };
+    }
+    if (assetClass === 'stock') {
+      currency = 'USD';
+    }
+    rows.push({ assetClass, symbol, qty, buyPrice, currency });
+  }
+  if (rows.length === 0) {
+    return { ok: false, messageKey: 'whatif.hypoBuyCsvErrNoValidRows', vars: {} };
+  }
+  return { ok: true, rows };
+}
+
+/** Hover overlay for weight chart bars — matches portfolio / profitability bar charts (stroke + glow). */
+function ActiveWhatIfWeightBar(props) {
+  const { x, y, width, height, fill } = props;
+  return (
+    <Rectangle
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      radius={[4, 4, 0, 0]}
+      fill={fill}
+      stroke="#67e8f9"
+      strokeWidth={2}
+      style={{ filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.45))' }}
+    />
+  );
+}
+
 export default function WhatIfScenariosPage({ hideValues }) {
   const { t } = useLanguage();
   const { netWorth, baseCurrency, portfolio } = useDashboard();
@@ -357,6 +535,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [adjustScenarioCashForHypotheticals, setAdjustScenarioCashForHypotheticals] = useState(true);
   const [stockForm, setStockForm] = useState(emptyStockForm());
   const [cryptoForm, setCryptoForm] = useState(emptyCryptoForm());
+  const [hypoBuyCsvText, setHypoBuyCsvText] = useState('');
+  const [hypoBuyCsvExpanded, setHypoBuyCsvExpanded] = useState(false);
   const [stockSellForm, setStockSellForm] = useState(emptyStockSellForm());
   const [cryptoSellForm, setCryptoSellForm] = useState(emptyCryptoSellForm());
   const [results, setResults] = useState(null);
@@ -397,6 +577,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setLastSavedHash(EMPTY_WHATIF_INPUTS_HASH);
     setStockForm(emptyStockForm());
     setCryptoForm(emptyCryptoForm());
+    setHypoBuyCsvText('');
+    setHypoBuyCsvExpanded(false);
     setStockSellForm(emptyStockSellForm());
     setCryptoSellForm(emptyCryptoSellForm());
     setResults(null);
@@ -1238,6 +1420,33 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setCryptoForm(emptyCryptoForm());
   }
 
+  function importHypotheticalBuysFromCsv() {
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
+    const parsed = parseHypotheticalBuyCsv(hypoBuyCsvText);
+    if (!parsed.ok) {
+      setError(t(parsed.messageKey, parsed.vars));
+      return;
+    }
+    setError('');
+    const baseTs = Date.now();
+    setBuyRows((prev) => {
+      const appended = parsed.rows.map((r, i) => ({
+        id: `csv-${baseTs}-${i}`,
+        assetClass: r.assetClass,
+        symbol: r.symbol,
+        qty: r.qty,
+        buyPrice: r.buyPrice,
+        currency: r.currency,
+      }));
+      const next = [...prev, ...appended];
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(next, sellRowsRef.current);
+      });
+      return next;
+    });
+    setHypoBuyCsvText('');
+  }
+
   function resetStockSellForm() {
     setError('');
     setStockSellForm(emptyStockSellForm());
@@ -1392,6 +1601,39 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   const resultRows = Array.isArray(results?.rows) ? results.rows : [];
+  const weightChartRows = useMemo(() => {
+    const raw = Array.isArray(results?.rows) ? results.rows : [];
+    return [...raw]
+      .sort((a, b) => String(a.symbol || '').localeCompare(String(b.symbol || '')))
+      .map((row) => {
+        const scenarioQty = num(row.qty);
+        const scenarioPrice = num(row.scenarioPrice);
+        const scenarioValue = num(row.scenarioValue);
+        const currency = String(row.currency || 'USD').trim() || 'USD';
+        return {
+          name: String(row.symbol || ''),
+          baselineWeight: Number(row.baselineWeightPct) || 0,
+          scenarioWeight: Number(row.scenarioWeightPct) || 0,
+          deltaVsBaseline:
+            (Number(row.scenarioWeightPct) || 0) - (Number(row.baselineWeightPct) || 0),
+          scenarioQty,
+          scenarioPrice,
+          scenarioValue,
+          currency,
+        };
+      });
+  }, [results]);
+
+  const formatWeightBarLabel = useCallback(
+    (value) => {
+      if (hideValues) return '';
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return '';
+      return `${n.toFixed(1)}%`;
+    },
+    [hideValues],
+  );
+
   const unsavedTargetSymbolSet = useMemo(() => {
     const set = new Set();
     for (const row of resultRows) {
@@ -1914,6 +2156,66 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       >
                         {t('whatif.addHypotheticalBuyToList')}
                       </button>
+                    </div>
+
+                    <div
+                      className={`whatIfBuyCard whatIfBuyCard--hypoBuy whatIfBuyCard--csvImport${
+                        hypoBuyCsvExpanded ? ' whatIfBuyCard--csvImportOpen' : ''
+                      }`}
+                    >
+                      <div className="whatIfBuyCardHeader whatIfCsvImportHeader">
+                        <button
+                          type="button"
+                          className="whatIfCsvFoldTrigger"
+                          onClick={() => setHypoBuyCsvExpanded((v) => !v)}
+                          aria-expanded={hypoBuyCsvExpanded}
+                        >
+                          <span className="whatIfCsvDisclosureChevron" aria-hidden>
+                            {hypoBuyCsvExpanded ? '▼' : '▶'}
+                          </span>
+                          <span className="whatIfCsvFoldTriggerTitle">{t('whatif.hypoBuyCsvTitle')}</span>
+                        </button>
+                        {hypoBuyCsvExpanded && (
+                          <button
+                            type="button"
+                            className="whatIfCsvClearBtn"
+                            onClick={() => setHypoBuyCsvText('')}
+                            disabled={isBusy || isPersistingInputs || !hypoBuyCsvText.trim()}
+                          >
+                            {t('whatif.hypoBuyCsvClear')}
+                          </button>
+                        )}
+                      </div>
+                      {hypoBuyCsvExpanded && (
+                        <div className="whatIfCsvImportPanel">
+                          <p className="whatIfCsvHelp">{t('whatif.hypoBuyCsvHelp')}</p>
+                          <label className="modalLabel">
+                            {t('whatif.hypoBuyCsvLabel')}
+                            <textarea
+                              className="whatIfCsvTextarea"
+                              value={hypoBuyCsvText}
+                              onChange={(e) => setHypoBuyCsvText(e.target.value)}
+                              placeholder={t('whatif.hypoBuyCsvPlaceholder')}
+                              spellCheck={false}
+                              rows={5}
+                              disabled={isBusy || isPersistingInputs}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoBuy"
+                            onClick={importHypotheticalBuysFromCsv}
+                            disabled={
+                              isBusy ||
+                              isPersistingInputs ||
+                              !String(hypoBuyCsvText || '').trim() ||
+                              !activeScenarioId
+                            }
+                          >
+                            {t('whatif.hypoBuyCsvImport')}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2872,46 +3174,137 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
                   </div>
 
-                  <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTableResults">
-                      <thead>
-                        <tr>
-                          <th>{t('portfolio.asset')}</th>
-                          <th>{t('portfolio.quantity')}</th>
-                          <th>{t('whatif.scenarioPrice')}</th>
-                          <th>{t('portfolio.marketValue')}</th>
-                          <th>{t('portfolio.portfolioWeight')}</th>
-                          <th>{t('whatif.weightDeltaVsBaseline')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resultRows.map((row) => (
-                          <tr key={row.symbol}>
-                            <td data-label={t('portfolio.asset')}>{row.symbol}</td>
-                            <td data-label={t('portfolio.quantity')}>{row.qty}</td>
-                            <td data-label={t('whatif.scenarioPrice')}>{hideValues ? '—' : formatCurrencyValue(row.scenarioPrice, row.currency || 'USD')}</td>
-                            <td data-label={t('portfolio.marketValue')}>{hideValues ? '—' : formatCurrencyValue(row.scenarioValue, row.currency || 'USD')}</td>
-                            <td data-label={t('portfolio.portfolioWeight')}>{formatPercent(row.scenarioWeightPct)}</td>
-                            <td
-                              data-label={t('whatif.weightDeltaVsBaseline')}
-                              className={
-                                hideValues
-                                  ? undefined
-                                  : (Number(row.scenarioWeightPct) || 0) - (Number(row.baselineWeightPct) || 0) >= 0
-                                    ? 'pos'
-                                    : 'neg'
-                              }
+                  <div className="whatIfWeightCharts">
+                    {weightChartRows.length === 0 ? (
+                      <p className="whatIfWeightChartsEmpty">{t('whatif.weightChartsNoData')}</p>
+                    ) : (
+                      <div className="whatIfWeightChartCard">
+                        <h3 className="whatIfWeightChartTitle">{t('whatif.weightChartCombinedTitle')}</h3>
+                        <div className="whatIfWeightChartArea whatIfWeightChartArea--vertical">
+                          <ResponsiveContainer width="100%" height={340}>
+                            <BarChart
+                              data={weightChartRows}
+                              margin={{ top: 28, right: 8, left: 0, bottom: 4 }}
+                              barCategoryGap="14%"
+                              barGap={4}
                             >
-                              {hideValues
-                                ? '—'
-                                : formatPercent(
-                                    (Number(row.scenarioWeightPct) || 0) - (Number(row.baselineWeightPct) || 0)
-                                  )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                              <XAxis
+                                dataKey="name"
+                                tick={{ fill: '#cbd5e1', fontSize: 11 }}
+                                tickLine={false}
+                                axisLine={{ stroke: '#475569' }}
+                                interval={0}
+                                angle={-28}
+                                textAnchor="end"
+                                height={48}
+                              />
+                              <YAxis
+                                type="number"
+                                domain={[
+                                  0,
+                                  (dataMax) =>
+                                    Number.isFinite(dataMax) ? Math.max(100, dataMax * 1.08) : 100,
+                                ]}
+                                tickFormatter={(v) => `${v}%`}
+                                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                                width={44}
+                              />
+                              <Tooltip
+                                cursor={{ fill: 'rgba(148, 163, 184, 0.07)' }}
+                                content={({ active, payload }) => {
+                                  if (!active || !payload?.length) return null;
+                                  const p = payload[0].payload;
+                                  return (
+                                    <div className="whatIfScenarioWeightTooltip">
+                                      <p className="whatIfScenarioWeightTooltipName">{p.name}</p>
+                                      <p className="whatIfScenarioWeightTooltipRow">
+                                        <span>{t('whatif.weightTooltipBaseline')}</span>
+                                        <span>{hideValues ? '—' : formatPercent(p.baselineWeight)}</span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow">
+                                        <span>{t('whatif.weightTooltipScenario')}</span>
+                                        <span>{hideValues ? '—' : formatPercent(p.scenarioWeight)}</span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow">
+                                        <span>{t('whatif.weightDeltaVsBaseline')}</span>
+                                        <span
+                                          className={
+                                            hideValues
+                                              ? undefined
+                                              : p.deltaVsBaseline >= 0
+                                                ? 'pos'
+                                                : 'neg'
+                                          }
+                                        >
+                                          {hideValues ? '—' : formatPercent(p.deltaVsBaseline)}
+                                        </span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow whatIfScenarioWeightTooltipRow--divider">
+                                        <span>{t('whatif.weightTooltipScenarioQty')}</span>
+                                        <span>{hideValues ? '—' : formatQty(p.scenarioQty)}</span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow">
+                                        <span>{t('whatif.weightTooltipScenarioTargetPrice')}</span>
+                                        <span>
+                                          {hideValues
+                                            ? '—'
+                                            : `${formatPriceNumber(p.scenarioPrice, p.currency)} ${p.currency}`}
+                                        </span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow">
+                                        <span>{t('whatif.weightTooltipScenarioMarketValue')}</span>
+                                        <span>
+                                          {hideValues ? '—' : formatCurrencyValue(p.scenarioValue, p.currency)}
+                                        </span>
+                                      </p>
+                                    </div>
+                                  );
+                                }}
+                              />
+                              <Legend
+                                wrapperStyle={{ paddingTop: 6, color: 'var(--text-dim)', fontSize: 12 }}
+                                formatter={(value) => value}
+                                iconType="square"
+                                iconSize={10}
+                              />
+                              <Bar
+                                name={t('whatif.weightLegendBaseline')}
+                                dataKey="baselineWeight"
+                                fill="rgba(56, 189, 248, 0.35)"
+                                radius={[4, 4, 0, 0]}
+                                isAnimationActive={false}
+                                activeBar={<ActiveWhatIfWeightBar />}
+                              >
+                                <LabelList
+                                  dataKey="baselineWeight"
+                                  position="top"
+                                  fill="#cbd5e1"
+                                  fontSize={10}
+                                  formatter={formatWeightBarLabel}
+                                />
+                              </Bar>
+                              <Bar
+                                name={t('whatif.weightLegendScenario')}
+                                dataKey="scenarioWeight"
+                                fill="rgba(94, 234, 212, 0.52)"
+                                radius={[4, 4, 0, 0]}
+                                isAnimationActive={false}
+                                activeBar={<ActiveWhatIfWeightBar />}
+                              >
+                                <LabelList
+                                  dataKey="scenarioWeight"
+                                  position="top"
+                                  fill="#e0f2fe"
+                                  fontSize={10}
+                                  formatter={formatWeightBarLabel}
+                                />
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </section>
 

@@ -513,6 +513,121 @@
   gap: 12px;
 }
 
+.whatIfBuyCard--csvImport {
+  grid-column: 1 / -1;
+}
+
+.whatIfCsvImportHeader {
+  align-items: center;
+}
+
+.whatIfCsvFoldTrigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.whatIfCsvFoldTrigger:hover {
+  color: var(--text);
+}
+
+.whatIfCsvFoldTrigger:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.55);
+  outline-offset: 2px;
+}
+
+.whatIfCsvFoldTriggerTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.whatIfCsvDisclosureChevron {
+  flex-shrink: 0;
+  width: 1.1em;
+  color: var(--text-dim);
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.whatIfCsvImportPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.whatIfBuyCard--csvImport:not(.whatIfBuyCard--csvImportOpen) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.whatIfCsvHelp {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.whatIfCsvTextarea {
+  width: 100%;
+  min-height: 112px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  resize: vertical;
+}
+
+.whatIfCsvTextarea:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.22);
+}
+
+.whatIfCsvTextarea:disabled {
+  opacity: 0.55;
+}
+
+.whatIfCsvClearBtn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.whatIfCsvClearBtn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.whatIfCsvClearBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .whatIfBuyCard {
   border: 1px solid #334155;
   border-radius: 10px;
@@ -629,6 +744,97 @@
   flex-direction: column;
   gap: 14px;
   margin-bottom: 14px;
+}
+
+.whatIfWeightCharts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.whatIfWeightChartCard {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 12px 12px 8px;
+  box-sizing: border-box;
+}
+
+.whatIfWeightChartTitle {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  transition: color 0.15s ease;
+}
+
+.whatIfWeightChartCard:hover .whatIfWeightChartTitle {
+  color: #f1f5f9;
+}
+
+.whatIfWeightChartArea {
+  width: 100%;
+  min-height: 200px;
+}
+
+.whatIfWeightChartArea--vertical {
+  min-height: 300px;
+  height: 340px;
+}
+
+.whatIfWeightChartsEmpty {
+  margin: 0;
+  padding: 16px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.whatIfScenarioWeightTooltip {
+  background: var(--panel-strong);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 0.82rem;
+  min-width: 180px;
+}
+
+.whatIfScenarioWeightTooltipName {
+  margin: 0 0 8px;
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.whatIfScenarioWeightTooltipRow {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  line-height: 1.45;
+}
+
+.whatIfScenarioWeightTooltipRow + .whatIfScenarioWeightTooltipRow {
+  margin-top: 6px;
+}
+
+.whatIfScenarioWeightTooltipRow--divider {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.whatIfScenarioWeightTooltipRow .pos {
+  color: #34d399;
+  font-weight: 650;
+}
+
+.whatIfScenarioWeightTooltipRow .neg {
+  color: #f87171;
+  font-weight: 650;
 }
 
 /* Hypothetical cash toggle + first KPI row */

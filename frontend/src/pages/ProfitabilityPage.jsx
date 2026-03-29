@@ -37,9 +37,9 @@ function ActiveAttributionBar(props) {
       height={height}
       radius={4}
       fill={fill}
-      stroke="#67e8f9"
+      stroke="rgba(94, 234, 212, 0.85)"
       strokeWidth={2}
-      style={{ filter: 'drop-shadow(0 0 8px rgba(56,189,248,0.45))' }}
+      style={{ filter: 'drop-shadow(0 0 8px rgba(94, 234, 212, 0.35))' }}
     />
   );
 }
@@ -269,16 +269,23 @@ export default function ProfitabilityPage({ hideValues }) {
               <div className="profitabilityChartArea profitabilityChartArea--md">
                 <ResponsiveContainer>
                   <BarChart data={tradeReturnHistogram} margin={{ left: -14, right: 10, top: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis
                       dataKey="bucket"
                       padding={{ left: 0, right: 0 }}
                       allowDataOverflow
-                      tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 10 }}
+                      tick={{ fill: '#cbd5e1', fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={{ stroke: '#475569' }}
                       tickMargin={0}
                       interval={2}
                     />
-                    <YAxis width={42} tick={{ fill: 'rgba(226,232,240,0.8)', fontSize: 12 }} tickMargin={0} />
+                    <YAxis
+                      width={42}
+                      tick={{ fill: '#94a3b8', fontSize: 11 }}
+                      tickLine={false}
+                      tickMargin={0}
+                    />
                     <Tooltip
                       contentStyle={CHART_TOOLTIP_STYLE}
                       labelStyle={{ color: '#f8fafc' }}
@@ -288,7 +295,8 @@ export default function ProfitabilityPage({ hideValues }) {
                     <Bar
                       dataKey="count"
                       name="count"
-                      fill="#a78bfa"
+                      fill="rgba(94, 234, 212, 0.52)"
+                      radius={[4, 4, 0, 0]}
                       activeBar={<ActiveAttributionBar />}
                       barCategoryGap="0%"
                       barGap={0}
