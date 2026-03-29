@@ -81,6 +81,10 @@ export async function listWhatIfScenarios(userId) {
   return result.rows;
 }
 
+function isUniqueViolation(error) {
+  return Boolean(error && error.code === '23505');
+}
+
 export async function createWhatIfScenario({ userId, name, makeActive = false }) {
   const resolvedUserId = String(userId || '').trim();
   const scenarioName = String(name || '').trim();
@@ -94,17 +98,133 @@ export async function createWhatIfScenario({ userId, name, makeActive = false })
         resolvedUserId,
       ]);
     }
-    const result = await client.query(
-      `INSERT INTO whatif_scenarios (user_id, name, is_active)
-       VALUES ($1, $2, $3)
-       RETURNING id,
-                 name,
-                 is_active AS "isActive",
-                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "createdAtUtc",
-                 to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "updatedAtUtc"`,
-      [resolvedUserId, scenarioName, Boolean(makeActive)],
-    );
+    let result;
+    try {
+      result = await client.query(
+        `INSERT INTO whatif_scenarios (user_id, name, is_active)
+         VALUES ($1, $2, $3)
+         RETURNING id,
+                   name,
+                   is_active AS "isActive",
+                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "createdAtUtc",
+                   to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "updatedAtUtc"`,
+        [resolvedUserId, scenarioName, Boolean(makeActive)],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new Error('A scenario with this name already exists.');
+      }
+      throw error;
+    }
     return result.rows[0];
+  });
+}
+
+/**
+ * Copies target prices, hypothetical purchases, and hypothetical sales into a new scenario.
+ * Name must be unique per user (case-insensitive), same as create.
+ */
+export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, makeActive = true }) {
+  const resolvedUserId = String(userId || '').trim();
+  const resolvedSourceId = String(sourceScenarioId || '').trim();
+  const scenarioName = String(name || '').trim();
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  if (!resolvedSourceId) throw new Error('Missing scenario id.');
+  if (!scenarioName) throw new Error('Scenario name is required.');
+  if (scenarioName.length > 120) throw new Error('Scenario name must be 120 chars or fewer.');
+
+  return withTransaction(async (client) => {
+    const found = await client.query(`SELECT id FROM whatif_scenarios WHERE user_id = $1 AND id = $2`, [
+      resolvedUserId,
+      resolvedSourceId,
+    ]);
+    if (found.rowCount === 0) throw new Error('Scenario not found.');
+
+    const targets = await client.query(
+      `SELECT symbol, target_price, currency
+       FROM whatif_target_prices
+       WHERE scenario_id = $1
+       ORDER BY symbol ASC`,
+      [resolvedSourceId],
+    );
+    const purchases = await client.query(
+      `SELECT symbol, qty, buy_price, currency
+       FROM whatif_hypothetical_purchases
+       WHERE scenario_id = $1
+       ORDER BY created_at ASC`,
+      [resolvedSourceId],
+    );
+    const sales = await client.query(
+      `SELECT symbol, qty, sell_price, fee_flat, currency
+       FROM whatif_hypothetical_sales
+       WHERE scenario_id = $1
+       ORDER BY created_at ASC`,
+      [resolvedSourceId],
+    );
+
+    if (makeActive) {
+      await client.query(`UPDATE whatif_scenarios SET is_active = FALSE, updated_at = NOW() WHERE user_id = $1`, [
+        resolvedUserId,
+      ]);
+    }
+
+    let ins;
+    try {
+      ins = await client.query(
+        `INSERT INTO whatif_scenarios (user_id, name, is_active)
+         VALUES ($1, $2, $3)
+         RETURNING id,
+                   name,
+                   is_active AS "isActive",
+                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "createdAtUtc",
+                   to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "updatedAtUtc"`,
+        [resolvedUserId, scenarioName, Boolean(makeActive)],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new Error('A scenario with this name already exists.');
+      }
+      throw error;
+    }
+
+    const newId = ins.rows[0].id;
+
+    for (const row of targets.rows) {
+      await client.query(
+        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, currency)
+         VALUES ($1, $2, $3, $4)`,
+        [newId, normalizeSymbol(row.symbol), Number(row.target_price), normalizeCurrency(row.currency)],
+      );
+    }
+    for (const row of purchases.rows) {
+      await client.query(
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          newId,
+          normalizeSymbol(row.symbol),
+          Number(row.qty),
+          Number(row.buy_price),
+          normalizeCurrency(row.currency),
+        ],
+      );
+    }
+    for (const row of sales.rows) {
+      await client.query(
+        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          newId,
+          normalizeSymbol(row.symbol),
+          Number(row.qty),
+          Number(row.sell_price),
+          row.fee_flat == null ? null : Number(row.fee_flat),
+          normalizeCurrency(row.currency),
+        ],
+      );
+    }
+
+    return ins.rows[0];
   });
 }
 
@@ -115,15 +235,24 @@ export async function updateWhatIfScenario({ userId, scenarioId, name }) {
   if (!resolvedUserId) throw new Error('Missing user id.');
   if (!resolvedScenarioId) throw new Error('Missing scenario id.');
   if (!scenarioName) throw new Error('Scenario name is required.');
+  if (scenarioName.length > 120) throw new Error('Scenario name must be 120 chars or fewer.');
 
-  const result = await query(
-    `UPDATE whatif_scenarios
-     SET name = $3,
-         updated_at = NOW()
-     WHERE id = $2 AND user_id = $1
-     RETURNING id, name, is_active AS "isActive"`,
-    [resolvedUserId, resolvedScenarioId, scenarioName],
-  );
+  let result;
+  try {
+    result = await query(
+      `UPDATE whatif_scenarios
+       SET name = $3,
+           updated_at = NOW()
+       WHERE id = $2 AND user_id = $1
+       RETURNING id, name, is_active AS "isActive"`,
+      [resolvedUserId, resolvedScenarioId, scenarioName],
+    );
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new Error('A scenario with this name already exists.');
+    }
+    throw error;
+  }
   if (result.rowCount === 0) throw new Error('Scenario not found.');
   return result.rows[0];
 }

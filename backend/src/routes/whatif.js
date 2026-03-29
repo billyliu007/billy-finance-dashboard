@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import {
   createWhatIfScenario,
   deleteWhatIfScenario,
+  duplicateWhatIfScenario,
   listWhatIfHypotheticalPurchases,
   listWhatIfHypotheticalSales,
   listWhatIfScenarios,
@@ -41,6 +42,22 @@ router.post(
       const name = req.body?.name;
       const makeActive = req.body?.makeActive !== false;
       const scenario = await createWhatIfScenario({ userId, name, makeActive });
+      return res.status(201).json({ scenario });
+    } catch (error) {
+      rethrowAsBadRequest(error);
+    }
+  }),
+);
+
+router.post(
+  '/scenarios/:id/duplicate',
+  asyncHandler(async (req, res) => {
+    try {
+      const userId = req.auth.user.userId;
+      const sourceScenarioId = req.params?.id;
+      const name = req.body?.name;
+      const makeActive = req.body?.makeActive !== false;
+      const scenario = await duplicateWhatIfScenario({ userId, sourceScenarioId, name, makeActive });
       return res.status(201).json({ scenario });
     } catch (error) {
       rethrowAsBadRequest(error);

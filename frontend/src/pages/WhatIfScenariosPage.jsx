@@ -20,6 +20,9 @@ function num(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Same as `computeInputsHash([], [], [])` for empty editor state. */
+const EMPTY_WHATIF_INPUTS_HASH = JSON.stringify({ targetRows: [], purchaseRows: [], saleRows: [] });
+
 /** Default sell-price text from portfolio row market price (dashboard live quote). */
 function marketPriceDefaultStringForSymbol(tableRows, symbol) {
   const sym = String(symbol || '').trim().toUpperCase();
@@ -188,6 +191,85 @@ function sumHypotheticalSaleProceedsByQuoteBucket(sellRows) {
   return m;
 }
 
+/**
+ * Same sequencing as backend what-if: baseline book, apply hypothetical buys in list order,
+ * then each hypothetical sale (avg cost before the sale, proportional cost removal).
+ * Yields one entry per sell row for display (aligned with position sold-history columns).
+ */
+function hypotheticalSellRowMetricsSequence(portfolioTableRows, buyRows, sellRows) {
+  const bySymbol = new Map();
+  for (const row of portfolioTableRows || []) {
+    const sym = String(row.symbol || '').trim().toUpperCase();
+    if (!sym) continue;
+    bySymbol.set(sym, {
+      qty: num(row.qty),
+      costBasis: num(row.totalPurchaseCost),
+      currency: String(row.currency || 'USD').trim().toUpperCase() || 'USD',
+    });
+  }
+
+  function seedIfMissing(sym, sellRow) {
+    if (bySymbol.has(sym)) return;
+    const cur =
+      sellRow?.assetClass === 'stock'
+        ? 'USD'
+        : String(sellRow?.currency || 'USD').trim().toUpperCase() || 'USD';
+    bySymbol.set(sym, { qty: 0, costBasis: 0, currency: cur });
+  }
+
+  for (const buy of buyRows || []) {
+    const sym = String(buy.symbol || '').trim().toUpperCase();
+    if (!sym) continue;
+    const q = num(buy.qty);
+    if (!(q > 0)) continue;
+    if (!bySymbol.has(sym)) {
+      const cur =
+        buy.assetClass === 'stock'
+          ? 'USD'
+          : String(buy.currency || 'USD').trim().toUpperCase() || 'USD';
+      bySymbol.set(sym, { qty: 0, costBasis: 0, currency: cur });
+    }
+    const st = bySymbol.get(sym);
+    const addedCost = q * num(buy.buyPrice);
+    st.qty += q;
+    st.costBasis += addedCost;
+    if (buy.assetClass === 'crypto' && buy.currency) {
+      st.currency = String(buy.currency).trim().toUpperCase() || st.currency;
+    }
+  }
+
+  const out = [];
+  for (const sell of sellRows || []) {
+    const sym = String(sell.symbol || '').trim().toUpperCase();
+    seedIfMissing(sym, sell);
+    const st = bySymbol.get(sym);
+    const q = num(sell.qty);
+    const sellPrice = num(sell.sellPrice);
+    const proceeds = Math.max(0, q * sellPrice);
+
+    let costPerUnit = 0;
+    let realizedPl = 0;
+    let realizedReturnPct = 0;
+
+    if (st && st.qty > 1e-12) {
+      costPerUnit = st.costBasis / st.qty;
+      const costSold = q * costPerUnit;
+      realizedPl = proceeds - costSold;
+      realizedReturnPct = costSold <= 1e-12 ? 0 : (realizedPl / costSold) * 100;
+      const removedCost = (st.costBasis * q) / st.qty;
+      st.qty -= q;
+      st.costBasis = Math.max(0, st.costBasis - removedCost);
+    } else {
+      costPerUnit = 0;
+      realizedPl = proceeds;
+      realizedReturnPct = 0;
+    }
+
+    out.push({ costPerUnit, proceeds, realizedPl, realizedReturnPct });
+  }
+  return out;
+}
+
 function emptyStockSellForm() {
   return { selectedSymbol: '', qty: '', sellPrice: '', sellPct: 0 };
 }
@@ -225,6 +307,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [activeScenarioId, setActiveScenarioId] = useState('');
   const [newScenarioName, setNewScenarioName] = useState('');
   const [isAddingScenario, setIsAddingScenario] = useState(false);
+  const [isDuplicatingScenario, setIsDuplicatingScenario] = useState(false);
+  const [duplicateScenarioName, setDuplicateScenarioName] = useState('');
+  const [isRenamingScenario, setIsRenamingScenario] = useState(false);
+  const [renameScenarioName, setRenameScenarioName] = useState('');
   const [targetPrices, setTargetPrices] = useState([]);
   /** Last target rows accepted by the server; hypothetical saves use this so in-flight target edits are not persisted until blur/debounced save. */
   const [lastSyncedTargetPrices, setLastSyncedTargetPrices] = useState([]);
@@ -253,7 +339,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const lastSyncedTargetPricesRef = useRef([]);
   const buyRowsRef = useRef([]);
   const sellRowsRef = useRef([]);
-  const [lastSavedHash, setLastSavedHash] = useState('');
+  const [lastSavedHash, setLastSavedHash] = useState(EMPTY_WHATIF_INPUTS_HASH);
   const stockHypotheticalQtyRef = useRef(null);
   const cryptoHypotheticalQtyRef = useRef(null);
   const stockSellQtyRef = useRef(null);
@@ -271,6 +357,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setBuyRows([]);
     setSellRows([]);
     setLastSyncedTargetPrices([]);
+    setLastSavedHash(EMPTY_WHATIF_INPUTS_HASH);
     setStockForm(emptyStockForm());
     setCryptoForm(emptyCryptoForm());
     setStockSellForm(emptyStockSellForm());
@@ -511,7 +598,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setStockSellForm(emptyStockSellForm());
       setCryptoSellForm(emptyCryptoSellForm());
       setResults(null);
-      setLastSavedHash('');
+      setLastSavedHash(EMPTY_WHATIF_INPUTS_HASH);
       setIsScenarioLoading(false);
       blockInputPersistRef.current = false;
       return;
@@ -596,9 +683,27 @@ export default function WhatIfScenariosPage({ hideValues }) {
     await loadScenarioPayload(scenarioId);
   }
 
+  /** Names are unique per user (case-insensitive). Skip `excludeScenarioId` when renaming the same scenario. */
+  function scenarioNameIsTaken(trimmedName, excludeScenarioId = null) {
+    const lower = String(trimmedName || '').trim().toLowerCase();
+    if (!lower) return false;
+    return scenarios.some((s) => {
+      if (excludeScenarioId != null && s.id === excludeScenarioId) return false;
+      return String(s.name || '').trim().toLowerCase() === lower;
+    });
+  }
+
   async function handleCreateScenario() {
     const name = String(newScenarioName || '').trim();
     if (!name) return;
+    if (name.length > 120) {
+      setError(t('whatif.scenarioNameTooLong'));
+      return;
+    }
+    if (scenarioNameIsTaken(name)) {
+      setError(t('whatif.scenarioNameAlreadyExists'));
+      return;
+    }
     try {
       setIsSaving(true);
       setError('');
@@ -607,6 +712,98 @@ export default function WhatIfScenariosPage({ hideValues }) {
       const id = created?.scenario?.id;
       setNewScenarioName('');
       setIsAddingScenario(false);
+      resetScenarioEditorState();
+      await loadScenarios();
+      if (id) {
+        setActiveScenarioId(id);
+        await refreshCurrentScenario(id);
+      }
+    } catch (err) {
+      setError(err?.message || t('errors.failedUpdate'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function openDuplicateScenario() {
+    if (!activeScenarioId) return;
+    const src = scenarios.find((s) => s.id === activeScenarioId);
+    const base = src?.name != null ? String(src.name) : '';
+    setDuplicateScenarioName(base ? `${t('whatif.duplicateNamePrefix')} ${base}` : '');
+    setIsAddingScenario(false);
+    setIsRenamingScenario(false);
+    setRenameScenarioName('');
+    setIsDuplicatingScenario(true);
+    setError('');
+  }
+
+  function openRenameScenario() {
+    if (!activeScenarioId) return;
+    const src = scenarios.find((s) => s.id === activeScenarioId);
+    setRenameScenarioName(src?.name != null ? String(src.name) : '');
+    setIsAddingScenario(false);
+    setIsDuplicatingScenario(false);
+    setDuplicateScenarioName('');
+    setIsRenamingScenario(true);
+    setError('');
+  }
+
+  async function handleRenameScenario() {
+    if (!activeScenarioId) return;
+    const name = String(renameScenarioName || '').trim();
+    if (!name) return;
+    const current = scenarios.find((s) => s.id === activeScenarioId);
+    const currentName = current?.name != null ? String(current.name).trim() : '';
+    if (name === currentName) {
+      setIsRenamingScenario(false);
+      setRenameScenarioName('');
+      return;
+    }
+    if (name.length > 120) {
+      setError(t('whatif.scenarioNameTooLong'));
+      return;
+    }
+    if (scenarioNameIsTaken(name, activeScenarioId)) {
+      setError(t('whatif.scenarioNameAlreadyExists'));
+      return;
+    }
+    try {
+      setIsSaving(true);
+      setError('');
+      await putJson(`/api/whatif/scenarios/${activeScenarioId}`, { name });
+      setRenameScenarioName('');
+      setIsRenamingScenario(false);
+      await loadScenarios();
+    } catch (err) {
+      setError(err?.message || t('errors.failedUpdate'));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDuplicateScenario() {
+    if (!activeScenarioId) return;
+    const name = String(duplicateScenarioName || '').trim();
+    if (!name) return;
+    if (name.length > 120) {
+      setError(t('whatif.scenarioNameTooLong'));
+      return;
+    }
+    if (scenarioNameIsTaken(name)) {
+      setError(t('whatif.scenarioNameAlreadyExists'));
+      return;
+    }
+    try {
+      setIsSaving(true);
+      setError('');
+      if (!confirmDiscardIfDirty(isDirty)) return;
+      const created = await postJson(`/api/whatif/scenarios/${activeScenarioId}/duplicate`, {
+        name,
+        makeActive: true,
+      });
+      const id = created?.scenario?.id;
+      setDuplicateScenarioName('');
+      setIsDuplicatingScenario(false);
       resetScenarioEditorState();
       await loadScenarios();
       if (id) {
@@ -762,6 +959,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [aggregatedHypotheticalBuys]);
   const aggregatedHypotheticalSells = useMemo(() => aggregateHypotheticalSellRows(sellRows), [sellRows]);
+  const hypotheticalSellMetricsByIndex = useMemo(
+    () => hypotheticalSellRowMetricsSequence(portfolioTableRows, buyRows, sellRows),
+    [portfolioTableRows, buyRows, sellRows],
+  );
   const hypotheticalAggregateProceedsSubtotals = useMemo(() => {
     const m = new Map();
     for (const row of aggregatedHypotheticalSells) {
@@ -780,7 +981,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const targetSaveUiActive = hasUnsavedTargetPrices && !isPersistingInputs;
 
   useEffect(() => {
-    if (!isDirty) return;
+    if (!isDirty || isLoading || isScenarioLoading) return;
     const onBeforeUnload = (e) => {
       e.preventDefault();
       e.returnValue = '';
@@ -788,7 +989,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [isDirty]);
+  }, [isDirty, isLoading, isScenarioLoading]);
 
   async function saveAfterHypotheticalChange(nextBuyRows, nextSellRows) {
     if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
@@ -1113,6 +1314,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }, [buyRows, sellRows, netWorth?.overview?.cashRows]);
 
   const isBusy = isLoading || isScenarioLoading || isSaving;
+  const showAutosaveStickyBar = Boolean(activeScenarioId) && !isLoading && !isScenarioLoading;
 
   return (
     <section className="contentWrap">
@@ -1162,6 +1364,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         value={newScenarioName}
                         onChange={(e) => setNewScenarioName(e.target.value)}
                         placeholder={t('whatif.newScenarioPlaceholder')}
+                        maxLength={120}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleCreateScenario();
                           if (e.key === 'Escape') {
@@ -1194,17 +1397,154 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         ×
                       </button>
                     </>
+                  ) : isRenamingScenario ? (
+                    <>
+                      <input
+                        className="profitabilityInput whatIfScenarioDupNameInput"
+                        value={renameScenarioName}
+                        onChange={(e) => setRenameScenarioName(e.target.value)}
+                        placeholder={t('whatif.renameScenarioPlaceholder')}
+                        maxLength={120}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameScenario();
+                          if (e.key === 'Escape') {
+                            setIsRenamingScenario(false);
+                            setRenameScenarioName('');
+                            setError('');
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="headerIconBtn whatIfIconBtn"
+                        onClick={handleRenameScenario}
+                        disabled={isBusy || !String(renameScenarioName || '').trim()}
+                        aria-label={t('modals.save')}
+                        title={t('modals.save')}
+                      >
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        className="headerIconBtn whatIfIconBtn"
+                        onClick={() => {
+                          setIsRenamingScenario(false);
+                          setRenameScenarioName('');
+                          setError('');
+                        }}
+                        disabled={isBusy}
+                        aria-label={t('modals.cancel')}
+                        title={t('modals.cancel')}
+                      >
+                        ×
+                      </button>
+                    </>
+                  ) : isDuplicatingScenario ? (
+                    <>
+                      <input
+                        className="profitabilityInput whatIfScenarioDupNameInput"
+                        value={duplicateScenarioName}
+                        onChange={(e) => setDuplicateScenarioName(e.target.value)}
+                        placeholder={t('whatif.duplicateScenarioPlaceholder')}
+                        maxLength={120}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleDuplicateScenario();
+                          if (e.key === 'Escape') {
+                            setIsDuplicatingScenario(false);
+                            setDuplicateScenarioName('');
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="headerIconBtn whatIfIconBtn"
+                        onClick={handleDuplicateScenario}
+                        disabled={isBusy || !String(duplicateScenarioName || '').trim()}
+                        aria-label={t('modals.save')}
+                        title={t('modals.save')}
+                      >
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        className="headerIconBtn whatIfIconBtn"
+                        onClick={() => {
+                          setIsDuplicatingScenario(false);
+                          setDuplicateScenarioName('');
+                        }}
+                        disabled={isBusy}
+                        aria-label={t('modals.cancel')}
+                        title={t('modals.cancel')}
+                      >
+                        ×
+                      </button>
+                    </>
                   ) : (
-                    <button
-                      type="button"
-                      className="headerIconBtn whatIfIconBtn"
-                      onClick={() => setIsAddingScenario(true)}
-                      disabled={isBusy}
-                      aria-label={t('whatif.createScenario')}
-                      title={t('whatif.createScenario')}
-                    >
-                      +
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="headerIconBtn whatIfIconBtn"
+                        onClick={() => {
+                          setIsDuplicatingScenario(false);
+                          setDuplicateScenarioName('');
+                          setIsRenamingScenario(false);
+                          setRenameScenarioName('');
+                          setIsAddingScenario(true);
+                        }}
+                        disabled={isBusy}
+                        aria-label={t('whatif.createScenario')}
+                        title={t('whatif.createScenario')}
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        className="headerIconBtn whatIfIconBtn"
+                        onClick={openDuplicateScenario}
+                        disabled={!activeScenarioId || isBusy}
+                        aria-label={t('whatif.duplicateScenario')}
+                        title={t('whatif.duplicateScenario')}
+                      >
+                        <svg
+                          className="whatIfDupIcon"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <rect x="9" y="9" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.75" />
+                          <rect x="4" y="4" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.75" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="headerIconBtn whatIfIconBtn"
+                        onClick={openRenameScenario}
+                        disabled={!activeScenarioId || isBusy}
+                        aria-label={t('whatif.renameScenario')}
+                        title={t('whatif.renameScenario')}
+                      >
+                        <svg
+                          className="whatIfRenameIcon"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M12 20h8M4 13l9-9 3 3-9 9H4v-3z"
+                            stroke="currentColor"
+                            strokeWidth="1.75"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </>
                   )}
                   <button
                     type="button"
@@ -1822,26 +2162,48 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <tr>
                           <th>{t('portfolio.assetClass')}</th>
                           <th>{t('portfolio.asset')}</th>
-                          <th>{t('portfolio.quantity')}</th>
-                          <th>{t('whatif.sellPricePerUnit')}</th>
-                          <th>{t('whatif.estimatedProceeds')}</th>
+                          <th>{t('modals.historyTableQty')}</th>
+                          <th>{t('modals.historyTableSellPrice')}</th>
+                          <th>{t('modals.historyTableCostPerUnit')}</th>
+                          <th>{t('modals.historyTableSaleAmount')}</th>
+                          <th>{t('modals.historyTableRealizedPl')}</th>
+                          <th>{t('modals.historyTableRealizedReturn')}</th>
                           <th>{t('netWorth.actions')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sellRows.map((row, index) => {
                           const quoteCcy = hypotheticalBuyQuoteCurrency(row);
-                          const proceeds = Math.max(0, num(row.qty) * num(row.sellPrice));
+                          const metrics = hypotheticalSellMetricsByIndex[index];
+                          const proceeds = metrics?.proceeds ?? Math.max(0, num(row.qty) * num(row.sellPrice));
+                          const costPu = metrics?.costPerUnit ?? 0;
+                          const realizedPl = metrics?.realizedPl ?? 0;
+                          const realizedPct = metrics?.realizedReturnPct ?? 0;
                           return (
                             <tr key={`${row.id || index}-sell-${row.symbol}`}>
                               <td data-label={t('portfolio.assetClass')}>
                                 {row.assetClass === 'crypto' ? t('portfolio.cryptoPosition') : t('portfolio.stockPosition')}
                               </td>
                               <td data-label={t('portfolio.asset')}>{row.symbol}</td>
-                              <td data-label={t('portfolio.quantity')}>{row.qty}</td>
-                              <td data-label={t('whatif.sellPricePerUnit')}>{row.sellPrice}</td>
-                              <td data-label={t('whatif.estimatedProceeds')}>
+                              <td data-label={t('modals.historyTableQty')}>{row.qty}</td>
+                              <td data-label={t('modals.historyTableSellPrice')}>{row.sellPrice}</td>
+                              <td data-label={t('modals.historyTableCostPerUnit')}>
+                                {hideValues ? '—' : formatCurrencyValue(costPu, quoteCcy)}
+                              </td>
+                              <td data-label={t('modals.historyTableSaleAmount')}>
                                 {hideValues ? '—' : formatCurrencyValue(proceeds, quoteCcy)}
+                              </td>
+                              <td
+                                data-label={t('modals.historyTableRealizedPl')}
+                                className={realizedPl >= 0 ? 'pos' : 'neg'}
+                              >
+                                {hideValues ? '—' : formatCurrencyValue(realizedPl, quoteCcy)}
+                              </td>
+                              <td
+                                data-label={t('modals.historyTableRealizedReturn')}
+                                className={realizedPl >= 0 ? 'pos' : 'neg'}
+                              >
+                                {hideValues ? '—' : formatPercent(realizedPct)}
                               </td>
                               <td data-label={t('netWorth.actions')}>
                                 <button
@@ -1859,7 +2221,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         })}
                         {sellRows.length === 0 && (
                           <tr>
-                            <td colSpan={6}>{t('whatif.noHypotheticalSales')}</td>
+                            <td colSpan={9}>{t('whatif.noHypotheticalSales')}</td>
                           </tr>
                         )}
                       </tbody>
@@ -2118,6 +2480,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     </div>
                   )}
                   <div className="whatIfResultsNetWorthBlock">
+                    <label className="whatIfToggleRow">
+                      <input
+                        type="checkbox"
+                        className="whatIfToggleInput"
+                        checked={adjustScenarioCashForHypotheticals}
+                        onChange={(e) => setAdjustScenarioCashForHypotheticals(e.target.checked)}
+                      />
+                      <span className="whatIfToggleSwitch" aria-hidden="true" />
+                      <span className="whatIfToggleText">{t('whatif.netWorthAdjustHypotheticalCash')}</span>
+                    </label>
                     <div className="profitabilitySellDownResult rebalanceKpiRow">
                       <div className="profitabilityCard">
                         <span className="profitabilityCardLabel">{t('whatif.baselineNetWorth')}</span>
@@ -2141,16 +2513,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         </small>
                       </div>
                     </div>
-                    <label className="whatIfToggleRow">
-                      <input
-                        type="checkbox"
-                        className="whatIfToggleInput"
-                        checked={adjustScenarioCashForHypotheticals}
-                        onChange={(e) => setAdjustScenarioCashForHypotheticals(e.target.checked)}
-                      />
-                      <span className="whatIfToggleSwitch" aria-hidden="true" />
-                      <span className="whatIfToggleText">{t('whatif.netWorthAdjustHypotheticalCash')}</span>
-                    </label>
                   </div>
 
                   <div className="profitabilitySellDownResult rebalanceKpiRow">
@@ -2248,7 +2610,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           </>
         )}
       </div>
-      {activeScenarioId && (
+      {showAutosaveStickyBar && (
         <div className="whatIfStickySaveBar" aria-live="polite">
           <div className="whatIfStickySaveBarInner">
             <div className="whatIfStickySaveLeft">
