@@ -271,6 +271,46 @@
   color: #99f6e4;
 }
 
+.whatIfHypoBuyAssetCell.positionAssetCell {
+  gap: 6px;
+}
+
+.whatIfHypoSellAssetCell.positionAssetCell {
+  gap: 6px;
+}
+
+.whatIfHypoSellDetailRow td {
+  padding: 0;
+  vertical-align: top;
+  background: rgba(67, 20, 7, 0.2);
+  border-top: none;
+}
+
+.whatIfHypoSellDetailWrap {
+  padding: 12px 14px 14px;
+  box-sizing: border-box;
+}
+
+.whatIfHypoSellDetailTable {
+  width: 100%;
+}
+
+.whatIfHypoBuyDetailRow td {
+  padding: 0;
+  vertical-align: top;
+  background: rgba(6, 78, 59, 0.14);
+  border-top: none;
+}
+
+.whatIfHypoBuyDetailWrap {
+  padding: 12px 14px 14px;
+  box-sizing: border-box;
+}
+
+.whatIfHypoBuyDetailTable {
+  width: 100%;
+}
+
 .whatIfHypotheticalAggregateTitle--hypoSell {
   color: #fdba74;
 }
@@ -932,6 +972,36 @@
 
   .whatIfTable td > * {
     min-width: 0;
+  }
+
+  .whatIfTable .whatIfHypoBuyDetailRow td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .whatIfTable .whatIfHypoBuyDetailRow td::before {
+    display: none;
+    content: '';
+  }
+
+  .whatIfTable .whatIfHypoBuyDetailWrap {
+    padding: 10px 8px 12px;
+  }
+
+  .whatIfTable .whatIfHypoSellDetailRow td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .whatIfTable .whatIfHypoSellDetailRow td::before {
+    display: none;
+    content: '';
+  }
+
+  .whatIfTable .whatIfHypoSellDetailWrap {
+    padding: 10px 8px 12px;
   }
 
   .whatIfTable .rebalanceTargetWrap {
