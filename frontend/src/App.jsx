@@ -10,7 +10,7 @@ import { SHOW_DEVELOPMENT_PAGE } from './constants.js';
 import NetWorthPage from './pages/NetWorthPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import ProfitabilityPage from './pages/ProfitabilityPage.jsx';
-import StrategySimulatorPage from './pages/StrategySimulatorPage.jsx';
+import RebalancePage from './pages/RebalancePage.jsx';
 import WhatIfScenariosPage from './pages/WhatIfScenariosPage.jsx';
 import DevelopmentPage from './pages/DevelopmentPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -113,8 +113,11 @@ export default function App() {
             <Route path="/overview" element={<Navigate to="/net-worth" replace />} />
             <Route path="/portfolio" element={<PortfolioPage hideValues={hideValues} />} />
             <Route path="/trading-performance" element={<ProfitabilityPage hideValues={hideValues} />} />
-            <Route path="/strategy-simulator" element={<StrategySimulatorPage hideValues={hideValues} />} />
-            <Route path="/what-if-scenarios" element={<WhatIfScenariosPage hideValues={hideValues} />} />
+            <Route path="/rebalance" element={<RebalancePage hideValues={hideValues} />} />
+            <Route path="/rebalance-sell-down" element={<Navigate to="/rebalance" replace />} />
+            <Route path="/strategy-simulator" element={<Navigate to="/rebalance" replace />} />
+            <Route path="/scenario-planning" element={<WhatIfScenariosPage hideValues={hideValues} />} />
+            <Route path="/what-if-scenarios" element={<Navigate to="/scenario-planning" replace />} />
             <Route path="/profitability" element={<Navigate to="/trading-performance" replace />} />
             {SHOW_DEVELOPMENT_PAGE && (
               <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />

@@ -1180,19 +1180,19 @@ h1 {
   gap: 12px;
 }
 
-/* Strategy simulator: rebalance table (slightly softer min-width vs generic profitability tables) */
-.profitabilityTable.strategyRebalanceTable {
+/* Rebalance page: weights table (slightly softer min-width vs generic profitability tables) */
+.profitabilityTable.rebalanceWeightsTable {
   min-width: min(100%, 640px);
 }
 
-.strategyRebalanceTargetWrap {
+.rebalanceTargetWrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-.strategyRebalancePctSuffix {
+.rebalancePctSuffix {
   color: #94a3b8;
   font-size: 0.86rem;
 }
@@ -1229,38 +1229,38 @@ h1 {
   min-width: 0;
 }
 
-/* Strategy simulator — card rows (aligns with main “compact” breakpoint @ 980px) */
+/* Rebalance page — card rows (aligns with main “compact” breakpoint @ 980px) */
 @media (max-width: 980px) {
-  .strategySimulator .profitabilityRebalanceMode {
+  .rebalancePage .profitabilityRebalanceMode {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
 
-  .strategySimulator .profitabilityRebalanceMode .profitabilityLabel {
+  .rebalancePage .profitabilityRebalanceMode .profitabilityLabel {
     width: auto;
     margin-bottom: 0;
   }
 
-  .strategySimulator .profitabilityRadioLabel {
+  .rebalancePage .profitabilityRadioLabel {
     width: 100%;
     box-sizing: border-box;
     padding: 6px 0;
   }
 
-  .strategySimulator .strategyRebalanceWrap {
+  .rebalancePage .rebalanceTableOuter {
     overflow-x: visible;
     border: none;
     background: transparent;
   }
 
-  .strategySimulator .profitabilityTable.strategyRebalanceTable {
+  .rebalancePage .profitabilityTable.rebalanceWeightsTable {
     min-width: 0;
     width: 100%;
     display: block;
   }
 
-  .strategySimulator .strategyRebalanceTable thead {
+  .rebalancePage .rebalanceWeightsTable thead {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -1272,11 +1272,11 @@ h1 {
     border: 0;
   }
 
-  .strategySimulator .strategyRebalanceTable tbody {
+  .rebalancePage .rebalanceWeightsTable tbody {
     display: block;
   }
 
-  .strategySimulator .strategyRebalanceTable tbody tr {
+  .rebalancePage .rebalanceWeightsTable tbody tr {
     display: block;
     margin-bottom: 12px;
     padding: 4px 12px 2px;
@@ -1285,7 +1285,7 @@ h1 {
     background: rgba(15, 23, 42, 0.55);
   }
 
-  .strategySimulator .strategyRebalanceTable td {
+  .rebalancePage .rebalanceWeightsTable td {
     display: grid;
     grid-template-columns: minmax(92px, 36%) 1fr;
     align-items: center;
@@ -1298,12 +1298,12 @@ h1 {
     word-break: break-word;
   }
 
-  .strategySimulator .strategyRebalanceTable tbody tr td:last-child {
+  .rebalancePage .rebalanceWeightsTable tbody tr td:last-child {
     border-bottom: none;
     padding-bottom: 8px;
   }
 
-  .strategySimulator .strategyRebalanceTable td::before {
+  .rebalancePage .rebalanceWeightsTable td::before {
     content: attr(data-label);
     color: #94a3b8;
     font-size: 0.74rem;
@@ -1311,27 +1311,27 @@ h1 {
     line-height: 1.3;
   }
 
-  .strategySimulator .strategyRebalanceCellVal {
+  .rebalancePage .rebalanceCellVal {
     min-width: 0;
   }
 
-  .strategySimulator .strategyRebalanceTargetWrap {
+  .rebalancePage .rebalanceTargetWrap {
     width: 100%;
     max-width: 100%;
   }
 
-  .strategySimulator .strategyRebalanceWeightInput {
+  .rebalancePage .rebalanceWeightInput {
     flex: 1;
     min-width: 0;
     width: auto;
     max-width: 160px;
   }
 
-  .strategySimulator .profitabilitySellDownResult {
+  .rebalancePage .profitabilitySellDownResult {
     grid-template-columns: 1fr;
   }
 
-  .strategySimulator .profitabilityResetBtn {
+  .rebalancePage .profitabilityResetBtn {
     width: 100%;
     margin-top: 8px;
   }

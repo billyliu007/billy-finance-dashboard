@@ -30,16 +30,16 @@ export default function SideNav() {
           {t('nav.tradingPerformance')}
         </NavLink>
         <NavLink
-          to="/strategy-simulator"
+          to="/scenario-planning"
           className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
         >
-          {t('nav.strategySimulator')}
+          {t('nav.scenarioPlanning')}
         </NavLink>
         <NavLink
-          to="/what-if-scenarios"
+          to="/rebalance"
           className={({ isActive }) => `navLink${isActive ? ' active' : ''}`}
         >
-          {t('nav.whatIfScenarios')}
+          {t('nav.rebalance')}
         </NavLink>
         {SHOW_DEVELOPMENT_PAGE && (
           <NavLink

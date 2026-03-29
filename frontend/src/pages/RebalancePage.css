@@ -1,10 +1,10 @@
-.strategyCardsRow {
+.rebalanceCardsRow {
   display: flex;
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.strategyModeCard {
+.rebalanceModeCard {
   flex: 1;
   background-color: var(--panel);
   border: 1px solid var(--line);
@@ -16,40 +16,40 @@
   color: var(--text-dim);
 }
 
-.strategyModeCard h3 {
+.rebalanceModeCard h3 {
   margin: 0 0 8px 0;
   color: var(--text);
   font-size: 1.1rem;
 }
 
-.strategyModeCard p {
+.rebalanceModeCard p {
   margin: 0;
   font-size: 0.9rem;
 }
 
-.strategyModeCard:hover {
+.rebalanceModeCard:hover {
   border-color: var(--accent);
   background-color: rgba(94, 234, 212, 0.05);
 }
 
-.strategyModeCard.active {
+.rebalanceModeCard.active {
   background-color: rgba(94, 234, 212, 0.1);
   border-color: var(--accent);
   color: var(--text);
 }
 
-.strategyKpiRow {
+.rebalanceKpiRow {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.strategyKpiRow .profitabilityCard {
+.rebalanceKpiRow .profitabilityCard {
   flex: 1;
 }
 
-.strategyTrackerRow {
+.rebalanceTrackerRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -60,52 +60,52 @@
   border: 1px solid var(--line);
 }
 
-.strategyTotalTracker {
+.rebalanceTotalTracker {
   font-size: 1.1rem;
 }
 
-.strategyTotalTracker.warn {
+.rebalanceTotalTracker.warn {
   color: var(--bad);
 }
 
-.strategyTotalTracker.ok {
+.rebalanceTotalTracker.ok {
   color: var(--good);
 }
 
-.strategyNormControls {
+.rebalanceNormControls {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.strategyNormControls .profitabilityRadioLabel {
+.rebalanceNormControls .profitabilityRadioLabel {
   margin: 0;
 }
 
-.strategyActionPlan {
+.rebalanceActionPlan {
   margin-top: 32px;
   padding-top: 24px;
   border-top: 1px dashed var(--line);
 }
 
-.strategyActionPlan h3 {
+.rebalanceActionPlan h3 {
   margin: 0 0 8px 0;
   color: var(--text);
 }
 
-.strategyActionPlan p {
+.rebalanceActionPlan p {
   margin: 0 0 16px 0;
   color: var(--text-dim);
   font-size: 0.9rem;
 }
 
-.strategyActionGrid {
+.rebalanceActionGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
 }
 
-.strategyActionCard {
+.rebalanceActionCard {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -115,11 +115,11 @@
   border-radius: 8px;
 }
 
-.strategyActionCard.buy {
+.rebalanceActionCard.buy {
   border-left: 4px solid var(--good);
 }
 
-.strategyActionCard.sell {
+.rebalanceActionCard.sell {
   border-left: 4px solid var(--bad);
 }
 
@@ -131,12 +131,12 @@
   letter-spacing: 0.5px;
 }
 
-.strategyActionCard.buy .actionBadge {
+.rebalanceActionCard.buy .actionBadge {
   background-color: rgba(52, 211, 153, 0.2);
   color: var(--good);
 }
 
-.strategyActionCard.sell .actionBadge {
+.rebalanceActionCard.sell .actionBadge {
   background-color: rgba(251, 113, 133, 0.2);
   color: var(--bad);
 }

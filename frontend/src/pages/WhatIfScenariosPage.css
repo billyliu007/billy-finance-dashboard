@@ -48,6 +48,37 @@
   }
 }
 
+.whatIfTargetToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.whatIfTargetToolbarHint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.45;
+  max-width: 38rem;
+  min-width: 0;
+}
+
+.whatIfTargetToolbarActions {
+  flex-shrink: 0;
+}
+
+/* Shown only in responsive layout (see max-width: 900px). Saves all target rows, same as toolbar. */
+.whatIfTargetInlineSaveBtn {
+  display: none;
+}
+
 .whatIfSection {
   display: flex;
   flex-direction: column;
@@ -111,20 +142,33 @@
   bottom: 0;
   z-index: 4;
   margin-top: 10px;
-  padding: 10px 0 0;
+  padding: 10px 0 max(10px, env(safe-area-inset-bottom, 0px));
   background: linear-gradient(to top, rgba(2, 6, 23, 0.92), rgba(2, 6, 23, 0));
+}
+
+.whatIfStickySaveLeft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  min-width: 0;
 }
 
 .whatIfStickySaveBarInner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 12px;
   padding: 10px 12px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: rgba(15, 23, 42, 0.92);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .whatIfStickySavedText {
@@ -205,6 +249,21 @@
   gap: 12px;
 }
 
+.whatIfAddHypotheticalToListBtn {
+  width: 100%;
+  margin-top: 12px;
+  box-sizing: border-box;
+}
+
+.whatIfStickySaveHint {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  max-width: 42rem;
+  min-width: 0;
+}
+
 .whatIfBuyCard .modalProductList {
   margin: 0;
   max-height: 170px;
@@ -280,23 +339,30 @@
   font-weight: 600;
 }
 
+.whatIfHypotheticalAggregateTitle {
+  margin: 1.25rem 0 0.65rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
 /* Keep scenario KPI cards aligned and prevent number overflow */
-.whatIfPanel .strategyKpiRow {
+.whatIfPanel .rebalanceKpiRow {
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
-.whatIfPanel .strategyKpiRow .profitabilityCard {
+.whatIfPanel .rebalanceKpiRow .profitabilityCard {
   min-width: 0;
   height: 100%;
 }
 
-.whatIfPanel .strategyKpiRow .profitabilityCardLabel {
+.whatIfPanel .rebalanceKpiRow .profitabilityCardLabel {
   min-height: 2.35em;
   align-items: flex-start;
   line-height: 1.25;
 }
 
-.whatIfPanel .strategyKpiRow .profitabilityCardValue {
+.whatIfPanel .rebalanceKpiRow .profitabilityCardValue {
   margin-top: 6px;
   font-size: clamp(1.1rem, 1.8vw, 2rem);
   line-height: 1.15;
@@ -324,6 +390,7 @@
   }
 
   .whatIfSection h2,
+  .whatIfSection h3.whatIfHypotheticalAggregateTitle,
   .whatIfSection .profitabilitySectionDesc {
     white-space: normal;
     overflow-wrap: anywhere;
@@ -331,24 +398,58 @@
   }
 
   .whatIfScenarioControls {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .whatIfScenarioPicker .profitabilitySelect {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .whatIfScenarioNameActions {
-    display: inline-flex;
-    justify-self: end;
-    align-self: end;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    justify-self: stretch;
+    width: 100%;
     gap: 8px;
   }
 
   .whatIfScenarioNameActions .profitabilityInput {
-    min-width: 140px;
-    width: min(180px, 42vw);
+    flex: 1 1 160px;
+    min-width: 0;
+    width: auto;
+    max-width: 100%;
   }
 
   .whatIfBuyForms {
     grid-template-columns: 1fr;
+  }
+
+  .whatIfTargetToolbar {
+    flex-direction: column;
+    align-items: stretch;
+    margin-left: 0;
+    margin-right: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .whatIfTargetToolbarHint {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .whatIfTargetToolbarActions .whatIfStickySaveBtn {
+    width: 100%;
+    min-height: 44px;
+    touch-action: manipulation;
   }
 
   .whatIfBuyCard .modalGrid {
@@ -416,32 +517,100 @@
   }
 
   .whatIfTableTarget td[data-label] .profitabilityInput,
-  .whatIfTableTarget td[data-label] .strategyRebalanceTargetWrap {
-    width: min(143px, 100%);
-    justify-self: start;
+  .whatIfTableTarget td[data-label] .rebalanceTargetWrap {
+    width: 100%;
+    max-width: 100%;
+    justify-self: stretch;
   }
 
   .whatIfTableTarget td[data-label] .profitabilityInput {
-    padding-left: 0;
-    padding-right: 8px;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding-left: 10px;
+    padding-right: 10px;
+    touch-action: manipulation;
   }
 
   .whatIfTable td > * {
     min-width: 0;
   }
 
-  .whatIfTable .strategyRebalanceTargetWrap {
+  .whatIfTable .rebalanceTargetWrap {
     width: 100%;
     max-width: 100%;
     min-width: 0;
     display: block;
   }
 
-  .whatIfPanel .strategyKpiRow .profitabilityCardValue {
+  .whatIfTable .rebalanceTargetWrap.whatIfTargetPriceFieldRow {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .whatIfTableTarget td[data-label] .whatIfTargetPriceFieldRow .profitabilityInput {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+  }
+
+  .whatIfTargetInlineSaveBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 12px;
+    border: 1px solid rgba(94, 234, 212, 0.55);
+    background: linear-gradient(120deg, rgba(14, 116, 144, 0.35), rgba(7, 89, 133, 0.25));
+    color: #ecfeff;
+    cursor: pointer;
+    flex-shrink: 0;
+    touch-action: manipulation;
+  }
+
+  .whatIfTargetInlineSaveIcon {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .whatIfTargetInlineSaveBtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: saturate(0.65);
+  }
+
+  .whatIfPanel .rebalanceKpiRow .profitabilityCardValue {
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
     overflow-wrap: anywhere;
     word-break: break-word;
+  }
+
+  .whatIfStickySaveHint {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .whatIfStickySaveLeft {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Very narrow phones: keep scenario action icons from shrinking awkwardly */
+@media (max-width: 480px) {
+  .whatIfScenarioNameActions .profitabilityInput {
+    flex: 1 1 100%;
+    min-width: 0;
   }
 }

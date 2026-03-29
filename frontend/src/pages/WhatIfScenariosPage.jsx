@@ -2,10 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deleteJson, fetchJson, postJson, putJson } from '../utils/api.js';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
-import { formatCurrencyValue, formatMoney, formatPercent } from '../utils/formatters.js';
+import { formatCurrencyValue, formatMoney, formatPercent, formatQty } from '../utils/formatters.js';
 import { useDebouncedSearch } from '../hooks/useDebouncedSearch.js';
 import { normalizeText, sanitizeDecimalInput } from '../utils/strings.js';
 import './WhatIfScenariosPage.css';
+
+function cloneSyncedTargetRows(rows) {
+  return (rows || []).map((r) => ({
+    symbol: String(r?.symbol || '').trim().toUpperCase(),
+    targetPrice: r.targetPrice,
+    currency: r.currency ?? '',
+  }));
+}
 
 function num(value) {
   const n = Number(value);
@@ -34,6 +42,47 @@ function inferAssetClass(row) {
   return 'stock';
 }
 
+function hypotheticalBuyQuoteCurrency(row) {
+  if (row?.assetClass === 'stock') return 'USD';
+  return String(row?.currency || 'USD').trim().toUpperCase() || 'USD';
+}
+
+/** USDT/USDC treated as USD for “Totals by asset” so stablecoin lines merge per symbol. */
+function aggregateHypotheticalQuoteBucket(quoteCode) {
+  const c = String(quoteCode || 'USD').trim().toUpperCase() || 'USD';
+  if (c === 'USDT' || c === 'USDC') return 'USD';
+  return c;
+}
+
+/** One row per (symbol, quote bucket): summed qty, cost, and volume-weighted avg price. */
+function aggregateHypotheticalBuyRows(rows) {
+  const map = new Map();
+  for (const row of rows || []) {
+    const sym = String(row?.symbol || '').trim().toUpperCase();
+    if (!sym) continue;
+    const q = num(row.qty);
+    if (!(q > 0)) continue;
+    const quoteCcy = hypotheticalBuyQuoteCurrency(row);
+    const bucketCcy = aggregateHypotheticalQuoteBucket(quoteCcy);
+    const key = `${sym}\0${bucketCcy}`;
+    const lineCost = q * num(row.buyPrice);
+    if (!Number.isFinite(lineCost)) continue;
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { symbol: sym, currency: bucketCcy, totalQty: q, totalCost: lineCost });
+    } else {
+      prev.totalQty += q;
+      prev.totalCost += lineCost;
+    }
+  }
+  return Array.from(map.values())
+    .map((r) => ({
+      ...r,
+      avgCost: r.totalQty > 0 ? r.totalCost / r.totalQty : 0,
+    }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
 export default function WhatIfScenariosPage({ hideValues }) {
   const { t } = useLanguage();
   const { netWorth, baseCurrency } = useDashboard();
@@ -42,6 +91,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [newScenarioName, setNewScenarioName] = useState('');
   const [isAddingScenario, setIsAddingScenario] = useState(false);
   const [targetPrices, setTargetPrices] = useState([]);
+  /** Last target rows accepted by the server; hypothetical saves use this so in-flight target edits are not persisted until blur/debounced save. */
+  const [lastSyncedTargetPrices, setLastSyncedTargetPrices] = useState([]);
   const [targetPricePctBySymbol, setTargetPricePctBySymbol] = useState({});
   const [buyRows, setBuyRows] = useState([]);
   const [deductHypotheticalFromCash, setDeductHypotheticalFromCash] = useState(true);
@@ -51,15 +102,29 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isScenarioLoading, setIsScenarioLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPersistingInputs, setIsPersistingInputs] = useState(false);
   const [error, setError] = useState('');
-  const skipNextAutoSaveRef = useRef(false);
+  const blockInputPersistRef = useRef(false);
+  const persistSeqRef = useRef(0);
+  const activeScenarioIdRef = useRef('');
+  const targetPricesRef = useRef([]);
+  const lastSyncedTargetPricesRef = useRef([]);
+  const buyRowsRef = useRef([]);
   const [lastSavedHash, setLastSavedHash] = useState('');
   const resultsHeaderRef = useRef(null);
+  const stockHypotheticalQtyRef = useRef(null);
+  const cryptoHypotheticalQtyRef = useRef(null);
+
+  activeScenarioIdRef.current = activeScenarioId;
+  targetPricesRef.current = targetPrices;
+  lastSyncedTargetPricesRef.current = lastSyncedTargetPrices;
+  buyRowsRef.current = buyRows;
 
   function resetScenarioEditorState() {
     setTargetPrices([]);
     setTargetPricePctBySymbol({});
     setBuyRows([]);
+    setLastSyncedTargetPrices([]);
     setStockForm(emptyStockForm());
     setCryptoForm(emptyCryptoForm());
     setResults(null);
@@ -137,9 +202,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   async function loadScenarioPayload(scenarioId) {
+    blockInputPersistRef.current = true;
     setIsScenarioLoading(true);
     if (!scenarioId) {
       setTargetPrices([]);
+      setLastSyncedTargetPrices([]);
       setTargetPricePctBySymbol({});
       setBuyRows([]);
       setStockForm(emptyStockForm());
@@ -147,6 +214,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setResults(null);
       setLastSavedHash('');
       setIsScenarioLoading(false);
+      blockInputPersistRef.current = false;
       return;
     }
     try {
@@ -184,6 +252,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
             : '';
       }
       setTargetPrices(prefilledTargets);
+      setLastSyncedTargetPrices(cloneSyncedTargetRows(prefilledTargets));
       setTargetPricePctBySymbol(pctBySymbol);
       const fetchedBuys = Array.isArray(resultRes?.hypotheticalPurchases) ? resultRes.hypotheticalPurchases : [];
       setBuyRows(
@@ -199,7 +268,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setStockForm(emptyStockForm());
       setCryptoForm(emptyCryptoForm());
       setResults(resultRes);
-      skipNextAutoSaveRef.current = true;
       setLastSavedHash(
         computeInputsHash(
           prefilledTargets,
@@ -215,6 +283,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       );
     } finally {
       setIsScenarioLoading(false);
+      blockInputPersistRef.current = false;
     }
   }
 
@@ -254,8 +323,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
       const id = created?.scenario?.id;
       setNewScenarioName('');
       setIsAddingScenario(false);
-      // Prevent autosave from writing the previously loaded scenario inputs while switching.
-      skipNextAutoSaveRef.current = true;
       resetScenarioEditorState();
       await loadScenarios();
       if (id) {
@@ -275,8 +342,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setIsSaving(true);
       setError('');
       if (!confirmDiscardIfDirty(isDirty)) return;
-      // Prevent autosave from persisting stale inputs during active scenario swap.
-      skipNextAutoSaveRef.current = true;
       resetScenarioEditorState();
       await postJson(`/api/whatif/scenarios/${nextId}/activate`, {});
       setActiveScenarioId(nextId);
@@ -332,13 +397,133 @@ export default function WhatIfScenariosPage({ hideValues }) {
     updateTargetPrice(sym, target, currency);
   }
 
+  const persistScenarioInputs = useCallback(async (scenarioId, nextTargetPrices, nextBuyRows) => {
+    if (!scenarioId) return false;
+    const dedupedTargetRows = new Map();
+    for (const row of nextTargetPrices || []) {
+      const symbol = String(row?.symbol || '').trim().toUpperCase();
+      const targetPrice = num(row?.targetPrice);
+      const currency = String(row?.currency || '').trim().toUpperCase() || null;
+      if (!symbol || targetPrice <= 0) continue;
+      // Last writer wins for duplicate symbols, preventing unique-key failures server-side.
+      dedupedTargetRows.set(symbol, { symbol, targetPrice, currency });
+    }
+    const targetRows = Array.from(dedupedTargetRows.values());
+    const purchaseRows = nextBuyRows
+      .map((row) => ({
+        symbol: String(row.symbol || '').trim().toUpperCase(),
+        qty: num(row.qty),
+        buyPrice: num(row.buyPrice),
+        currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
+      }))
+      .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0);
+
+    const seq = ++persistSeqRef.current;
+    setIsPersistingInputs(true);
+    setError('');
+    try {
+      const nextResults = await putJson(`/api/whatif/scenarios/${scenarioId}/inputs`, {
+        targetPrices: targetRows,
+        hypotheticalPurchases: purchaseRows,
+      });
+      if (seq !== persistSeqRef.current || scenarioId !== activeScenarioIdRef.current) {
+        return false;
+      }
+      setResults(nextResults);
+      return true;
+    } catch (err) {
+      if (seq === persistSeqRef.current && scenarioId === activeScenarioIdRef.current) {
+        throw err;
+      }
+      return false;
+    } finally {
+      if (seq === persistSeqRef.current) {
+        setIsPersistingInputs(false);
+      }
+    }
+  }, []);
+
+  const currentInputsHash = useMemo(() => computeInputsHash(targetPrices, buyRows), [buyRows, targetPrices]);
+  const aggregatedHypotheticalBuys = useMemo(() => aggregateHypotheticalBuyRows(buyRows), [buyRows]);
+  const isDirty = Boolean(activeScenarioId) && currentInputsHash !== lastSavedHash;
+  const hasUnsavedTargetPrices = useMemo(
+    () =>
+      Boolean(activeScenarioId) &&
+      computeInputsHash(targetPrices, []) !== computeInputsHash(lastSyncedTargetPrices, []),
+    [activeScenarioId, lastSyncedTargetPrices, targetPrices],
+  );
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
+
+  async function saveAfterHypotheticalChange(nextBuyRows) {
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
+    const sid = activeScenarioIdRef.current;
+    const tp = cloneSyncedTargetRows(lastSyncedTargetPricesRef.current);
+    const hashSnapshot = computeInputsHash(tp, nextBuyRows);
+    try {
+      const committed = await persistScenarioInputs(sid, tp, nextBuyRows);
+      if (!committed || activeScenarioIdRef.current !== sid) return;
+      setLastSavedHash(hashSnapshot);
+      setError('');
+    } catch (err) {
+      if (activeScenarioIdRef.current === sid) {
+        setError(err?.message || t('errors.failedUpdate'));
+      }
+    }
+  }
+
+  async function saveTargetPricesNow({ scrollToResults = false } = {}) {
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
+    const tp = cloneSyncedTargetRows(targetPricesRef.current);
+    const synced = lastSyncedTargetPricesRef.current;
+    if (computeInputsHash(tp, []) === computeInputsHash(synced, [])) return;
+    const sid = activeScenarioIdRef.current;
+    const br = buyRowsRef.current;
+    const hashSnapshot = computeInputsHash(tp, br);
+    try {
+      const committed = await persistScenarioInputs(sid, tp, br);
+      if (!committed || activeScenarioIdRef.current !== sid) return;
+      setLastSavedHash(hashSnapshot);
+      setLastSyncedTargetPrices(tp);
+      setError('');
+      if (scrollToResults) {
+        requestAnimationFrame(() => {
+          resultsHeaderRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    } catch (err) {
+      if (activeScenarioIdRef.current === sid) {
+        setError(err?.message || t('errors.failedUpdate'));
+      }
+    }
+  }
+
+  function handleTargetPriceFieldKeyDown(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    void saveTargetPricesNow({ scrollToResults: true });
+  }
+
   function removeBuyRow(index) {
     setBuyRows((prev) => {
-      return prev.filter((_, i) => i !== index);
+      const next = prev.filter((_, i) => i !== index);
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(next);
+      });
+      return next;
     });
   }
 
-  function addStockHypotheticalBuy() {
+  function addStockHypotheticalBuyToList() {
     const symbol = normalizeText(stockForm.selectedSymbol).toUpperCase();
     const qty = num(stockForm.qty);
     const buyPrice = num(stockForm.buyPrice);
@@ -355,14 +540,26 @@ export default function WhatIfScenariosPage({ hideValues }) {
       return;
     }
     setError('');
-    setBuyRows((prev) => [
-      ...prev,
-      { id: `stock-${Date.now()}`, assetClass: 'stock', symbol, qty, buyPrice, currency: 'USD' },
-    ]);
+    setBuyRows((prev) => {
+      const next = [
+        ...prev,
+        { id: `stock-${Date.now()}`, assetClass: 'stock', symbol, qty, buyPrice, currency: 'USD' },
+      ];
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(next);
+      });
+      return next;
+    });
+    setStockForm((prev) => ({ ...prev, qty: '', buyPrice: '' }));
+    requestAnimationFrame(() => stockHypotheticalQtyRef.current?.focus?.());
+  }
+
+  function resetStockHypotheticalForm() {
+    setError('');
     setStockForm(emptyStockForm());
   }
 
-  function addCryptoHypotheticalBuy() {
+  function addCryptoHypotheticalBuyToList() {
     const selected = cryptoProducts.find((item) => item.productId === cryptoForm.selectedProductId);
     const qty = num(cryptoForm.qty);
     const buyPrice = num(cryptoForm.buyPrice);
@@ -379,84 +576,31 @@ export default function WhatIfScenariosPage({ hideValues }) {
       return;
     }
     setError('');
-    setBuyRows((prev) => [
-      ...prev,
-      {
-        id: `crypto-${Date.now()}`,
-        assetClass: 'crypto',
-        symbol: String(selected.baseCurrency || '').toUpperCase(),
-        qty,
-        buyPrice,
-        currency: String(selected.quoteCurrency || 'USD').toUpperCase(),
-        productId: selected.productId,
-      },
-    ]);
-    setCryptoForm(emptyCryptoForm());
+    setBuyRows((prev) => {
+      const next = [
+        ...prev,
+        {
+          id: `crypto-${Date.now()}`,
+          assetClass: 'crypto',
+          symbol: String(selected.baseCurrency || '').toUpperCase(),
+          qty,
+          buyPrice,
+          currency: String(selected.quoteCurrency || 'USD').toUpperCase(),
+          productId: selected.productId,
+        },
+      ];
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(next);
+      });
+      return next;
+    });
+    setCryptoForm((prev) => ({ ...prev, qty: '', buyPrice: '' }));
+    requestAnimationFrame(() => cryptoHypotheticalQtyRef.current?.focus?.());
   }
 
-  const persistScenarioInputs = useCallback(
-    async (scenarioId, nextTargetPrices, nextBuyRows) => {
-      if (!scenarioId) return;
-      const dedupedTargetRows = new Map();
-      for (const row of nextTargetPrices || []) {
-        const symbol = String(row?.symbol || '').trim().toUpperCase();
-        const targetPrice = num(row?.targetPrice);
-        const currency = String(row?.currency || '').trim().toUpperCase() || null;
-        if (!symbol || targetPrice <= 0) continue;
-        // Last writer wins for duplicate symbols, preventing unique-key failures server-side.
-        dedupedTargetRows.set(symbol, { symbol, targetPrice, currency });
-      }
-      const targetRows = Array.from(dedupedTargetRows.values());
-      const purchaseRows = nextBuyRows
-        .map((row) => ({
-          symbol: String(row.symbol || '').trim().toUpperCase(),
-          qty: num(row.qty),
-          buyPrice: num(row.buyPrice),
-          currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
-        }))
-        .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0);
-
-      setIsSaving(true);
-      setError('');
-      try {
-        const nextResults = await putJson(`/api/whatif/scenarios/${scenarioId}/inputs`, {
-          targetPrices: targetRows,
-          hypotheticalPurchases: purchaseRows,
-        });
-        setResults(nextResults);
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [],
-  );
-
-  const currentInputsHash = useMemo(() => computeInputsHash(targetPrices, buyRows), [buyRows, targetPrices]);
-  const isDirty = Boolean(activeScenarioId) && currentInputsHash !== lastSavedHash;
-
-  useEffect(() => {
-    if (!isDirty) return;
-    const onBeforeUnload = (e) => {
-      e.preventDefault();
-      e.returnValue = '';
-      return '';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [isDirty]);
-
-  async function handleManualSave() {
-    if (!activeScenarioId) return;
-    try {
-      await persistScenarioInputs(activeScenarioId, targetPrices, buyRows);
-      setLastSavedHash(currentInputsHash);
-      // Bring results into view after save so users see the updated simulation immediately.
-      requestAnimationFrame(() => {
-        resultsHeaderRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-      });
-    } catch (err) {
-      setError(err?.message || t('errors.failedUpdate'));
-    }
+  function resetCryptoHypotheticalForm() {
+    setError('');
+    setCryptoForm(emptyCryptoForm());
   }
 
   const resultRows = Array.isArray(results?.rows) ? results.rows : [];
@@ -522,19 +666,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </select>
                 </label>
                 <div className="whatIfScenarioNameActions">
-                  {activeScenarioId && (
-                    <button
-                      type="button"
-                      className="headerIconBtn whatIfIconBtn"
-                      onClick={handleManualSave}
-                      disabled={isBusy || !isDirty}
-                      aria-label="Save scenario"
-                      title={isDirty ? 'Save changes' : 'No changes to save'}
-                    >
-                      ✓
-                    </button>
-                  )}
-                  {activeScenarioId && isDirty && <span className="whatIfUnsavedPill">Unsaved</span>}
                   {isAddingScenario ? (
                     <>
                       <input
@@ -603,81 +734,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
             {activeScenarioId && (
               <>
                 <section className="whatIfSection">
-                  <h2>{t('whatif.featureATitle')}</h2>
-                  <p className="profitabilitySectionDesc">{t('whatif.featureADesc')}</p>
-                  <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTableTarget">
-                      <thead>
-                        <tr>
-                          <th>{t('portfolio.asset')}</th>
-                          <th>{`${t('whatif.currentPrice')} $`}</th>
-                          <th>{t('whatif.targetDeltaVsCurrentPct')}</th>
-                          <th>{`${t('whatif.targetPrice')} $`}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resultRows.map((row) => {
-                          const targetRow = targetPrices.find((x) => String(x.symbol).toUpperCase() === String(row.symbol).toUpperCase());
-                          const targetCurrency = targetRow?.currency || row.currency || 'USD';
-                          return (
-                            <tr key={row.symbol}>
-                              <td data-label={t('portfolio.asset')}>{row.symbol}</td>
-                              <td data-label={`${t('whatif.currentPrice')} $`}>
-                                {hideValues
-                                  ? '—'
-                                  : formatPriceNumber(row.baselinePrice, targetCurrency)}
-                              </td>
-                              <td data-label={t('whatif.targetDeltaVsCurrentPct')}>
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  className="profitabilityInput"
-                                  value={targetPricePctBySymbol[row.symbol] ?? ''}
-                                  onChange={(e) =>
-                                    updateTargetPricePct(
-                                      row.symbol,
-                                      e.target.value,
-                                      row.baselinePrice,
-                                      targetCurrency,
-                                    )
-                                  }
-                                  placeholder="0.0"
-                                  disabled={num(row.baselinePrice) <= 0}
-                                />
-                              </td>
-                              <td data-label={`${t('whatif.targetPrice')} $`}>
-                                <span className="strategyRebalanceTargetWrap">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.0001"
-                                    className="profitabilityInput"
-                                    value={targetRow?.targetPrice ?? ''}
-                                    onChange={(e) => {
-                                      const nextVal = e.target.value;
-                                      updateTargetPrice(row.symbol, nextVal, targetCurrency);
-                                      const baseline = num(row.baselinePrice);
-                                      const nextNum = num(nextVal);
-                                      setTargetPricePctBySymbol((prev) => ({
-                                        ...prev,
-                                        [row.symbol]:
-                                          baseline > 0 && nextVal !== ''
-                                            ? (((nextNum - baseline) / baseline) * 100).toFixed(2)
-                                            : '',
-                                      }));
-                                    }}
-                                  />
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-
-                <section className="whatIfSection">
                   <h2>{t('whatif.featureBTitle')}</h2>
                   <p className="profitabilitySectionDesc">{t('whatif.featureBDesc')}</p>
                   <div className="whatIfBuyForms">
@@ -687,9 +743,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <button
                           type="button"
                           className="headerIconBtn whatIfIconBtn"
-                          onClick={addStockHypotheticalBuy}
-                          aria-label={t('whatif.addHypotheticalBuy')}
-                          title={t('whatif.addHypotheticalBuy')}
+                          onClick={resetStockHypotheticalForm}
+                          aria-label={t('whatif.newHypotheticalAsset')}
+                          title={t('whatif.newHypotheticalAssetHint')}
                         >
                           +
                         </button>
@@ -740,6 +796,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <label className="modalLabel">
                           {t('portfolio.quantity')}
                           <input
+                            ref={stockHypotheticalQtyRef}
                             className="profitabilityInput"
                             type="text"
                             inputMode="decimal"
@@ -768,6 +825,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           />
                         </label>
                       </div>
+                      <button
+                        type="button"
+                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        onClick={addStockHypotheticalBuyToList}
+                      >
+                        {t('whatif.addHypotheticalBuyToList')}
+                      </button>
                     </div>
 
                     <div className="whatIfBuyCard">
@@ -776,9 +840,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <button
                           type="button"
                           className="headerIconBtn whatIfIconBtn"
-                          onClick={addCryptoHypotheticalBuy}
-                          aria-label={t('whatif.addHypotheticalBuy')}
-                          title={t('whatif.addHypotheticalBuy')}
+                          onClick={resetCryptoHypotheticalForm}
+                          aria-label={t('whatif.newHypotheticalAsset')}
+                          title={t('whatif.newHypotheticalAssetHint')}
                         >
                           +
                         </button>
@@ -831,6 +895,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <label className="modalLabel">
                           {t('portfolio.quantity')}
                           <input
+                            ref={cryptoHypotheticalQtyRef}
                             className="profitabilityInput"
                             type="text"
                             inputMode="decimal"
@@ -859,6 +924,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           />
                         </label>
                       </div>
+                      <button
+                        type="button"
+                        className="modalBtn whatIfAddHypotheticalToListBtn"
+                        onClick={addCryptoHypotheticalBuyToList}
+                      >
+                        {t('whatif.addHypotheticalBuyToList')}
+                      </button>
                     </div>
                   </div>
 
@@ -870,34 +942,195 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           <th>{t('portfolio.asset')}</th>
                           <th>{t('portfolio.quantity')}</th>
                           <th>{t('modals.avgCostPerUnit')}</th>
+                          <th>{t('portfolio.totalCostBasis')}</th>
                           <th>{t('netWorth.actions')}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {buyRows.map((row, index) => (
-                          <tr key={`${row.id || index}-${row.symbol}`}>
-                            <td data-label={t('portfolio.assetClass')}>{row.assetClass === 'crypto' ? t('portfolio.cryptoPosition') : t('portfolio.stockPosition')}</td>
+                        {buyRows.map((row, index) => {
+                          const quoteCcy = hypotheticalBuyQuoteCurrency(row);
+                          const lineCost = num(row.qty) * num(row.buyPrice);
+                          return (
+                            <tr key={`${row.id || index}-${row.symbol}`}>
+                              <td data-label={t('portfolio.assetClass')}>
+                                {row.assetClass === 'crypto' ? t('portfolio.cryptoPosition') : t('portfolio.stockPosition')}
+                              </td>
+                              <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                              <td data-label={t('portfolio.quantity')}>{row.qty}</td>
+                              <td data-label={t('modals.avgCostPerUnit')}>{row.buyPrice}</td>
+                              <td data-label={t('portfolio.totalCostBasis')}>
+                                {hideValues ? '—' : formatCurrencyValue(lineCost, quoteCcy)}
+                              </td>
+                              <td data-label={t('netWorth.actions')}>
+                                <button
+                                  type="button"
+                                  className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
+                                  onClick={() => removeBuyRow(index)}
+                                  aria-label={t('modals.remove')}
+                                  title={t('modals.remove')}
+                                >
+                                  -
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {buyRows.length === 0 && (
+                          <tr>
+                            <td colSpan={6}>{t('whatif.noHypotheticalPurchases')}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <h3 className="whatIfHypotheticalAggregateTitle">{t('whatif.hypotheticalAggregateTitle')}</h3>
+                  <div className="profitabilityTableWrap whatIfHypotheticalAggregateWrap">
+                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate">
+                      <thead>
+                        <tr>
+                          <th>{t('portfolio.asset')}</th>
+                          <th>{t('portfolio.quantity')}</th>
+                          <th>{t('portfolio.totalCostBasis')}</th>
+                          <th>{t('portfolio.avgCostPerUnit')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aggregatedHypotheticalBuys.map((row) => (
+                          <tr key={`${row.symbol}-${row.currency}`}>
                             <td data-label={t('portfolio.asset')}>{row.symbol}</td>
-                            <td data-label={t('portfolio.quantity')}>{row.qty}</td>
-                            <td data-label={t('modals.avgCostPerUnit')}>{row.buyPrice}</td>
-                            <td data-label={t('netWorth.actions')}>
-                              <button
-                                type="button"
-                                className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
-                                onClick={() => removeBuyRow(index)}
-                                aria-label={t('modals.remove')}
-                                title={t('modals.remove')}
-                              >
-                                -
-                              </button>
+                            <td data-label={t('portfolio.quantity')}>
+                              {hideValues ? '—' : formatQty(row.totalQty)}
+                            </td>
+                            <td data-label={t('portfolio.totalCostBasis')}>
+                              {hideValues ? '—' : formatCurrencyValue(row.totalCost, row.currency)}
+                            </td>
+                            <td data-label={t('portfolio.avgCostPerUnit')}>
+                              {hideValues ? '—' : formatCurrencyValue(row.avgCost, row.currency)}
                             </td>
                           </tr>
                         ))}
-                        {buyRows.length === 0 && (
+                        {aggregatedHypotheticalBuys.length === 0 && (
                           <tr>
-                            <td colSpan={5}>{t('whatif.noHypotheticalPurchases')}</td>
+                            <td colSpan={4}>{t('whatif.hypotheticalAggregateEmpty')}</td>
                           </tr>
                         )}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="whatIfSection">
+                  <h2>{t('whatif.featureATitle')}</h2>
+                  <p className="profitabilitySectionDesc">{t('whatif.featureADesc')}</p>
+                  <div className="whatIfTargetToolbar">
+                    <p className="whatIfTargetToolbarHint">{t('whatif.targetPricesToolbarHint')}</p>
+                    <div className="whatIfTargetToolbarActions">
+                      <button
+                        type="button"
+                        className="whatIfStickySaveBtn"
+                        disabled={!hasUnsavedTargetPrices || isPersistingInputs}
+                        onClick={() => void saveTargetPricesNow({ scrollToResults: true })}
+                      >
+                        {t('whatif.applyTargetPrices')}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="profitabilityTableWrap">
+                    <table className="profitabilityTable whatIfTable whatIfTableTarget">
+                      <thead>
+                        <tr>
+                          <th>{t('portfolio.asset')}</th>
+                          <th>{`${t('whatif.currentPrice')} $`}</th>
+                          <th>{t('whatif.targetDeltaVsCurrentPct')}</th>
+                          <th>{`${t('whatif.targetPrice')} $`}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resultRows.map((row) => {
+                          const targetRow = targetPrices.find((x) => String(x.symbol).toUpperCase() === String(row.symbol).toUpperCase());
+                          const targetCurrency = targetRow?.currency || row.currency || 'USD';
+                          return (
+                            <tr key={row.symbol}>
+                              <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                              <td data-label={`${t('whatif.currentPrice')} $`}>
+                                {hideValues
+                                  ? '—'
+                                  : formatPriceNumber(row.baselinePrice, targetCurrency)}
+                              </td>
+                              <td data-label={t('whatif.targetDeltaVsCurrentPct')}>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  className="profitabilityInput"
+                                  value={targetPricePctBySymbol[row.symbol] ?? ''}
+                                  onChange={(e) =>
+                                    updateTargetPricePct(
+                                      row.symbol,
+                                      e.target.value,
+                                      row.baselinePrice,
+                                      targetCurrency,
+                                    )
+                                  }
+                                  onKeyDown={handleTargetPriceFieldKeyDown}
+                                  placeholder="0.0"
+                                  disabled={num(row.baselinePrice) <= 0}
+                                />
+                              </td>
+                              <td data-label={`${t('whatif.targetPrice')} $`}>
+                                <span className="rebalanceTargetWrap whatIfTargetPriceFieldRow">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    className="profitabilityInput"
+                                    value={targetRow?.targetPrice ?? ''}
+                                    onChange={(e) => {
+                                      const nextVal = e.target.value;
+                                      updateTargetPrice(row.symbol, nextVal, targetCurrency);
+                                      const baseline = num(row.baselinePrice);
+                                      const nextNum = num(nextVal);
+                                      setTargetPricePctBySymbol((prev) => ({
+                                        ...prev,
+                                        [row.symbol]:
+                                          baseline > 0 && nextVal !== ''
+                                            ? (((nextNum - baseline) / baseline) * 100).toFixed(2)
+                                            : '',
+                                      }));
+                                    }}
+                                    onKeyDown={handleTargetPriceFieldKeyDown}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="whatIfTargetInlineSaveBtn"
+                                    disabled={!hasUnsavedTargetPrices || isPersistingInputs}
+                                    aria-label={t('whatif.saveTargetPricesMobileAria')}
+                                    title={t('whatif.saveTargetPricesMobileAria')}
+                                    onClick={() => void saveTargetPricesNow({ scrollToResults: true })}
+                                  >
+                                    <svg
+                                      className="whatIfTargetInlineSaveIcon"
+                                      width="20"
+                                      height="20"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      aria-hidden="true"
+                                    >
+                                      <path
+                                        d="M20 6L9 17l-5-5"
+                                        stroke="currentColor"
+                                        strokeWidth="2.25"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    </svg>
+                                  </button>
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -915,7 +1148,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     <span className="whatIfToggleSwitch" aria-hidden="true" />
                     <span className="whatIfToggleText">{t('whatif.netWorthUseCashFunding')}</span>
                   </label>
-                  <div className="profitabilitySellDownResult strategyKpiRow">
+                  <div className="profitabilitySellDownResult rebalanceKpiRow">
                     <div className="profitabilityCard">
                       <span className="profitabilityCardLabel">{t('whatif.baselineNetWorth')}</span>
                       <span className="profitabilityCardValue">
@@ -939,7 +1172,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     </div>
                   </div>
 
-                  <div className="profitabilitySellDownResult strategyKpiRow">
+                  <div className="profitabilitySellDownResult rebalanceKpiRow">
                     <div className="profitabilityCard">
                       <span className="profitabilityCardLabel">{t('whatif.baselineUnrealizedPl')}</span>
                       <span className={`profitabilityCardValue ${baselineUnrealized >= 0 ? 'pos' : 'neg'}`}>
@@ -969,7 +1202,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     </div>
                   </div>
 
-                  <div className="profitabilitySellDownResult strategyKpiRow">
+                  <div className="profitabilitySellDownResult rebalanceKpiRow">
                     <div className="profitabilityCard">
                       <span className="profitabilityCardLabel">{t('whatif.baselineValue')}</span>
                       <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(baselineTotal)}</span>
@@ -986,7 +1219,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     </div>
                   </div>
 
-                  <div className="profitabilitySellDownResult strategyKpiRow">
+                  <div className="profitabilitySellDownResult rebalanceKpiRow">
                     <div className="profitabilityCard">
                       <span className="profitabilityCardLabel">{t('whatif.baselineCostBasis')}</span>
                       <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(baselineCostBasis)}</span>
@@ -1029,7 +1262,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
                 </section>
 
-                {isSaving && <p className="hint">{t('modals.saving')}</p>}
               </>
             )}
           </>
@@ -1039,20 +1271,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
         <div className="whatIfStickySaveBar" aria-live="polite">
           <div className="whatIfStickySaveBarInner">
             <div className="whatIfStickySaveLeft">
-              {isDirty ? (
-                <span className="whatIfUnsavedPill">Unsaved</span>
+              {isPersistingInputs ? (
+                <span className="whatIfStickySavedText">{t('whatif.autosaveSaving')}</span>
+              ) : isDirty ? (
+                <span className="whatIfUnsavedPill">{t('whatif.autosaveUnsaved')}</span>
               ) : (
-                <span className="whatIfStickySavedText">Saved</span>
+                <span className="whatIfStickySavedText">{t('whatif.autosaveSaved')}</span>
               )}
+              <p className="whatIfStickySaveHint">{t('whatif.saveStatusHint')}</p>
             </div>
-            <button
-              type="button"
-              className="whatIfStickySaveBtn"
-              onClick={handleManualSave}
-              disabled={isBusy || !isDirty}
-            >
-              Save & refresh results
-            </button>
           </div>
         </div>
       )}
