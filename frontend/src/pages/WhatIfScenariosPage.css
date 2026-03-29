@@ -279,6 +279,21 @@
   gap: 6px;
 }
 
+.whatIfHypoAggregateActionsTh {
+  text-align: right;
+  width: 3.25rem;
+  white-space: nowrap;
+}
+
+.whatIfHypoAggregateDeleteCell {
+  text-align: right;
+  vertical-align: middle;
+}
+
+.whatIfHypoAggregateBatchDeleteBtn {
+  flex-shrink: 0;
+}
+
 .whatIfHypoSellDetailRow td {
   padding: 0;
   vertical-align: top;
@@ -608,13 +623,20 @@
   text-align: right;
 }
 
-/* Hypothetical cash toggle above net worth KPI row; tight stack, then extra space before P/L row */
+/* Uniform vertical rhythm between scenario result KPI rows */
+.whatIfResultsKpiStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+/* Hypothetical cash toggle + first KPI row */
 .whatIfResultsNetWorthBlock {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  margin-bottom: 14px;
 }
 
 .whatIfResultsNetWorthBlock .rebalanceKpiRow {
@@ -676,6 +698,7 @@
 
 .whatIfHypoFundingCallout {
   margin-top: 4px;
+  margin-bottom: 24px;
   padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.28);

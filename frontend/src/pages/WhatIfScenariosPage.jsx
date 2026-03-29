@@ -1258,6 +1258,46 @@ export default function WhatIfScenariosPage({ hideValues }) {
     });
   }
 
+  /** Removes all hypothetical buy lines for one aggregate (symbol + quote bucket); one PUT /inputs. */
+  function batchRemoveHypotheticalBuysForAggregate(aggKey, symbolLabel) {
+    if (!aggKey) return;
+    if (!window.confirm(t('whatif.batchDeleteHypotheticalBuysConfirm', { symbol: symbolLabel }))) return;
+    setBuyRows((prev) => {
+      const next = prev.filter((r) => hypoBuyAggregateKey(r) !== aggKey);
+      if (next.length === prev.length) return prev;
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(next, sellRowsRef.current);
+      });
+      return next;
+    });
+    setExpandedHypoBuyKeys((prev) => {
+      if (!prev.has(aggKey)) return prev;
+      const n = new Set(prev);
+      n.delete(aggKey);
+      return n;
+    });
+  }
+
+  /** Removes all hypothetical sale lines for one aggregate (symbol + quote bucket); one PUT /inputs. */
+  function batchRemoveHypotheticalSellsForAggregate(aggKey, symbolLabel) {
+    if (!aggKey) return;
+    if (!window.confirm(t('whatif.batchDeleteHypotheticalSalesConfirm', { symbol: symbolLabel }))) return;
+    setSellRows((prev) => {
+      const next = prev.filter((r) => hypoSellAggregateKey(r) !== aggKey);
+      if (next.length === prev.length) return prev;
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(buyRowsRef.current, next);
+      });
+      return next;
+    });
+    setExpandedHypoSellKeys((prev) => {
+      if (!prev.has(aggKey)) return prev;
+      const n = new Set(prev);
+      n.delete(aggKey);
+      return n;
+    });
+  }
+
   function addStockHypotheticalSellToList() {
     const symbol = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
     const qty = num(stockSellForm.qty);
@@ -1888,6 +1928,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           <th>{t('portfolio.quantity')}</th>
                           <th>{t('portfolio.totalCostBasis')}</th>
                           <th>{t('portfolio.avgCostPerUnit')}</th>
+                          <th className="whatIfHypoAggregateActionsTh">{t('netWorth.actions')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1937,10 +1978,25 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 <td data-label={t('portfolio.avgCostPerUnit')}>
                                   {hideValues ? '—' : formatCurrencyValue(row.avgCost, row.currency)}
                                 </td>
+                                <td
+                                  className="whatIfHypoAggregateDeleteCell"
+                                  data-label={t('netWorth.actions')}
+                                >
+                                  <button
+                                    type="button"
+                                    className="headerIconBtn positionActionBtnDanger whatIfIconBtn whatIfHypoAggregateBatchDeleteBtn"
+                                    onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
+                                    disabled={lineCount === 0 || isPersistingInputs}
+                                    aria-label={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
+                                    title={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
+                                  >
+                                    ×
+                                  </button>
+                                </td>
                               </tr>
                               {isOpen && (
                                 <tr className="whatIfHypoBuyDetailRow">
-                                  <td colSpan={4}>
+                                  <td colSpan={5}>
                                     <div className="tableWrap whatIfHypoBuyDetailWrap">
                                       <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable whatIfHypoBuyDetailTable">
                                         <thead>
@@ -1988,7 +2044,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         })}
                         {aggregatedHypotheticalBuys.length === 0 && (
                           <tr>
-                            <td colSpan={4}>{t('whatif.noHypotheticalBuys')}</td>
+                            <td colSpan={5}>{t('whatif.noHypotheticalBuys')}</td>
                           </tr>
                         )}
                         {aggregatedHypotheticalBuys.length > 0 &&
@@ -2007,6 +2063,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 {hideValues ? '—' : formatCurrencyValue(totalCost, currency)}
                               </td>
                               <td data-label={t('portfolio.avgCostPerUnit')}>—</td>
+                              <td className="whatIfHypoAggregateDeleteCell" data-label={t('netWorth.actions')}>
+                                —
+                              </td>
                             </tr>
                           ))}
                       </tbody>
@@ -2314,6 +2373,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           <th>{t('modals.historyTableSaleAmount')}</th>
                           <th>{t('modals.historyTableRealizedPl')}</th>
                           <th>{t('modals.historyTableRealizedReturn')}</th>
+                          <th className="whatIfHypoAggregateActionsTh">{t('netWorth.actions')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2378,10 +2438,25 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 >
                                   {hideValues ? '—' : formatPercent(row.realizedPct)}
                                 </td>
+                                <td
+                                  className="whatIfHypoAggregateDeleteCell"
+                                  data-label={t('netWorth.actions')}
+                                >
+                                  <button
+                                    type="button"
+                                    className="headerIconBtn positionActionBtnDanger whatIfIconBtn whatIfHypoAggregateBatchDeleteBtn"
+                                    onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
+                                    disabled={lineCount === 0 || isPersistingInputs}
+                                    aria-label={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
+                                    title={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
+                                  >
+                                    ×
+                                  </button>
+                                </td>
                               </tr>
                               {isOpen && (
                                 <tr className="whatIfHypoSellDetailRow">
-                                  <td colSpan={7}>
+                                  <td colSpan={8}>
                                     <div className="tableWrap whatIfHypoSellDetailWrap">
                                       <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable whatIfHypoSellDetailTable">
                                         <thead>
@@ -2452,7 +2527,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         })}
                         {aggregatedHypotheticalSellSummary.length === 0 && (
                           <tr>
-                            <td colSpan={7}>{t('whatif.noHypotheticalSales')}</td>
+                            <td colSpan={8}>{t('whatif.noHypotheticalSales')}</td>
                           </tr>
                         )}
                         {aggregatedHypotheticalSellSummary.length > 0 &&
@@ -2489,6 +2564,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 className={sub.totalRealizedPl >= 0 ? 'pos' : 'neg'}
                               >
                                 {hideValues ? '—' : formatPercent(sub.realizedPct)}
+                              </td>
+                              <td className="whatIfHypoAggregateDeleteCell" data-label={t('netWorth.actions')}>
+                                —
                               </td>
                             </tr>
                           ))}
@@ -2692,6 +2770,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       </p>
                     </div>
                   )}
+                  <div className="whatIfResultsKpiStack">
                   <div className="whatIfResultsNetWorthBlock">
                     <label className="whatIfToggleRow">
                       <input
@@ -2790,6 +2869,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         {hideValues ? '—' : formatMoney(costBasisDelta)}
                       </span>
                     </div>
+                  </div>
                   </div>
 
                   <div className="profitabilityTableWrap">
