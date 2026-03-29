@@ -87,9 +87,71 @@
   justify-content: flex-start;
 }
 
-/* Shown only in responsive layout (see max-width: 900px). Saves all target rows, same as toolbar. */
+/* Per-row save (same action as “Apply target prices”): all breakpoints; larger tap target ≤900px. */
+.whatIfTableTarget tbody td:last-child {
+  min-width: 0;
+  vertical-align: middle;
+}
+
+.whatIfTableTarget .whatIfTargetPriceFieldRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.whatIfTableTarget .whatIfTargetPriceFieldRow .profitabilityInput {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+}
+
 .whatIfTargetInlineSaveBtn {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(94, 234, 212, 0.55);
+  background: linear-gradient(120deg, rgba(14, 116, 144, 0.35), rgba(7, 89, 133, 0.25));
+  color: #ecfeff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+.whatIfTargetInlineSaveBtn--unsaved {
+  border-color: rgba(165, 243, 252, 0.7);
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.78), rgba(8, 145, 178, 0.62));
+  color: #f0fdfa;
+  box-shadow:
+    0 0 0 1px rgba(165, 243, 252, 0.2),
+    0 3px 16px rgba(20, 184, 166, 0.3);
+}
+
+.whatIfTargetInlineSaveIcon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.whatIfTargetInlineSaveBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.65);
 }
 
 .whatIfTableTarget .whatIfTargetInput--unsaved {
@@ -115,7 +177,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .whatIfTableTarget .whatIfTargetInput--unsaved {
+  .whatIfTableTarget .whatIfTargetInput--unsaved,
+  .whatIfTargetInlineSaveBtn {
     transition: none;
   }
 }
@@ -496,6 +559,19 @@
   text-align: right;
 }
 
+/* Net worth KPIs + hypothetical cash toggle: tight stack, then extra space before P/L row */
+.whatIfResultsNetWorthBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.whatIfResultsNetWorthBlock .rebalanceKpiRow {
+  width: 100%;
+}
+
 .whatIfToggleRow {
   display: inline-flex;
   align-items: center;
@@ -547,6 +623,104 @@
   font-size: 0.88rem;
   color: #cbd5e1;
   font-weight: 600;
+}
+
+.whatIfHypoFundingCallout {
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.whatIfHypoFundingCallout--covered {
+  border-color: rgba(45, 212, 191, 0.42);
+  background: rgba(13, 148, 136, 0.12);
+}
+
+.whatIfHypoFundingCallout--short {
+  border-color: rgba(251, 113, 133, 0.45);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.whatIfHypoFundingTitle {
+  margin: 0 0 12px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+
+.whatIfHypoFundingTableWrap {
+  overflow-x: auto;
+  margin: 0;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+.whatIfHypoFundingTable {
+  width: 100%;
+  min-width: min(100%, 520px);
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.whatIfHypoFundingTable th,
+.whatIfHypoFundingTable td {
+  padding: 8px 10px;
+  text-align: right;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.whatIfHypoFundingTable th:first-child,
+.whatIfHypoFundingTable td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+
+.whatIfHypoFundingTable thead th {
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.whatIfHypoFundingTable tbody td {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.whatIfHypoFundingShortList {
+  font-weight: 750;
+}
+
+.whatIfHypoFundingBalance--ok {
+  color: #6ee7b7;
+}
+
+.whatIfHypoFundingBalance--short {
+  color: #fda4af;
+}
+
+.whatIfHypoFundingVerdict {
+  margin: 14px 0 0;
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.45;
+  color: #e2e8f0;
+}
+
+.whatIfHypoFundingCallout--covered .whatIfHypoFundingVerdict {
+  color: #a7f3d0;
+}
+
+.whatIfHypoFundingCallout--short .whatIfHypoFundingVerdict {
+  color: #fecdd3;
 }
 
 .whatIfHypotheticalAggregateTitle {
@@ -775,47 +949,11 @@
   }
 
   .whatIfTargetInlineSaveBtn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
     width: 44px;
     min-width: 44px;
     height: 44px;
-    padding: 0;
     border-radius: 12px;
-    border: 1px solid rgba(94, 234, 212, 0.55);
-    background: linear-gradient(120deg, rgba(14, 116, 144, 0.35), rgba(7, 89, 133, 0.25));
-    color: #ecfeff;
-    cursor: pointer;
-    flex-shrink: 0;
     touch-action: manipulation;
-    transition:
-      border-color 0.2s ease,
-      background 0.2s ease,
-      box-shadow 0.2s ease,
-      opacity 0.2s ease,
-      filter 0.2s ease;
-  }
-
-  .whatIfTargetInlineSaveBtn--unsaved {
-    border-color: rgba(165, 243, 252, 0.7);
-    background: linear-gradient(135deg, rgba(20, 184, 166, 0.78), rgba(8, 145, 178, 0.62));
-    color: #f0fdfa;
-    box-shadow:
-      0 0 0 1px rgba(165, 243, 252, 0.2),
-      0 3px 16px rgba(20, 184, 166, 0.3);
-  }
-
-  .whatIfTargetInlineSaveIcon {
-    display: block;
-    flex-shrink: 0;
-  }
-
-  .whatIfTargetInlineSaveBtn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-    filter: saturate(0.65);
   }
 
   .whatIfPanel .rebalanceKpiRow .profitabilityCardValue {

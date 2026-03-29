@@ -20,6 +20,18 @@ function num(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Default sell-price text from portfolio row market price (dashboard live quote). */
+function marketPriceDefaultStringForSymbol(tableRows, symbol) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!sym) return '';
+  const row = (tableRows || []).find((r) => String(r.symbol || '').trim().toUpperCase() === sym);
+  const p = num(row?.currentPrice);
+  if (!(p > 0)) return '';
+  let s = p.toFixed(8);
+  if (s.includes('.')) s = s.replace(/\.?0+$/, '');
+  return s;
+}
+
 /** Match RecordSaleModal: floor qty at 8 dp so slider % does not overshoot max sellable. */
 function roundDownSellQty(value, decimals = 8) {
   const n = Number(value);
@@ -133,6 +145,47 @@ function aggregateHypotheticalSellRows(rows) {
       avgSell: r.totalQty > 0 ? r.totalProceeds / r.totalQty : 0,
     }))
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
+function sumCashByQuoteBucket(cashRows) {
+  const m = new Map();
+  for (const row of cashRows || []) {
+    const ccy = String(row.currency || 'USD').trim().toUpperCase() || 'USD';
+    const bucket = aggregateHypotheticalQuoteBucket(ccy);
+    const v = Number(row.amountLocal);
+    if (!Number.isFinite(v)) continue;
+    m.set(bucket, (m.get(bucket) ?? 0) + v);
+  }
+  return m;
+}
+
+function sumHypotheticalBuyCostByQuoteBucket(buyRows) {
+  const m = new Map();
+  for (const row of buyRows || []) {
+    const q = num(row.qty);
+    if (!(q > 0)) continue;
+    const quoteCcy = hypotheticalBuyQuoteCurrency(row);
+    const bucket = aggregateHypotheticalQuoteBucket(quoteCcy);
+    const cost = q * num(row.buyPrice);
+    if (!Number.isFinite(cost)) continue;
+    m.set(bucket, (m.get(bucket) ?? 0) + cost);
+  }
+  return m;
+}
+
+function sumHypotheticalSaleProceedsByQuoteBucket(sellRows) {
+  const m = new Map();
+  for (const row of sellRows || []) {
+    const q = num(row.qty);
+    if (!(q > 0)) continue;
+    const quoteCcy =
+      row?.assetClass === 'stock' ? 'USD' : String(row.currency || 'USD').trim().toUpperCase() || 'USD';
+    const bucket = aggregateHypotheticalQuoteBucket(quoteCcy);
+    const proceeds = Math.max(0, q * num(row.sellPrice));
+    if (!Number.isFinite(proceeds)) continue;
+    m.set(bucket, (m.get(bucket) ?? 0) + proceeds);
+  }
+  return m;
 }
 
 function emptyStockSellForm() {
@@ -1020,6 +1073,45 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const netWorthDelta = scenarioNetWorth - baselineNetWorth;
   const netWorthDeltaPct = baselineNetWorth > 0 ? (netWorthDelta / baselineNetWorth) * 100 : 0;
 
+  const hypoPurchaseFunding = useMemo(() => {
+    const requiredMap = sumHypotheticalBuyCostByQuoteBucket(buyRows);
+    let totalRequired = 0;
+    for (const v of requiredMap.values()) totalRequired += v;
+    if (!(totalRequired > 1e-9)) return null;
+
+    const cashRows = Array.isArray(netWorth?.overview?.cashRows) ? netWorth.overview.cashRows : [];
+    const cashMap = sumCashByQuoteBucket(cashRows);
+    const proceedsMap = sumHypotheticalSaleProceedsByQuoteBucket(sellRows);
+
+    const bucketSet = new Set([...requiredMap.keys(), ...cashMap.keys(), ...proceedsMap.keys()]);
+    const rows = [...bucketSet]
+      .sort((a, b) => a.localeCompare(b))
+      .map((bucket) => {
+        const cash = cashMap.get(bucket) ?? 0;
+        const proceeds = proceedsMap.get(bucket) ?? 0;
+        const required = requiredMap.get(bucket) ?? 0;
+        const available = cash + proceeds;
+        const balance = available - required;
+        return { bucket, cash, proceeds, required, available, balance };
+      })
+      .filter((r) => r.proceeds > 1e-9 || r.required > 1e-9);
+
+    const shortBuckets = [];
+    let covered = true;
+    for (const [bucket, req] of requiredMap.entries()) {
+      if (!(req > 1e-9)) continue;
+      const cash = cashMap.get(bucket) ?? 0;
+      const proc = proceedsMap.get(bucket) ?? 0;
+      const balance = cash + proc - req;
+      if (balance < -1e-6) {
+        covered = false;
+        shortBuckets.push({ bucket, shortfall: -balance });
+      }
+    }
+
+    return { rows, covered, shortBuckets };
+  }, [buyRows, sellRows, netWorth?.overview?.cashRows]);
+
   const isBusy = isLoading || isScenarioLoading || isSaving;
 
   return (
@@ -1476,16 +1568,19 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 ...prev,
                                 selectedSymbol: '',
                                 qty: '',
+                                sellPrice: '',
                                 sellPct: 0,
                               }));
                               return;
                             }
                             const avail = sellFormAvailableQtyForSymbol(sym);
+                            const priceStr = marketPriceDefaultStringForSymbol(portfolioTableRows, sym);
                             setStockSellForm((prev) => ({
                               ...prev,
                               selectedSymbol: sym,
                               sellPct: avail > 0 ? 100 : 0,
                               qty: avail > 0 ? String(avail) : '',
+                              sellPrice: priceStr,
                             }));
                           }}
                         >
@@ -1613,16 +1708,19 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 ...prev,
                                 selectedSymbol: '',
                                 qty: '',
+                                sellPrice: '',
                                 sellPct: 0,
                               }));
                               return;
                             }
                             const avail = sellFormAvailableQtyForSymbol(sym);
+                            const priceStr = marketPriceDefaultStringForSymbol(portfolioTableRows, sym);
                             setCryptoSellForm((prev) => ({
                               ...prev,
                               selectedSymbol: sym,
                               sellPct: avail > 0 ? 100 : 0,
                               qty: avail > 0 ? String(avail) : '',
+                              sellPrice: priceStr,
                             }));
                           }}
                         >
@@ -1945,38 +2043,114 @@ export default function WhatIfScenariosPage({ hideValues }) {
 
                 <section className="whatIfSection">
                   <h2>{t('whatif.resultsTitle')}</h2>
-                  <label className="whatIfToggleRow">
-                    <input
-                      type="checkbox"
-                      className="whatIfToggleInput"
-                      checked={adjustScenarioCashForHypotheticals}
-                      onChange={(e) => setAdjustScenarioCashForHypotheticals(e.target.checked)}
-                    />
-                    <span className="whatIfToggleSwitch" aria-hidden="true" />
-                    <span className="whatIfToggleText">{t('whatif.netWorthAdjustHypotheticalCash')}</span>
-                  </label>
-                  <div className="profitabilitySellDownResult rebalanceKpiRow">
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.baselineNetWorth')}</span>
-                      <span className="profitabilityCardValue">
-                        {hideValues ? '—' : formatCurrencyValue(baselineNetWorth, baseCurrency)}
-                      </span>
+                  {hypoPurchaseFunding && (
+                    <div
+                      className={`whatIfHypoFundingCallout${hypoPurchaseFunding.covered ? ' whatIfHypoFundingCallout--covered' : ' whatIfHypoFundingCallout--short'}`}
+                    >
+                      <h3 className="whatIfHypoFundingTitle">{t('whatif.hypoFundingTitle')}</h3>
+                      <div className="whatIfHypoFundingTableWrap">
+                        <table className="whatIfHypoFundingTable">
+                          <thead>
+                            <tr>
+                              <th scope="col">{t('whatif.hypoFundingColQuote')}</th>
+                              <th scope="col">{t('whatif.hypoFundingCash')}</th>
+                              <th scope="col">{t('whatif.hypoFundingProceeds')}</th>
+                              <th scope="col">{t('whatif.hypoFundingRequired')}</th>
+                              <th scope="col">{t('whatif.hypoFundingAvailable')}</th>
+                              <th scope="col">{t('whatif.hypoFundingBalance')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {hypoPurchaseFunding.rows.map((r) => (
+                              <tr key={r.bucket}>
+                                <td data-label={t('whatif.hypoFundingColQuote')}>{r.bucket}</td>
+                                <td data-label={t('whatif.hypoFundingCash')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.cash, r.bucket)}
+                                </td>
+                                <td data-label={t('whatif.hypoFundingProceeds')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.proceeds, r.bucket)}
+                                </td>
+                                <td data-label={t('whatif.hypoFundingRequired')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.required, r.bucket)}
+                                </td>
+                                <td data-label={t('whatif.hypoFundingAvailable')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.available, r.bucket)}
+                                </td>
+                                <td
+                                  data-label={t('whatif.hypoFundingBalance')}
+                                  className={
+                                    r.required > 1e-9
+                                      ? r.balance >= -1e-6
+                                        ? 'whatIfHypoFundingBalance--ok'
+                                        : 'whatIfHypoFundingBalance--short'
+                                      : ''
+                                  }
+                                >
+                                  {hideValues
+                                    ? '—'
+                                    : r.required > 1e-9
+                                      ? formatCurrencyValue(r.balance, r.bucket)
+                                      : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="whatIfHypoFundingVerdict" role="status">
+                        {hypoPurchaseFunding.covered
+                          ? t('whatif.hypoFundingCovered')
+                          : t('whatif.hypoFundingShortLead')}
+                        {!hypoPurchaseFunding.covered && !hideValues && hypoPurchaseFunding.shortBuckets.length > 0 ? (
+                          <span className="whatIfHypoFundingShortList">
+                            {' '}
+                            {hypoPurchaseFunding.shortBuckets.map(({ bucket, shortfall }, i) => (
+                              <span key={bucket}>
+                                {i > 0 ? t('whatif.hypoFundingShortSep') : ''}
+                                {t('whatif.hypoFundingShortPart', {
+                                  amount: formatCurrencyValue(shortfall, bucket),
+                                })}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                      </p>
                     </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorth')}</span>
-                      <span className="profitabilityCardValue">
-                        {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
-                      </span>
+                  )}
+                  <div className="whatIfResultsNetWorthBlock">
+                    <div className="profitabilitySellDownResult rebalanceKpiRow">
+                      <div className="profitabilityCard">
+                        <span className="profitabilityCardLabel">{t('whatif.baselineNetWorth')}</span>
+                        <span className="profitabilityCardValue">
+                          {hideValues ? '—' : formatCurrencyValue(baselineNetWorth, baseCurrency)}
+                        </span>
+                      </div>
+                      <div className="profitabilityCard">
+                        <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorth')}</span>
+                        <span className="profitabilityCardValue">
+                          {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
+                        </span>
+                      </div>
+                      <div className="profitabilityCard">
+                        <span className="profitabilityCardLabel">{t('whatif.netWorthDelta')}</span>
+                        <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
+                          {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
+                        </span>
+                        <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                          {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
+                        </small>
+                      </div>
                     </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.netWorthDelta')}</span>
-                      <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
-                      </span>
-                      <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
-                      </small>
-                    </div>
+                    <label className="whatIfToggleRow">
+                      <input
+                        type="checkbox"
+                        className="whatIfToggleInput"
+                        checked={adjustScenarioCashForHypotheticals}
+                        onChange={(e) => setAdjustScenarioCashForHypotheticals(e.target.checked)}
+                      />
+                      <span className="whatIfToggleSwitch" aria-hidden="true" />
+                      <span className="whatIfToggleText">{t('whatif.netWorthAdjustHypotheticalCash')}</span>
+                    </label>
                   </div>
 
                   <div className="profitabilitySellDownResult rebalanceKpiRow">
