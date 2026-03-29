@@ -52,21 +52,29 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 10px;
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.5);
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  align-self: flex-start;
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    padding 0.2s ease;
 }
 
+/* Bordered “callout” only when edits are pending—avoids a full-width empty footer on desktop. */
 .whatIfTargetToolbar--unsaved {
-  border-color: rgba(45, 212, 191, 0.55);
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 212, 191, 0.55);
   background: rgba(13, 148, 136, 0.2);
   box-shadow:
     0 0 0 1px rgba(94, 234, 212, 0.12),
@@ -75,9 +83,8 @@
 
 .whatIfTargetToolbarActions {
   flex-shrink: 0;
-  width: 100%;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 /* Shown only in responsive layout (see max-width: 900px). Saves all target rows, same as toolbar. */
@@ -647,6 +654,8 @@
   .whatIfTargetToolbar {
     flex-direction: column;
     align-items: stretch;
+    align-self: stretch;
+    width: 100%;
     margin-left: 0;
     margin-right: 0;
     max-width: 100%;
