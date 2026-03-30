@@ -189,9 +189,60 @@
   width: 40px;
 }
 
-.whatIfHypoAggDesktopActionsCol {
-  width: 48px;
-  text-align: center;
+.whatIfHypoAggregateDesktopTable {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.whatIfHypoAggregateDesktopTable .profitabilityTableWrap {
+  width: 100%;
+  max-width: 100%;
+}
+
+.whatIfHypoAggDesktopTable {
+  width: 100%;
+  table-layout: fixed;
+  min-width: 0;
+}
+
+.whatIfHypoAggDesktopTable th.whatIfHypoAggDesktopActionsCol,
+.whatIfHypoAggDesktopTable td.whatIfHypoAggDesktopActionsCol {
+  width: 1%;
+  min-width: 4.75rem;
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.whatIfHypoAggActionsCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Teal accent + icon sizing (matches headerIconBtn + whatIfIconBtn elsewhere on this page) */
+.whatIfHypoAggAddBtn {
+  border-color: rgba(45, 212, 191, 0.45) !important;
+  background: linear-gradient(120deg, rgba(14, 116, 144, 0.32), rgba(7, 89, 133, 0.24)) !important;
+  color: #ecfeff !important;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.whatIfHypoAggAddBtn:hover:not(:disabled) {
+  border-color: rgba(94, 234, 212, 0.65) !important;
+  filter: brightness(1.05);
+}
+
+.whatIfHypoAggAddBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .whatIfHypoAggNestedRow td {
@@ -312,6 +363,141 @@
   margin-bottom: 6px;
 }
 
+.whatIfHypoSectionHeadRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.whatIfHypoAddMenuWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.whatIfHypoAddMenuTrigger {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.whatIfHypoAddMenu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 200px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.whatIfHypoAddMenuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.whatIfHypoAddMenuItem:hover,
+.whatIfHypoAddMenuItem:focus-visible {
+  background: rgba(45, 212, 191, 0.14);
+  outline: none;
+}
+
+.whatIfHypoAddMenu--sell {
+  border-color: rgba(251, 146, 60, 0.42);
+  background: rgba(30, 18, 12, 0.98);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.whatIfHypoAddMenu--sell .whatIfHypoAddMenuItem:hover,
+.whatIfHypoAddMenu--sell .whatIfHypoAddMenuItem:focus-visible {
+  background: rgba(249, 115, 22, 0.16);
+}
+
+.whatIfHypoAddMenuTrigger--sell {
+  color: #fed7aa;
+  border-color: rgba(251, 146, 60, 0.45);
+  background: rgba(67, 20, 7, 0.45);
+}
+
+.whatIfHypoAddMenuTrigger--sell:hover,
+.whatIfHypoAddMenuTrigger--sell:focus-visible {
+  background: rgba(124, 45, 18, 0.55);
+}
+
+/* Simulated-buy modals: match Add stock/crypto position dialogs + legacy hypo card tint */
+.whatIfHypoBuyModalCard {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: linear-gradient(
+    165deg,
+    rgba(6, 78, 59, 0.12) 0%,
+    rgba(8, 16, 33, 0.96) 45%,
+    rgba(12, 22, 43, 0.92) 100%
+  );
+}
+
+.whatIfHypoBuyModalCard--csv {
+  border-color: rgba(56, 189, 248, 0.24);
+  background: linear-gradient(
+    165deg,
+    rgba(6, 47, 78, 0.14) 0%,
+    rgba(8, 16, 33, 0.96) 45%,
+    rgba(12, 22, 43, 0.92) 100%
+  );
+}
+
+.whatIfHypoBuyModalFooter {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+.whatIfHypoBuyCsvTextarea.whatIfCsvTextarea {
+  border-color: rgba(226, 232, 240, 0.35);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.6);
+  padding: 10px;
+  font-size: 0.9rem;
+  min-height: 140px;
+}
+
+.whatIfHypoBuyCsvTextarea.whatIfCsvTextarea:focus {
+  border-color: rgba(94, 234, 212, 0.45);
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.18);
+}
+
+.whatIfHypoSellModalCard {
+  border-color: rgba(251, 146, 60, 0.32);
+  background: linear-gradient(
+    165deg,
+    rgba(124, 45, 18, 0.18) 0%,
+    rgba(8, 16, 33, 0.96) 45%,
+    rgba(12, 22, 43, 0.92) 100%
+  );
+}
+
+.whatIfHypoSellModalCard .modalRange {
+  accent-color: rgba(251, 146, 60, 0.95);
+}
+
+.whatIfHypoSellModalGridFull {
+  grid-column: 1 / -1;
+}
+
 .whatIfHypoBadge {
   flex-shrink: 0;
   margin-top: 4px;
@@ -334,6 +520,34 @@
   color: #fff7ed;
   background: linear-gradient(135deg, rgba(249, 115, 22, 0.58), rgba(124, 45, 18, 0.68));
   border: 1px solid rgba(251, 146, 60, 0.48);
+}
+
+/* Target price simulation — distinct from buy (teal) and sell (orange) */
+.whatIfHypoBadge--target {
+  color: #e0f2fe;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.52), rgba(30, 64, 175, 0.65));
+  border: 1px solid rgba(56, 189, 248, 0.48);
+}
+
+.whatIfSection.whatIfSection--targetPrice h2.whatIfHypoBadge {
+  margin: 0;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.whatIfSection.whatIfSection--targetPrice {
+  padding: 18px 18px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: linear-gradient(
+    160deg,
+    rgba(8, 47, 73, 0.2) 0%,
+    rgba(15, 23, 42, 0.5) 48%,
+    rgba(15, 23, 42, 0.58) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(125, 211, 252, 0.06),
+    0 12px 40px rgba(0, 0, 0, 0.18);
 }
 
 .whatIfBuyCard--hypoBuy {
@@ -557,10 +771,6 @@
   color: #fdba74;
 }
 
-.whatIfHypotheticalAggregateTitle--hypoBuy {
-  color: #99f6e4;
-}
-
 .whatIfHypoBuyAssetCell.positionAssetCell {
   gap: 6px;
 }
@@ -589,10 +799,6 @@
   width: 100%;
 }
 
-.whatIfHypotheticalAggregateTitle--hypoSell {
-  color: #fdba74;
-}
-
 .whatIfAddHypotheticalToListBtn--hypoBuy {
   box-shadow: inset 3px 0 0 rgba(45, 212, 191, 0.85);
 }
@@ -617,46 +823,204 @@
   }
 
   .whatIfSection.whatIfSection--hypoBuy,
-  .whatIfSection.whatIfSection--hypoSell {
+  .whatIfSection.whatIfSection--hypoSell,
+  .whatIfSection.whatIfSection--targetPrice {
     padding: 14px 12px 16px;
   }
 }
 
-.whatIfScenarioControls {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
+.whatIfSection.whatIfSection--scenarios {
+  padding: 18px 18px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  background: linear-gradient(
+    155deg,
+    rgba(49, 46, 129, 0.2) 0%,
+    rgba(15, 23, 42, 0.5) 42%,
+    rgba(15, 23, 42, 0.62) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(165, 180, 252, 0.08),
+    0 12px 36px rgba(0, 0, 0, 0.22);
+}
+
+.whatIfScenarioShell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.whatIfScenarioShellHead {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: end;
+}
+
+.whatIfScenarioShellTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.whatIfScenarioPageTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #f1f5f9;
+}
+
+.whatIfScenarioZeroHint {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: rgba(251, 191, 36, 0.95);
+}
+
+.whatIfScenarioControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+
+.whatIfScenarioSelectBlock {
+  flex: 0 1 auto;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .whatIfScenarioControls .profitabilityInput {
-  min-width: 320px;
+  min-width: 0;
 }
 
 .whatIfScenarioPicker {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .whatIfScenarioPickerLabel {
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #9dd7ff;
+  color: #a5b4fc;
 }
 
-.whatIfScenarioPicker .profitabilitySelect {
-  height: 36px;
+.whatIfScenarioSelectInner {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 12px;
+  padding: 2px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(30, 41, 59, 0.85));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 0 rgba(15, 23, 42, 0.9);
+}
+
+.whatIfScenarioPicker .whatIfScenarioSelect,
+.whatIfScenarioPicker .profitabilitySelect.whatIfScenarioSelect {
+  display: block;
+  width: auto;
+  min-width: min(100%, 280px);
+  max-width: 100%;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.92);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f8fafc;
+  padding-left: 12px;
+  padding-right: 36px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.whatIfScenarioPicker .whatIfScenarioSelect:hover:not(:disabled) {
+  border-color: rgba(165, 180, 252, 0.45);
+}
+
+.whatIfScenarioPicker .whatIfScenarioSelect:focus {
+  outline: none;
+  border-color: rgba(129, 140, 248, 0.75);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.28);
+}
+
+.whatIfScenarioPicker .whatIfScenarioSelect:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .whatIfScenarioNameActions {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  align-self: end;
-  justify-self: end;
-  width: auto;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  flex: 0 0 auto;
+}
+
+.whatIfScenarioToolBtn {
+  transition:
+    transform 0.12s ease,
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.whatIfScenarioToolBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.45);
+}
+
+.whatIfScenarioToolBtn--accent {
+  border-color: rgba(45, 212, 191, 0.55) !important;
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.45), rgba(8, 91, 115, 0.35)) !important;
+  color: #ecfdf5 !important;
+}
+
+.whatIfScenarioToolBtn--accent:hover:not(:disabled) {
+  border-color: rgba(94, 234, 212, 0.75) !important;
+  filter: brightness(1.06);
+}
+
+.whatIfScenarioToolBtn--confirm {
+  border-color: rgba(52, 211, 153, 0.55) !important;
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.45), rgba(6, 95, 70, 0.38)) !important;
+  color: #ecfdf5 !important;
+}
+
+.whatIfScenarioToolBtn--danger {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+}
+
+.whatIfScenarioToolBtn--danger:hover:not(:disabled) {
+  border-color: rgba(252, 165, 165, 0.65) !important;
+  background: rgba(127, 29, 29, 0.45) !important;
+}
+
+.whatIfScenarioTrashIcon {
+  display: block;
+}
+
+.whatIfScenarioInlineInput {
+  flex: 1 1 200px;
+  min-width: 0;
+  height: 38px;
 }
 
 .whatIfUnsavedPill {
@@ -1316,6 +1680,7 @@
   .whatIfSection .profitabilityTableWrap,
   .whatIfSection .whatIfHypotheticalAggregateWrap--buyCards,
   .whatIfSection .whatIfHypotheticalAggregateWrap--sellCards,
+  .whatIfSection .whatIfHypotheticalAggregateWrap--targetPriceCards,
   .whatIfSection .profitabilityTable,
   .whatIfSection .profitabilityTable tbody,
   .whatIfSection .profitabilityTable tr,
@@ -1335,12 +1700,25 @@
   }
 
   .whatIfScenarioControls {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
 
-  .whatIfScenarioPicker .profitabilitySelect {
+  .whatIfScenarioSelectBlock {
+    width: 100%;
+  }
+
+  .whatIfScenarioPicker {
+    width: 100%;
+  }
+
+  .whatIfScenarioSelectInner {
+    width: 100%;
+  }
+
+  .whatIfScenarioPicker .whatIfScenarioSelect,
+  .whatIfScenarioPicker .profitabilitySelect.whatIfScenarioSelect {
     width: 100%;
     max-width: 100%;
     min-width: 0;

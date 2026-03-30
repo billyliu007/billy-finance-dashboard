@@ -349,6 +349,7 @@ function mapApiHypotheticalPurchasesToBuyRows(rows) {
     qty: row.qty,
     buyPrice: row.buyPrice,
     currency: String(row.currency || '').toUpperCase() || null,
+    ...(row.productId ? { productId: String(row.productId) } : {}),
   }));
 }
 
@@ -552,7 +553,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [stockForm, setStockForm] = useState(emptyStockForm());
   const [cryptoForm, setCryptoForm] = useState(emptyCryptoForm());
   const [hypoBuyCsvText, setHypoBuyCsvText] = useState('');
-  const [hypoBuyCsvExpanded, setHypoBuyCsvExpanded] = useState(false);
+  const [hypoBuyAddMenuOpen, setHypoBuyAddMenuOpen] = useState(false);
+  const [hypoBuyStockModalOpen, setHypoBuyStockModalOpen] = useState(false);
+  const [hypoBuyCryptoModalOpen, setHypoBuyCryptoModalOpen] = useState(false);
+  const [hypoBuyCsvModalOpen, setHypoBuyCsvModalOpen] = useState(false);
+  const hypoBuyMenuWrapRef = useRef(null);
+  const [hypoSellAddMenuOpen, setHypoSellAddMenuOpen] = useState(false);
+  const [hypoSellStockModalOpen, setHypoSellStockModalOpen] = useState(false);
+  const [hypoSellCryptoModalOpen, setHypoSellCryptoModalOpen] = useState(false);
+  const hypoSellMenuWrapRef = useRef(null);
   const [stockSellForm, setStockSellForm] = useState(emptyStockSellForm());
   const [cryptoSellForm, setCryptoSellForm] = useState(emptyCryptoSellForm());
   const [results, setResults] = useState(null);
@@ -594,7 +603,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setStockForm(emptyStockForm());
     setCryptoForm(emptyCryptoForm());
     setHypoBuyCsvText('');
-    setHypoBuyCsvExpanded(false);
+    setHypoBuyAddMenuOpen(false);
+    setHypoBuyStockModalOpen(false);
+    setHypoBuyCryptoModalOpen(false);
+    setHypoBuyCsvModalOpen(false);
+    setHypoSellAddMenuOpen(false);
+    setHypoSellStockModalOpen(false);
+    setHypoSellCryptoModalOpen(false);
     setStockSellForm(emptyStockSellForm());
     setCryptoSellForm(emptyCryptoSellForm());
     setResults(null);
@@ -1302,6 +1317,56 @@ export default function WhatIfScenariosPage({ hideValues }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty, isLoading, isScenarioLoading]);
 
+  useEffect(() => {
+    if (!hypoBuyAddMenuOpen) return;
+    function onDocMouseDown(e) {
+      if (hypoBuyMenuWrapRef.current && !hypoBuyMenuWrapRef.current.contains(e.target)) {
+        setHypoBuyAddMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [hypoBuyAddMenuOpen]);
+
+  useEffect(() => {
+    if (!hypoSellAddMenuOpen) return;
+    function onDocMouseDown(e) {
+      if (hypoSellMenuWrapRef.current && !hypoSellMenuWrapRef.current.contains(e.target)) {
+        setHypoSellAddMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [hypoSellAddMenuOpen]);
+
+  useEffect(() => {
+    if (
+      !hypoBuyStockModalOpen &&
+      !hypoBuyCryptoModalOpen &&
+      !hypoBuyCsvModalOpen &&
+      !hypoSellStockModalOpen &&
+      !hypoSellCryptoModalOpen
+    )
+      return;
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        setHypoBuyStockModalOpen(false);
+        setHypoBuyCryptoModalOpen(false);
+        setHypoBuyCsvModalOpen(false);
+        setHypoSellStockModalOpen(false);
+        setHypoSellCryptoModalOpen(false);
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [
+    hypoBuyStockModalOpen,
+    hypoBuyCryptoModalOpen,
+    hypoBuyCsvModalOpen,
+    hypoSellStockModalOpen,
+    hypoSellCryptoModalOpen,
+  ]);
+
   async function saveAfterHypotheticalChange(nextBuyRows, nextSellRows) {
     if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
     const sid = activeScenarioIdRef.current;
@@ -1385,15 +1450,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
     const buyPrice = num(stockForm.buyPrice);
     if (!symbol) {
       setError(t('errors.selectStockSymbol'));
-      return;
+      return false;
     }
     if (!Number.isFinite(qty) || qty <= 0) {
       setError(t('errors.quantityGreaterZero'));
-      return;
+      return false;
     }
     if (!Number.isFinite(buyPrice) || buyPrice < 0) {
       setError(t('errors.avgCostNonNegative'));
-      return;
+      return false;
     }
     setError('');
     setBuyRows((prev) => {
@@ -1408,6 +1473,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     });
     setStockForm((prev) => ({ ...prev, qty: '', buyPrice: '' }));
     requestAnimationFrame(() => stockHypotheticalQtyRef.current?.focus?.());
+    return true;
   }
 
   function resetStockHypotheticalForm() {
@@ -1421,15 +1487,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
     const buyPrice = num(cryptoForm.buyPrice);
     if (!selected) {
       setError(t('errors.selectCoinbaseProduct'));
-      return;
+      return false;
     }
     if (!Number.isFinite(qty) || qty <= 0) {
       setError(t('errors.quantityGreaterZero'));
-      return;
+      return false;
     }
     if (!Number.isFinite(buyPrice) || buyPrice < 0) {
       setError(t('errors.avgCostNonNegative'));
-      return;
+      return false;
     }
     setError('');
     setBuyRows((prev) => {
@@ -1452,6 +1518,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     });
     setCryptoForm((prev) => ({ ...prev, qty: '', buyPrice: '' }));
     requestAnimationFrame(() => cryptoHypotheticalQtyRef.current?.focus?.());
+    return true;
   }
 
   function resetCryptoHypotheticalForm() {
@@ -1460,11 +1527,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   function importHypotheticalBuysFromCsv() {
-    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return false;
     const parsed = parseHypotheticalBuyCsv(hypoBuyCsvText);
     if (!parsed.ok) {
       setError(t(parsed.messageKey, parsed.vars));
-      return;
+      return false;
     }
     setError('');
     const baseTs = Date.now();
@@ -1484,6 +1551,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       return next;
     });
     setHypoBuyCsvText('');
+    return true;
   }
 
   function resetStockSellForm() {
@@ -1546,31 +1614,90 @@ export default function WhatIfScenariosPage({ hideValues }) {
     });
   }
 
+  function openHypoBuyModalForAggregate(aggKey) {
+    if (!activeScenarioId || isPersistingInputs) return;
+    setError('');
+    const sample = buyRows.find((r) => hypoBuyAggregateKey(r) === aggKey);
+    const sym = sample
+      ? String(sample.symbol || '').trim().toUpperCase()
+      : String(aggKey.split('\0')[0] || '').trim().toUpperCase();
+    if (!sym) return;
+    const isCrypto = sample?.assetClass === 'crypto';
+    if (!isCrypto) {
+      setStockForm({
+        query: sym,
+        selectedSymbol: sym,
+        qty: '',
+        buyPrice: '',
+      });
+      setHypoBuyStockModalOpen(true);
+      return;
+    }
+    const pid = sample?.productId ? String(sample.productId) : '';
+    setCryptoForm({
+      query: pid || sym,
+      selectedProductId: pid,
+      qty: '',
+      buyPrice: '',
+    });
+    setHypoBuyCryptoModalOpen(true);
+  }
+
+  function openHypoSellModalForAggregate(aggKey) {
+    if (!activeScenarioId || isPersistingInputs) return;
+    setError('');
+    const sample = sellRows.find((r) => hypoSellAggregateKey(r) === aggKey);
+    const sym = sample
+      ? String(sample.symbol || '').trim().toUpperCase()
+      : String(aggKey.split('\0')[0] || '').trim().toUpperCase();
+    if (!sym) return;
+    const isCrypto = sample?.assetClass === 'crypto';
+    const avail = sellFormAvailableQtyForSymbol(sym);
+    const priceStr = marketPriceDefaultStringForSymbol(portfolioTableRows, sym);
+    if (!isCrypto) {
+      setStockSellForm({
+        selectedSymbol: sym,
+        sellPct: avail > 0 ? 100 : 0,
+        qty: avail > 0 ? String(avail) : '',
+        sellPrice: priceStr,
+      });
+      setHypoSellStockModalOpen(true);
+      return;
+    }
+    setCryptoSellForm({
+      selectedSymbol: sym,
+      sellPct: avail > 0 ? 100 : 0,
+      qty: avail > 0 ? String(avail) : '',
+      sellPrice: priceStr,
+    });
+    setHypoSellCryptoModalOpen(true);
+  }
+
   function addStockHypotheticalSellToList() {
     const symbol = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
     const qty = num(stockSellForm.qty);
     const sellPrice = num(stockSellForm.sellPrice);
     if (!symbol) {
       setError(t('errors.selectStockSymbol'));
-      return;
+      return false;
     }
     const inHoldings = stockHoldingsForSell.some((h) => String(h.symbol || '').toUpperCase() === symbol);
     if (!inHoldings) {
       setError(t('whatif.selectHoldingToSell'));
-      return;
+      return false;
     }
     const uiMax = sellFormAvailableQtyForSymbol(symbol);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError(t('errors.quantityGreaterZero'));
-      return;
+      return false;
     }
     if (qty > uiMax + 1e-9) {
       setError(t('whatif.sellQtyExceedsAvailable'));
-      return;
+      return false;
     }
     if (!Number.isFinite(sellPrice) || sellPrice < 0) {
       setError(t('errors.sellPricePerUnitNonNegative'));
-      return;
+      return false;
     }
     setError('');
     setSellRows((prev) => {
@@ -1592,6 +1719,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     });
     setStockSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0 }));
     requestAnimationFrame(() => stockSellQtyRef.current?.focus?.());
+    return true;
   }
 
   function addCryptoHypotheticalSellToList() {
@@ -1601,20 +1729,20 @@ export default function WhatIfScenariosPage({ hideValues }) {
     const sellPrice = num(cryptoSellForm.sellPrice);
     if (!holding || !symbol) {
       setError(t('whatif.selectHoldingToSell'));
-      return;
+      return false;
     }
     const uiMax = sellFormAvailableQtyForSymbol(symbol);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError(t('errors.quantityGreaterZero'));
-      return;
+      return false;
     }
     if (qty > uiMax + 1e-9) {
       setError(t('whatif.sellQtyExceedsAvailable'));
-      return;
+      return false;
     }
     if (!Number.isFinite(sellPrice) || sellPrice < 0) {
       setError(t('errors.sellPricePerUnitNonNegative'));
-      return;
+      return false;
     }
     const currency = String(holding.currency || 'USD').toUpperCase();
     setError('');
@@ -1637,6 +1765,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     });
     setCryptoSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0 }));
     requestAnimationFrame(() => cryptoSellQtyRef.current?.focus?.());
+    return true;
   }
 
   const resultRows = Array.isArray(results?.rows) ? results.rows : [];
@@ -1771,225 +1900,263 @@ export default function WhatIfScenariosPage({ hideValues }) {
                 </div>
               </div>
             )}
-            <section className="whatIfSection">
-              <h2>{t('whatif.scenarios')}</h2>
-              <div className="whatIfScenarioControls">
-                <label className="whatIfScenarioPicker">
-                  <span className="whatIfScenarioPickerLabel">{t('whatif.activeScenarioLabel')}</span>
-                  <select
-                    className="profitabilitySelect"
-                    value={activeScenarioId}
-                    onChange={(e) => handleActivateScenario(e.target.value)}
-                    disabled={isBusy}
+            <section className="whatIfSection whatIfSection--scenarios" aria-labelledby="whatif-scenarios-heading">
+              <div className="whatIfScenarioShell">
+                <header className="whatIfScenarioShellHead">
+                  <div className="whatIfScenarioShellTitleRow">
+                    <h2 className="whatIfScenarioPageTitle" id="whatif-scenarios-heading">
+                      {t('whatif.scenarios')}
+                    </h2>
+                  </div>
+                  {scenarios.length === 0 && !isLoading && (
+                    <p className="whatIfScenarioZeroHint">{t('whatif.scenarioZeroHint')}</p>
+                  )}
+                </header>
+
+                <div className="whatIfScenarioControls">
+                  <div className="whatIfScenarioSelectBlock">
+                    <label className="whatIfScenarioPicker">
+                      <span className="whatIfScenarioPickerLabel">{t('whatif.activeScenarioLabel')}</span>
+                      <div className="whatIfScenarioSelectInner">
+                        <select
+                          id="whatif-scenario-select"
+                          className="profitabilitySelect whatIfScenarioSelect"
+                          value={activeScenarioId}
+                          onChange={(e) => handleActivateScenario(e.target.value)}
+                          disabled={isBusy}
+                        >
+                          <option value="">{t('whatif.selectScenario')}</option>
+                          {scenarios.map((row) => (
+                            <option key={row.id} value={row.id}>
+                              {row.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div
+                    className="whatIfScenarioNameActions"
+                    role="toolbar"
+                    aria-label={t('whatif.scenarioToolbarAria')}
                   >
-                    <option value="">{t('whatif.selectScenario')}</option>
-                    {scenarios.map((row) => (
-                      <option key={row.id} value={row.id}>
-                        {row.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="whatIfScenarioNameActions">
-                  {isAddingScenario ? (
-                    <>
-                      <input
-                        className="profitabilityInput"
-                        value={newScenarioName}
-                        onChange={(e) => setNewScenarioName(e.target.value)}
-                        placeholder={t('whatif.newScenarioPlaceholder')}
-                        maxLength={120}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleCreateScenario();
-                          if (e.key === 'Escape') {
+                    {isAddingScenario ? (
+                      <>
+                        <input
+                          className="profitabilityInput whatIfScenarioInlineInput"
+                          value={newScenarioName}
+                          onChange={(e) => setNewScenarioName(e.target.value)}
+                          placeholder={t('whatif.newScenarioPlaceholder')}
+                          maxLength={120}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleCreateScenario();
+                            if (e.key === 'Escape') {
+                              setIsAddingScenario(false);
+                              setNewScenarioName('');
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn whatIfScenarioToolBtn--confirm headerIconBtn whatIfIconBtn"
+                          onClick={handleCreateScenario}
+                          disabled={isBusy || !String(newScenarioName || '').trim()}
+                          aria-label={t('modals.save')}
+                          title={t('modals.save')}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn headerIconBtn whatIfIconBtn"
+                          onClick={() => {
                             setIsAddingScenario(false);
                             setNewScenarioName('');
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={handleCreateScenario}
-                        disabled={isBusy || !String(newScenarioName || '').trim()}
-                        aria-label={t('modals.save')}
-                        title={t('modals.save')}
-                      >
-                        ✓
-                      </button>
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={() => {
-                          setIsAddingScenario(false);
-                          setNewScenarioName('');
-                        }}
-                        disabled={isBusy}
-                        aria-label={t('modals.cancel')}
-                        title={t('modals.cancel')}
-                      >
-                        ×
-                      </button>
-                    </>
-                  ) : isRenamingScenario ? (
-                    <>
-                      <input
-                        className="profitabilityInput whatIfScenarioDupNameInput"
-                        value={renameScenarioName}
-                        onChange={(e) => setRenameScenarioName(e.target.value)}
-                        placeholder={t('whatif.renameScenarioPlaceholder')}
-                        maxLength={120}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleRenameScenario();
-                          if (e.key === 'Escape') {
+                          }}
+                          disabled={isBusy}
+                          aria-label={t('modals.cancel')}
+                          title={t('modals.cancel')}
+                        >
+                          ×
+                        </button>
+                      </>
+                    ) : isRenamingScenario ? (
+                      <>
+                        <input
+                          className="profitabilityInput whatIfScenarioDupNameInput whatIfScenarioInlineInput"
+                          value={renameScenarioName}
+                          onChange={(e) => setRenameScenarioName(e.target.value)}
+                          placeholder={t('whatif.renameScenarioPlaceholder')}
+                          maxLength={120}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameScenario();
+                            if (e.key === 'Escape') {
+                              setIsRenamingScenario(false);
+                              setRenameScenarioName('');
+                              setError('');
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn whatIfScenarioToolBtn--confirm headerIconBtn whatIfIconBtn"
+                          onClick={handleRenameScenario}
+                          disabled={isBusy || !String(renameScenarioName || '').trim()}
+                          aria-label={t('modals.save')}
+                          title={t('modals.save')}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn headerIconBtn whatIfIconBtn"
+                          onClick={() => {
                             setIsRenamingScenario(false);
                             setRenameScenarioName('');
                             setError('');
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={handleRenameScenario}
-                        disabled={isBusy || !String(renameScenarioName || '').trim()}
-                        aria-label={t('modals.save')}
-                        title={t('modals.save')}
-                      >
-                        ✓
-                      </button>
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={() => {
-                          setIsRenamingScenario(false);
-                          setRenameScenarioName('');
-                          setError('');
-                        }}
-                        disabled={isBusy}
-                        aria-label={t('modals.cancel')}
-                        title={t('modals.cancel')}
-                      >
-                        ×
-                      </button>
-                    </>
-                  ) : isDuplicatingScenario ? (
-                    <>
-                      <input
-                        className="profitabilityInput whatIfScenarioDupNameInput"
-                        value={duplicateScenarioName}
-                        onChange={(e) => setDuplicateScenarioName(e.target.value)}
-                        placeholder={t('whatif.duplicateScenarioPlaceholder')}
-                        maxLength={120}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleDuplicateScenario();
-                          if (e.key === 'Escape') {
+                          }}
+                          disabled={isBusy}
+                          aria-label={t('modals.cancel')}
+                          title={t('modals.cancel')}
+                        >
+                          ×
+                        </button>
+                      </>
+                    ) : isDuplicatingScenario ? (
+                      <>
+                        <input
+                          className="profitabilityInput whatIfScenarioDupNameInput whatIfScenarioInlineInput"
+                          value={duplicateScenarioName}
+                          onChange={(e) => setDuplicateScenarioName(e.target.value)}
+                          placeholder={t('whatif.duplicateScenarioPlaceholder')}
+                          maxLength={120}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleDuplicateScenario();
+                            if (e.key === 'Escape') {
+                              setIsDuplicatingScenario(false);
+                              setDuplicateScenarioName('');
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn whatIfScenarioToolBtn--confirm headerIconBtn whatIfIconBtn"
+                          onClick={handleDuplicateScenario}
+                          disabled={isBusy || !String(duplicateScenarioName || '').trim()}
+                          aria-label={t('modals.save')}
+                          title={t('modals.save')}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn headerIconBtn whatIfIconBtn"
+                          onClick={() => {
                             setIsDuplicatingScenario(false);
                             setDuplicateScenarioName('');
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={handleDuplicateScenario}
-                        disabled={isBusy || !String(duplicateScenarioName || '').trim()}
-                        aria-label={t('modals.save')}
-                        title={t('modals.save')}
-                      >
-                        ✓
-                      </button>
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={() => {
-                          setIsDuplicatingScenario(false);
-                          setDuplicateScenarioName('');
-                        }}
-                        disabled={isBusy}
-                        aria-label={t('modals.cancel')}
-                        title={t('modals.cancel')}
-                      >
-                        ×
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={() => {
-                          setIsDuplicatingScenario(false);
-                          setDuplicateScenarioName('');
-                          setIsRenamingScenario(false);
-                          setRenameScenarioName('');
-                          setIsAddingScenario(true);
-                        }}
-                        disabled={isBusy}
-                        aria-label={t('whatif.createScenario')}
-                        title={t('whatif.createScenario')}
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={openDuplicateScenario}
-                        disabled={!activeScenarioId || isBusy}
-                        aria-label={t('whatif.duplicateScenario')}
-                        title={t('whatif.duplicateScenario')}
-                      >
-                        <svg
-                          className="whatIfDupIcon"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          aria-hidden="true"
+                          }}
+                          disabled={isBusy}
+                          aria-label={t('modals.cancel')}
+                          title={t('modals.cancel')}
                         >
-                          <rect x="9" y="9" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.75" />
-                          <rect x="4" y="4" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.75" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        className="headerIconBtn whatIfIconBtn"
-                        onClick={openRenameScenario}
-                        disabled={!activeScenarioId || isBusy}
-                        aria-label={t('whatif.renameScenario')}
-                        title={t('whatif.renameScenario')}
-                      >
-                        <svg
-                          className="whatIfRenameIcon"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          aria-hidden="true"
+                          ×
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn whatIfScenarioToolBtn--accent headerIconBtn whatIfIconBtn"
+                          onClick={() => {
+                            setIsDuplicatingScenario(false);
+                            setDuplicateScenarioName('');
+                            setIsRenamingScenario(false);
+                            setRenameScenarioName('');
+                            setIsAddingScenario(true);
+                          }}
+                          disabled={isBusy}
+                          aria-label={t('whatif.createScenario')}
+                          title={t('whatif.createScenario')}
                         >
-                          <path
-                            d="M12 20h8M4 13l9-9 3 3-9 9H4v-3z"
-                            stroke="currentColor"
-                            strokeWidth="1.75"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
-                    onClick={handleDeleteScenario}
-                    disabled={!activeScenarioId || isBusy}
-                    aria-label={t('whatif.deleteScenario')}
-                    title={t('whatif.deleteScenario')}
-                  >
-                    -
-                  </button>
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn headerIconBtn whatIfIconBtn"
+                          onClick={openDuplicateScenario}
+                          disabled={!activeScenarioId || isBusy}
+                          aria-label={t('whatif.duplicateScenario')}
+                          title={t('whatif.duplicateScenario')}
+                        >
+                          <svg
+                            className="whatIfDupIcon"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                          >
+                            <rect x="9" y="9" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.75" />
+                            <rect x="4" y="4" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.75" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="whatIfScenarioToolBtn headerIconBtn whatIfIconBtn"
+                          onClick={openRenameScenario}
+                          disabled={!activeScenarioId || isBusy}
+                          aria-label={t('whatif.renameScenario')}
+                          title={t('whatif.renameScenario')}
+                        >
+                          <svg
+                            className="whatIfRenameIcon"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M12 20h8M4 13l9-9 3 3-9 9H4v-3z"
+                              stroke="currentColor"
+                              strokeWidth="1.75"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      className="whatIfScenarioToolBtn whatIfScenarioToolBtn--danger headerIconBtn whatIfIconBtn positionActionBtnDanger"
+                      onClick={handleDeleteScenario}
+                      disabled={!activeScenarioId || isBusy}
+                      aria-label={t('whatif.deleteScenario')}
+                      title={t('whatif.deleteScenario')}
+                    >
+                      <svg
+                        className="whatIfScenarioTrashIcon"
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -1998,269 +2165,61 @@ export default function WhatIfScenariosPage({ hideValues }) {
               <>
                 <section className="whatIfSection whatIfSection--hypoBuy">
                   <header className="whatIfHypoSectionHead">
-                    <span className="whatIfHypoBadge whatIfHypoBadge--buy">{t('whatif.hypoSectionBadgeBuy')}</span>
-                  </header>
-                  <div className="whatIfBuyForms">
-                    <div className="whatIfBuyCard whatIfBuyCard--hypoBuy">
-                      <div className="whatIfBuyCardHeader">
-                        <h3>{t('portfolio.stockPosition')}</h3>
+                    <div className="whatIfHypoSectionHeadRow">
+                      <span className="whatIfHypoBadge whatIfHypoBadge--buy">{t('whatif.hypoSectionBadgeBuy')}</span>
+                      <div className="whatIfHypoAddMenuWrap" ref={hypoBuyMenuWrapRef}>
                         <button
                           type="button"
-                          className="headerIconBtn whatIfIconBtn"
-                          onClick={resetStockHypotheticalForm}
-                          aria-label={t('whatif.newHypotheticalAsset')}
-                          title={t('whatif.newHypotheticalAssetHint')}
+                          className="headerIconBtn whatIfIconBtn whatIfHypoAddMenuTrigger"
+                          aria-expanded={hypoBuyAddMenuOpen}
+                          aria-haspopup="menu"
+                          aria-label={t('whatif.hypoBuyAddMenuAria')}
+                          title={t('whatif.hypoBuyAddMenuAria')}
+                          onClick={() => setHypoBuyAddMenuOpen((o) => !o)}
                         >
                           +
                         </button>
-                      </div>
-                      <label className="modalLabel">
-                        {t('modals.asset')}
-                        <input
-                          className="profitabilityInput"
-                          value={stockForm.query}
-                          onChange={(e) => {
-                            const nextQuery = e.target.value;
-                            setStockForm((prev) => ({ ...prev, query: nextQuery, selectedSymbol: '' }));
-                          }}
-                          placeholder={t('modals.placeholderStock')}
-                        />
-                      </label>
-                      {!stockForm.selectedSymbol && normalizeText(stockForm.query) && (
-                        <div className="modalProductList">
-                          {isLoadingStockSymbols && <p className="modalHint">{t('modals.loadingSymbols')}</p>}
-                          {!isLoadingStockSymbols && stockSymbols.length === 0 && (
-                            <p className="modalHint">{t('modals.noMatchingStock')}</p>
-                          )}
-                          {!isLoadingStockSymbols && stockSymbols.length > 0 && (
-                            <ul>
-                              {stockSymbols.map((item) => (
-                                <li key={item.symbol}>
-                                  <button
-                                    type="button"
-                                    className="modalProductItem"
-                                    onClick={() =>
-                                      setStockForm((prev) => ({
-                                        ...prev,
-                                        selectedSymbol: item.symbol,
-                                        query: item.symbol,
-                                      }))
-                                    }
-                                  >
-                                    <span className="modalProductMain">{item.symbol}</span>
-                                    {item.securityName && <span className="modalProductSub">{item.securityName}</span>}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                      <div className="modalGrid">
-                        <label className="modalLabel">
-                          {t('portfolio.quantity')}
-                          <input
-                            ref={stockHypotheticalQtyRef}
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={stockForm.qty}
-                            onChange={(e) =>
-                              setStockForm((prev) => ({
-                                ...prev,
-                                qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="modalLabel">
-                          {t('modals.avgCostPerUnit')}
-                          <input
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={stockForm.buyPrice}
-                            onChange={(e) =>
-                              setStockForm((prev) => ({
-                                ...prev,
-                                buyPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <button
-                        type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoBuy"
-                        onClick={addStockHypotheticalBuyToList}
-                      >
-                        {t('whatif.addHypotheticalBuyToList')}
-                      </button>
-                    </div>
-
-                    <div className="whatIfBuyCard whatIfBuyCard--hypoBuy">
-                      <div className="whatIfBuyCardHeader">
-                        <h3>{t('portfolio.cryptoPosition')}</h3>
-                        <button
-                          type="button"
-                          className="headerIconBtn whatIfIconBtn"
-                          onClick={resetCryptoHypotheticalForm}
-                          aria-label={t('whatif.newHypotheticalAsset')}
-                          title={t('whatif.newHypotheticalAssetHint')}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <label className="modalLabel">
-                        {t('modals.asset')}
-                        <input
-                          className="profitabilityInput"
-                          value={cryptoForm.query}
-                          onChange={(e) => {
-                            const nextQuery = e.target.value;
-                            setCryptoForm((prev) => ({ ...prev, query: nextQuery, selectedProductId: '' }));
-                          }}
-                          placeholder={t('modals.placeholderCrypto')}
-                        />
-                      </label>
-                      {!cryptoForm.selectedProductId && normalizeText(cryptoForm.query) && (
-                        <div className="modalProductList">
-                          {isLoadingCryptoProducts && <p className="modalHint">{t('modals.loadingProducts')}</p>}
-                          {!isLoadingCryptoProducts && cryptoProducts.length === 0 && (
-                            <p className="modalHint">{t('modals.noMatchingCrypto')}</p>
-                          )}
-                          {!isLoadingCryptoProducts && cryptoProducts.length > 0 && (
-                            <ul>
-                              {cryptoProducts.map((item) => (
-                                <li key={item.productId}>
-                                  <button
-                                    type="button"
-                                    className="modalProductItem"
-                                    onClick={() =>
-                                      setCryptoForm((prev) => ({
-                                        ...prev,
-                                        selectedProductId: item.productId,
-                                        query: item.productId,
-                                      }))
-                                    }
-                                  >
-                                    <span className="modalProductMain">
-                                      {item.baseCurrency}/{item.quoteCurrency}
-                                    </span>
-                                    <span className="modalProductSub">{item.productId}</span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                      <div className="modalGrid">
-                        <label className="modalLabel">
-                          {t('portfolio.quantity')}
-                          <input
-                            ref={cryptoHypotheticalQtyRef}
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={cryptoForm.qty}
-                            onChange={(e) =>
-                              setCryptoForm((prev) => ({
-                                ...prev,
-                                qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="modalLabel">
-                          {t('modals.avgCostPerUnit')}
-                          <input
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={cryptoForm.buyPrice}
-                            onChange={(e) =>
-                              setCryptoForm((prev) => ({
-                                ...prev,
-                                buyPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <button
-                        type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoBuy"
-                        onClick={addCryptoHypotheticalBuyToList}
-                      >
-                        {t('whatif.addHypotheticalBuyToList')}
-                      </button>
-                    </div>
-
-                    <div
-                      className={`whatIfBuyCard whatIfBuyCard--hypoBuy whatIfBuyCard--csvImport${
-                        hypoBuyCsvExpanded ? ' whatIfBuyCard--csvImportOpen' : ''
-                      }`}
-                    >
-                      <div className="whatIfBuyCardHeader whatIfCsvImportHeader">
-                        <button
-                          type="button"
-                          className="whatIfCsvFoldTrigger"
-                          onClick={() => setHypoBuyCsvExpanded((v) => !v)}
-                          aria-expanded={hypoBuyCsvExpanded}
-                        >
-                          <span className="whatIfCsvDisclosureChevron" aria-hidden>
-                            {hypoBuyCsvExpanded ? '▼' : '▶'}
-                          </span>
-                          <span className="whatIfCsvFoldTriggerTitle">{t('whatif.hypoBuyCsvTitle')}</span>
-                        </button>
-                        {hypoBuyCsvExpanded && (
-                          <button
-                            type="button"
-                            className="whatIfCsvClearBtn"
-                            onClick={() => setHypoBuyCsvText('')}
-                            disabled={isBusy || isPersistingInputs || !hypoBuyCsvText.trim()}
-                          >
-                            {t('whatif.hypoBuyCsvClear')}
-                          </button>
+                        {hypoBuyAddMenuOpen && (
+                          <div className="whatIfHypoAddMenu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="whatIfHypoAddMenuItem"
+                              onClick={() => {
+                                setHypoBuyAddMenuOpen(false);
+                                setHypoBuyStockModalOpen(true);
+                              }}
+                            >
+                              {t('whatif.hypoBuyMenuStock')}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="whatIfHypoAddMenuItem"
+                              onClick={() => {
+                                setHypoBuyAddMenuOpen(false);
+                                setHypoBuyCryptoModalOpen(true);
+                              }}
+                            >
+                              {t('whatif.hypoBuyMenuCrypto')}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="whatIfHypoAddMenuItem"
+                              onClick={() => {
+                                setHypoBuyAddMenuOpen(false);
+                                setHypoBuyCsvModalOpen(true);
+                              }}
+                            >
+                              {t('whatif.hypoBuyMenuCsv')}
+                            </button>
+                          </div>
                         )}
                       </div>
-                      {hypoBuyCsvExpanded && (
-                        <div className="whatIfCsvImportPanel">
-                          <p className="whatIfCsvHelp">{t('whatif.hypoBuyCsvHelp')}</p>
-                          <label className="modalLabel">
-                            {t('whatif.hypoBuyCsvLabel')}
-                            <textarea
-                              className="whatIfCsvTextarea"
-                              value={hypoBuyCsvText}
-                              onChange={(e) => setHypoBuyCsvText(e.target.value)}
-                              placeholder={t('whatif.hypoBuyCsvPlaceholder')}
-                              spellCheck={false}
-                              rows={5}
-                              disabled={isBusy || isPersistingInputs}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoBuy"
-                            onClick={importHypotheticalBuysFromCsv}
-                            disabled={
-                              isBusy ||
-                              isPersistingInputs ||
-                              !String(hypoBuyCsvText || '').trim() ||
-                              !activeScenarioId
-                            }
-                          >
-                            {t('whatif.hypoBuyCsvImport')}
-                          </button>
-                        </div>
-                      )}
                     </div>
-                  </div>
+                  </header>
 
-                  <h3 className="whatIfHypotheticalAggregateTitle whatIfHypotheticalAggregateTitle--hypoBuy">
-                    {t('whatif.hypotheticalAggregateTitle')}
-                  </h3>
                   <div className="whatIfHypotheticalAggregateWrap whatIfHypotheticalAggregateWrap--buyCards">
                     <div className="whatIfHypoAggregateDesktopTable">
                       <div className="profitabilityTableWrap">
@@ -2275,8 +2234,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
                               <th scope="col">{t('portfolio.totalCostBasis')}</th>
                               <th scope="col">{t('portfolio.avgCostPerUnit')}</th>
                               <th scope="col">{t('whatif.hypoAggregateLineCountLabel')}</th>
-                              <th className="whatIfHypoAggDesktopActionsCol" scope="col">
-                                {t('modals.remove')}
+                              <th
+                                className="whatIfHypoAggDesktopActionsCol"
+                                scope="col"
+                                aria-label={t('whatif.hypoAggActionsColumn')}
+                              >
+                                {' '}
                               </th>
                             </tr>
                           </thead>
@@ -2326,17 +2289,32 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                       {hideValues ? '—' : formatCurrencyValue(row.avgCost, row.currency)}
                                     </td>
                                     <td data-label={t('whatif.hypoAggregateLineCountLabel')}>{lineCount}</td>
-                                    <td data-label={t('modals.remove')}>
-                                      <button
-                                        type="button"
-                                        className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                                        onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
-                                        disabled={lineCount === 0 || isPersistingInputs}
-                                        aria-label={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
-                                        title={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
-                                      >
-                                        ✕
-                                      </button>
+                                    <td
+                                      className="whatIfHypoAggDesktopActionsCol"
+                                      data-label={t('whatif.hypoAggActionsColumn')}
+                                    >
+                                      <div className="whatIfHypoAggActionsCell">
+                                        <button
+                                          type="button"
+                                          className="headerIconBtn whatIfIconBtn whatIfHypoAggAddBtn"
+                                          onClick={() => openHypoBuyModalForAggregate(aggKey)}
+                                          disabled={lineCount === 0 || !activeScenarioId || isBusy}
+                                          aria-label={t('whatif.hypoAggQuickAddBuyAria', { symbol: row.symbol })}
+                                          title={t('whatif.hypoAggQuickAddBuyAria', { symbol: row.symbol })}
+                                        >
+                                          +
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                          onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
+                                          disabled={lineCount === 0 || isPersistingInputs}
+                                          aria-label={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
+                                          title={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
                                     </td>
                                   </tr>
                                   {isOpen && lineCount > 0 && (
@@ -2350,8 +2328,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                 <th scope="col">{t('portfolio.quantity')}</th>
                                                 <th scope="col">{t('modals.avgCostPerUnit')}</th>
                                                 <th scope="col">{t('portfolio.totalCostBasis')}</th>
-                                                <th className="whatIfHypoNestedLinesTableActionsCol" scope="col">
-                                                  {t('modals.remove')}
+                                                <th
+                                                  className="whatIfHypoNestedLinesTableActionsCol"
+                                                  scope="col"
+                                                  aria-label={t('modals.remove')}
+                                                >
+                                                  {' '}
                                                 </th>
                                               </tr>
                                             </thead>
@@ -2492,6 +2474,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 <div className="positionCardActionIcons">
                                   <button
                                     type="button"
+                                    className="headerIconBtn whatIfIconBtn whatIfHypoAggAddBtn"
+                                    onClick={() => openHypoBuyModalForAggregate(aggKey)}
+                                    disabled={lineCount === 0 || !activeScenarioId || isBusy}
+                                    aria-label={t('whatif.hypoAggQuickAddBuyAria', { symbol: row.symbol })}
+                                    title={t('whatif.hypoAggQuickAddBuyAria', { symbol: row.symbol })}
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
                                     className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                     onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
                                     disabled={lineCount === 0 || isPersistingInputs}
@@ -2594,293 +2586,50 @@ export default function WhatIfScenariosPage({ hideValues }) {
 
                 <section className="whatIfSection whatIfSection--hypoSell">
                   <header className="whatIfHypoSectionHead">
-                    <span className="whatIfHypoBadge whatIfHypoBadge--sell">{t('whatif.hypoSectionBadgeSell')}</span>
+                    <div className="whatIfHypoSectionHeadRow">
+                      <span className="whatIfHypoBadge whatIfHypoBadge--sell">{t('whatif.hypoSectionBadgeSell')}</span>
+                      <div className="whatIfHypoAddMenuWrap" ref={hypoSellMenuWrapRef}>
+                        <button
+                          type="button"
+                          className="headerIconBtn whatIfIconBtn whatIfHypoAddMenuTrigger whatIfHypoAddMenuTrigger--sell"
+                          aria-expanded={hypoSellAddMenuOpen}
+                          aria-haspopup="menu"
+                          aria-label={t('whatif.hypoSellAddMenuAria')}
+                          title={t('whatif.hypoSellAddMenuAria')}
+                          onClick={() => setHypoSellAddMenuOpen((o) => !o)}
+                        >
+                          +
+                        </button>
+                        {hypoSellAddMenuOpen && (
+                          <div className="whatIfHypoAddMenu whatIfHypoAddMenu--sell" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="whatIfHypoAddMenuItem"
+                              onClick={() => {
+                                setHypoSellAddMenuOpen(false);
+                                setHypoSellStockModalOpen(true);
+                              }}
+                            >
+                              {t('whatif.hypoSellMenuStock')}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="whatIfHypoAddMenuItem"
+                              onClick={() => {
+                                setHypoSellAddMenuOpen(false);
+                                setHypoSellCryptoModalOpen(true);
+                              }}
+                            >
+                              {t('whatif.hypoSellMenuCrypto')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </header>
-                  <div className="whatIfBuyForms">
-                    <div className="whatIfBuyCard whatIfBuyCard--hypoSell">
-                      <div className="whatIfBuyCardHeader">
-                        <h3>{t('portfolio.stockPosition')}</h3>
-                        <button
-                          type="button"
-                          className="headerIconBtn whatIfIconBtn"
-                          onClick={resetStockSellForm}
-                          aria-label={t('whatif.newHypotheticalAsset')}
-                          title={t('whatif.newHypotheticalAssetHint')}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <label className="modalLabel">
-                        {t('modals.asset')}
-                        <select
-                          className="profitabilityInput"
-                          value={(() => {
-                            const sym = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
-                            if (!sym) return '';
-                            return stockSellHoldingsOptions.some(
-                              (r) => String(r.symbol || '').toUpperCase() === sym,
-                            )
-                              ? sym
-                              : '';
-                          })()}
-                          onChange={(e) => {
-                            const sym = normalizeText(e.target.value).toUpperCase();
-                            if (!sym) {
-                              setStockSellForm((prev) => ({
-                                ...prev,
-                                selectedSymbol: '',
-                                qty: '',
-                                sellPrice: '',
-                                sellPct: 0,
-                              }));
-                              return;
-                            }
-                            const avail = sellFormAvailableQtyForSymbol(sym);
-                            const priceStr = marketPriceDefaultStringForSymbol(portfolioTableRows, sym);
-                            setStockSellForm((prev) => ({
-                              ...prev,
-                              selectedSymbol: sym,
-                              sellPct: avail > 0 ? 100 : 0,
-                              qty: avail > 0 ? String(avail) : '',
-                              sellPrice: priceStr,
-                            }));
-                          }}
-                        >
-                          <option value="">{t('whatif.sellSelectHoldingPlaceholder')}</option>
-                          {stockSellHoldingsOptions.map((row) => {
-                            const sym = String(row.symbol || '').toUpperCase();
-                            const labelName = row.name && String(row.name) !== sym ? String(row.name) : '';
-                            return (
-                              <option key={sym} value={sym}>
-                                {labelName ? `${sym} — ${labelName}` : sym} ({formatQty(num(row.qty))})
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </label>
-                      {stockSellHoldingsOptions.length === 0 ? (
-                        <p className="modalHint">{t('whatif.sellNoHoldingsWithQty')}</p>
-                      ) : null}
-                      {normalizeText(stockSellForm.selectedSymbol) ? (
-                        <p className="modalHint">
-                          {t('whatif.holdingQtyForSalesHint', {
-                            qty: formatQty(livePortfolioQtyForSymbol(stockSellForm.selectedSymbol)),
-                          })}
-                        </p>
-                      ) : null}
-                      <div className="modalGrid">
-                        <label className="modalLabel">
-                          {t('portfolio.quantity')}
-                          <input
-                            ref={stockSellQtyRef}
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            autoComplete="off"
-                            value={stockSellForm.qty}
-                            onChange={handleStockSellQtyChange}
-                            disabled={!(sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol) > 0)}
-                            placeholder={
-                              (() => {
-                                const avail = sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol);
-                                if (!(avail > 0)) return '0';
-                                return `≤ ${formatQty(avail)}`;
-                              })()
-                            }
-                          />
-                        </label>
-                        <label className="modalLabel">
-                          {t('modals.sellPct')}
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                            value={stockSellForm.sellPct}
-                            onChange={handleStockSellPctChange}
-                            className="modalRange"
-                            disabled={!(sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol) > 0)}
-                          />
-                          <div className="modalRangeMeta">
-                            <strong>
-                              {Number.isFinite(stockSellForm.sellPct)
-                                ? `${Number(stockSellForm.sellPct).toFixed(1)}%`
-                                : '0.0%'}
-                            </strong>
-                            <span>
-                              {t('modals.qtyShort')} {stockSellForm.qty || '0'}
-                            </span>
-                          </div>
-                        </label>
-                        <label className="modalLabel">
-                          {t('whatif.sellPricePerUnit')}
-                          <input
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={stockSellForm.sellPrice}
-                            onChange={(e) =>
-                              setStockSellForm((prev) => ({
-                                ...prev,
-                                sellPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <button
-                        type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoSell"
-                        onClick={addStockHypotheticalSellToList}
-                      >
-                        {t('whatif.addHypotheticalSellToList')}
-                      </button>
-                    </div>
 
-                    <div className="whatIfBuyCard whatIfBuyCard--hypoSell">
-                      <div className="whatIfBuyCardHeader">
-                        <h3>{t('portfolio.cryptoPosition')}</h3>
-                        <button
-                          type="button"
-                          className="headerIconBtn whatIfIconBtn"
-                          onClick={resetCryptoSellForm}
-                          aria-label={t('whatif.newHypotheticalAsset')}
-                          title={t('whatif.newHypotheticalAssetHint')}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <label className="modalLabel">
-                        {t('modals.asset')}
-                        <select
-                          className="profitabilityInput"
-                          value={(() => {
-                            const sym = normalizeText(cryptoSellForm.selectedSymbol).toUpperCase();
-                            if (!sym) return '';
-                            return cryptoSellHoldingsOptions.some(
-                              (r) => String(r.symbol || '').toUpperCase() === sym,
-                            )
-                              ? sym
-                              : '';
-                          })()}
-                          onChange={(e) => {
-                            const sym = normalizeText(e.target.value).toUpperCase();
-                            if (!sym) {
-                              setCryptoSellForm((prev) => ({
-                                ...prev,
-                                selectedSymbol: '',
-                                qty: '',
-                                sellPrice: '',
-                                sellPct: 0,
-                              }));
-                              return;
-                            }
-                            const avail = sellFormAvailableQtyForSymbol(sym);
-                            const priceStr = marketPriceDefaultStringForSymbol(portfolioTableRows, sym);
-                            setCryptoSellForm((prev) => ({
-                              ...prev,
-                              selectedSymbol: sym,
-                              sellPct: avail > 0 ? 100 : 0,
-                              qty: avail > 0 ? String(avail) : '',
-                              sellPrice: priceStr,
-                            }));
-                          }}
-                        >
-                          <option value="">{t('whatif.sellSelectHoldingPlaceholder')}</option>
-                          {cryptoSellHoldingsOptions.map((row) => {
-                            const sym = String(row.symbol || '').toUpperCase();
-                            const labelName = row.name && String(row.name) !== sym ? String(row.name) : '';
-                            return (
-                              <option key={sym} value={sym}>
-                                {labelName ? `${sym} — ${labelName}` : sym} ({formatQty(num(row.qty))})
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </label>
-                      {cryptoSellHoldingsOptions.length === 0 ? (
-                        <p className="modalHint">{t('whatif.sellNoHoldingsWithQty')}</p>
-                      ) : null}
-                      {normalizeText(cryptoSellForm.selectedSymbol) ? (
-                        <p className="modalHint">
-                          {t('whatif.holdingQtyForSalesHint', {
-                            qty: formatQty(livePortfolioQtyForSymbol(cryptoSellForm.selectedSymbol)),
-                          })}
-                        </p>
-                      ) : null}
-                      <div className="modalGrid">
-                        <label className="modalLabel">
-                          {t('portfolio.quantity')}
-                          <input
-                            ref={cryptoSellQtyRef}
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            autoComplete="off"
-                            value={cryptoSellForm.qty}
-                            onChange={handleCryptoSellQtyChange}
-                            disabled={!(sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol) > 0)}
-                            placeholder={
-                              (() => {
-                                const avail = sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol);
-                                if (!(avail > 0)) return '0';
-                                return `≤ ${formatQty(avail)}`;
-                              })()
-                            }
-                          />
-                        </label>
-                        <label className="modalLabel">
-                          {t('modals.sellPct')}
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                            value={cryptoSellForm.sellPct}
-                            onChange={handleCryptoSellPctChange}
-                            className="modalRange"
-                            disabled={!(sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol) > 0)}
-                          />
-                          <div className="modalRangeMeta">
-                            <strong>
-                              {Number.isFinite(cryptoSellForm.sellPct)
-                                ? `${Number(cryptoSellForm.sellPct).toFixed(1)}%`
-                                : '0.0%'}
-                            </strong>
-                            <span>
-                              {t('modals.qtyShort')} {cryptoSellForm.qty || '0'}
-                            </span>
-                          </div>
-                        </label>
-                        <label className="modalLabel">
-                          {t('whatif.sellPricePerUnit')}
-                          <input
-                            className="profitabilityInput"
-                            type="text"
-                            inputMode="decimal"
-                            value={cryptoSellForm.sellPrice}
-                            onChange={(e) =>
-                              setCryptoSellForm((prev) => ({
-                                ...prev,
-                                sellPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-                      <button
-                        type="button"
-                        className="modalBtn whatIfAddHypotheticalToListBtn whatIfAddHypotheticalToListBtn--hypoSell"
-                        onClick={addCryptoHypotheticalSellToList}
-                      >
-                        {t('whatif.addHypotheticalSellToList')}
-                      </button>
-                    </div>
-                  </div>
-
-                  <h3 className="whatIfHypotheticalAggregateTitle whatIfHypotheticalAggregateTitle--hypoSell">
-                    {t('whatif.hypotheticalSalesAggregateTitle')}
-                  </h3>
                   <div className="whatIfHypotheticalAggregateWrap whatIfHypotheticalAggregateWrap--sellCards">
                     <div className="whatIfHypoAggregateDesktopTable">
                       <div className="profitabilityTableWrap">
@@ -2896,8 +2645,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
                               <th scope="col">{t('modals.historyTableSaleAmount')}</th>
                               <th scope="col">{t('modals.historyTableRealizedPl')}</th>
                               <th scope="col">{t('whatif.hypoAggregateSellLineCountLabel')}</th>
-                              <th className="whatIfHypoAggDesktopActionsCol" scope="col">
-                                {t('modals.remove')}
+                              <th
+                                className="whatIfHypoAggDesktopActionsCol"
+                                scope="col"
+                                aria-label={t('whatif.hypoAggActionsColumn')}
+                              >
+                                {' '}
                               </th>
                             </tr>
                           </thead>
@@ -2961,17 +2714,32 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                       </div>
                                     </td>
                                     <td data-label={t('whatif.hypoAggregateSellLineCountLabel')}>{lineCount}</td>
-                                    <td data-label={t('modals.remove')}>
-                                      <button
-                                        type="button"
-                                        className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                                        onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
-                                        disabled={lineCount === 0 || isPersistingInputs}
-                                        aria-label={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
-                                        title={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
-                                      >
-                                        ✕
-                                      </button>
+                                    <td
+                                      className="whatIfHypoAggDesktopActionsCol"
+                                      data-label={t('whatif.hypoAggActionsColumn')}
+                                    >
+                                      <div className="whatIfHypoAggActionsCell">
+                                        <button
+                                          type="button"
+                                          className="headerIconBtn whatIfIconBtn whatIfHypoAggAddBtn"
+                                          onClick={() => openHypoSellModalForAggregate(aggKey)}
+                                          disabled={lineCount === 0 || !activeScenarioId || isBusy}
+                                          aria-label={t('whatif.hypoAggQuickAddSellAria', { symbol: row.symbol })}
+                                          title={t('whatif.hypoAggQuickAddSellAria', { symbol: row.symbol })}
+                                        >
+                                          +
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                          onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
+                                          disabled={lineCount === 0 || isPersistingInputs}
+                                          aria-label={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
+                                          title={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
                                     </td>
                                   </tr>
                                   {isOpen && lineCount > 0 && (
@@ -2988,8 +2756,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                 <th scope="col">{t('modals.historyTableSaleAmount')}</th>
                                                 <th scope="col">{t('modals.historyTableRealizedPl')}</th>
                                                 <th scope="col">{t('modals.historyTableRealizedReturn')}</th>
-                                                <th className="whatIfHypoNestedLinesTableActionsCol" scope="col">
-                                                  {t('modals.remove')}
+                                                <th
+                                                  className="whatIfHypoNestedLinesTableActionsCol"
+                                                  scope="col"
+                                                  aria-label={t('modals.remove')}
+                                                >
+                                                  {' '}
                                                 </th>
                                               </tr>
                                             </thead>
@@ -3156,6 +2928,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 <div className="positionCardActionIcons">
                                   <button
                                     type="button"
+                                    className="headerIconBtn whatIfIconBtn whatIfHypoAggAddBtn"
+                                    onClick={() => openHypoSellModalForAggregate(aggKey)}
+                                    disabled={lineCount === 0 || !activeScenarioId || isBusy}
+                                    aria-label={t('whatif.hypoAggQuickAddSellAria', { symbol: row.symbol })}
+                                    title={t('whatif.hypoAggQuickAddSellAria', { symbol: row.symbol })}
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
                                     className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                     onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
                                     disabled={lineCount === 0 || isPersistingInputs}
@@ -3283,8 +3065,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
                 </section>
 
-                <section className="whatIfSection">
-                  <h2>{t('whatif.featureATitle')}</h2>
+                <section className="whatIfSection whatIfSection--targetPrice">
+                  <header className="whatIfHypoSectionHead">
+                    <div className="whatIfHypoSectionHeadRow">
+                      <h2 className="whatIfHypoBadge whatIfHypoBadge--target">{t('whatif.featureATitle')}</h2>
+                    </div>
+                  </header>
                   <div className="whatIfHypotheticalAggregateWrap whatIfHypotheticalAggregateWrap--targetPriceCards">
                     <div className="whatIfTargetPriceDesktopTable profitabilityTableWrap">
                       <table className="profitabilityTable whatIfTable whatIfTableTarget">
@@ -3827,6 +3613,690 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     )}
                   </div>
                 </section>
+
+                {hypoBuyStockModalOpen && (
+                  <div
+                    className="modalOverlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="hypo-buy-stock-modal-title"
+                  >
+                    <section className="modalCard whatIfHypoBuyModalCard whatIfHypoBuyModalCard--stock">
+                      <header className="modalHeader">
+                        <h2 id="hypo-buy-stock-modal-title">{t('modals.addStockPosition')}</h2>
+                        <button
+                          type="button"
+                          className="modalCloseBtn"
+                          aria-label={t('modals.close')}
+                          onClick={() => setHypoBuyStockModalOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </header>
+                      <div className="modalBody">
+                        <label className="modalLabel">
+                          {t('modals.asset')}
+                          <input
+                            className="modalInput"
+                            value={stockForm.query}
+                            onChange={(e) => {
+                              const nextQuery = e.target.value;
+                              setStockForm((prev) => ({ ...prev, query: nextQuery, selectedSymbol: '' }));
+                            }}
+                            placeholder={t('modals.placeholderStock')}
+                          />
+                        </label>
+                        {!stockForm.selectedSymbol && normalizeText(stockForm.query) && (
+                          <div className="modalProductList">
+                            {isLoadingStockSymbols && <p className="modalHint">{t('modals.loadingSymbols')}</p>}
+                            {!isLoadingStockSymbols && stockSymbols.length === 0 && (
+                              <p className="modalHint">{t('modals.noMatchingStock')}</p>
+                            )}
+                            {!isLoadingStockSymbols && stockSymbols.length > 0 && (
+                              <ul>
+                                {stockSymbols.map((item) => (
+                                  <li key={item.symbol}>
+                                    <button
+                                      type="button"
+                                      className="modalProductItem"
+                                      onClick={() =>
+                                        setStockForm((prev) => ({
+                                          ...prev,
+                                          selectedSymbol: item.symbol,
+                                          query: item.symbol,
+                                        }))
+                                      }
+                                    >
+                                      <span className="modalProductMain">{item.symbol}</span>
+                                      {item.securityName && (
+                                        <span className="modalProductSub">{item.securityName}</span>
+                                      )}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                        <div className="modalGrid">
+                          <label className="modalLabel">
+                            {t('modals.quantity')}
+                            <input
+                              ref={stockHypotheticalQtyRef}
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={stockForm.qty}
+                              disabled={!stockForm.selectedSymbol}
+                              aria-disabled={!stockForm.selectedSymbol}
+                              onChange={(e) =>
+                                setStockForm((prev) => ({
+                                  ...prev,
+                                  qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="modalLabel">
+                            {t('modals.avgCostPerUnit')}
+                            <input
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={stockForm.buyPrice}
+                              disabled={!stockForm.selectedSymbol}
+                              aria-disabled={!stockForm.selectedSymbol}
+                              onChange={(e) =>
+                                setStockForm((prev) => ({
+                                  ...prev,
+                                  buyPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <footer className="modalFooter whatIfHypoBuyModalFooter">
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoBuyStockModalOpen(false)}
+                        >
+                          {t('modals.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => {
+                            resetStockHypotheticalForm();
+                          }}
+                        >
+                          {t('whatif.hypoBuyModalClearForm')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn"
+                          onClick={() => {
+                            if (addStockHypotheticalBuyToList()) setHypoBuyStockModalOpen(false);
+                          }}
+                        >
+                          {t('whatif.addHypotheticalBuyToList')}
+                        </button>
+                      </footer>
+                      <p className="modalDisclaimer">{t('modals.disclaimerStock')}</p>
+                    </section>
+                  </div>
+                )}
+
+                {hypoBuyCryptoModalOpen && (
+                  <div
+                    className="modalOverlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="hypo-buy-crypto-modal-title"
+                  >
+                    <section className="modalCard whatIfHypoBuyModalCard whatIfHypoBuyModalCard--crypto">
+                      <header className="modalHeader">
+                        <h2 id="hypo-buy-crypto-modal-title">{t('modals.addCryptoPosition')}</h2>
+                        <button
+                          type="button"
+                          className="modalCloseBtn"
+                          aria-label={t('modals.close')}
+                          onClick={() => setHypoBuyCryptoModalOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </header>
+                      <div className="modalBody">
+                        <label className="modalLabel">
+                          {t('modals.asset')}
+                          <input
+                            className="modalInput"
+                            value={cryptoForm.query}
+                            onChange={(e) => {
+                              const nextQuery = e.target.value;
+                              setCryptoForm((prev) => ({ ...prev, query: nextQuery, selectedProductId: '' }));
+                            }}
+                            placeholder={t('modals.placeholderCrypto')}
+                          />
+                        </label>
+                        {!cryptoForm.selectedProductId && normalizeText(cryptoForm.query) && (
+                          <div className="modalProductList">
+                            {isLoadingCryptoProducts && <p className="modalHint">{t('modals.loadingProducts')}</p>}
+                            {!isLoadingCryptoProducts && cryptoProducts.length === 0 && (
+                              <p className="modalHint">{t('modals.noMatchingCrypto')}</p>
+                            )}
+                            {!isLoadingCryptoProducts && cryptoProducts.length > 0 && (
+                              <ul>
+                                {cryptoProducts.map((item) => (
+                                  <li key={item.productId}>
+                                    <button
+                                      type="button"
+                                      className="modalProductItem"
+                                      onClick={() =>
+                                        setCryptoForm((prev) => ({
+                                          ...prev,
+                                          selectedProductId: item.productId,
+                                          query: item.productId,
+                                        }))
+                                      }
+                                    >
+                                      <span className="modalProductMain">
+                                        {item.baseCurrency}/{item.quoteCurrency}
+                                      </span>
+                                      <span className="modalProductSub">{item.productId}</span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                        <div className="modalGrid">
+                          <label className="modalLabel">
+                            {t('modals.quantity')}
+                            <input
+                              ref={cryptoHypotheticalQtyRef}
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={cryptoForm.qty}
+                              disabled={!cryptoForm.selectedProductId}
+                              aria-disabled={!cryptoForm.selectedProductId}
+                              onChange={(e) =>
+                                setCryptoForm((prev) => ({
+                                  ...prev,
+                                  qty: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="modalLabel">
+                            {t('modals.avgCostPerUnit')}
+                            <input
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={cryptoForm.buyPrice}
+                              disabled={!cryptoForm.selectedProductId}
+                              aria-disabled={!cryptoForm.selectedProductId}
+                              onChange={(e) =>
+                                setCryptoForm((prev) => ({
+                                  ...prev,
+                                  buyPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <footer className="modalFooter whatIfHypoBuyModalFooter">
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoBuyCryptoModalOpen(false)}
+                        >
+                          {t('modals.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => {
+                            resetCryptoHypotheticalForm();
+                          }}
+                        >
+                          {t('whatif.hypoBuyModalClearForm')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn"
+                          onClick={() => {
+                            if (addCryptoHypotheticalBuyToList()) setHypoBuyCryptoModalOpen(false);
+                          }}
+                        >
+                          {t('whatif.addHypotheticalBuyToList')}
+                        </button>
+                      </footer>
+                      <p className="modalDisclaimer">{t('modals.disclaimerCrypto')}</p>
+                    </section>
+                  </div>
+                )}
+
+                {hypoBuyCsvModalOpen && (
+                  <div
+                    className="modalOverlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="hypo-buy-csv-modal-title"
+                  >
+                    <section className="modalCard modalCard--wide whatIfHypoBuyModalCard whatIfHypoBuyModalCard--csv">
+                      <header className="modalHeader">
+                        <h2 id="hypo-buy-csv-modal-title">{t('whatif.hypoBuyCsvTitle')}</h2>
+                        <button
+                          type="button"
+                          className="modalCloseBtn"
+                          aria-label={t('modals.close')}
+                          onClick={() => setHypoBuyCsvModalOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </header>
+                      <div className="modalBody">
+                        <p className="whatIfCsvHelp">{t('whatif.hypoBuyCsvHelp')}</p>
+                        <label className="modalLabel">
+                          {t('whatif.hypoBuyCsvLabel')}
+                          <textarea
+                            className="whatIfCsvTextarea whatIfHypoBuyCsvTextarea"
+                            value={hypoBuyCsvText}
+                            onChange={(e) => setHypoBuyCsvText(e.target.value)}
+                            placeholder={t('whatif.hypoBuyCsvPlaceholder')}
+                            spellCheck={false}
+                            rows={8}
+                            disabled={isBusy || isPersistingInputs}
+                          />
+                        </label>
+                      </div>
+                      <footer className="modalFooter whatIfHypoBuyModalFooter">
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoBuyCsvModalOpen(false)}
+                        >
+                          {t('modals.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoBuyCsvText('')}
+                          disabled={isBusy || isPersistingInputs || !hypoBuyCsvText.trim()}
+                        >
+                          {t('whatif.hypoBuyCsvClear')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn"
+                          onClick={() => {
+                            if (importHypotheticalBuysFromCsv()) setHypoBuyCsvModalOpen(false);
+                          }}
+                          disabled={
+                            isBusy ||
+                            isPersistingInputs ||
+                            !String(hypoBuyCsvText || '').trim() ||
+                            !activeScenarioId
+                          }
+                        >
+                          {t('whatif.hypoBuyCsvImport')}
+                        </button>
+                      </footer>
+                    </section>
+                  </div>
+                )}
+
+                {hypoSellStockModalOpen && (
+                  <div
+                    className="modalOverlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="hypo-sell-stock-modal-title"
+                  >
+                    <section className="modalCard whatIfHypoSellModalCard">
+                      <header className="modalHeader">
+                        <h2 id="hypo-sell-stock-modal-title">{t('whatif.hypoSellModalStockTitle')}</h2>
+                        <button
+                          type="button"
+                          className="modalCloseBtn"
+                          aria-label={t('modals.close')}
+                          onClick={() => setHypoSellStockModalOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </header>
+                      <div className="modalBody">
+                        <label className="modalLabel">
+                          {t('modals.asset')}
+                          <select
+                            className="modalSelect"
+                            value={(() => {
+                              const sym = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
+                              if (!sym) return '';
+                              return stockSellHoldingsOptions.some(
+                                (r) => String(r.symbol || '').toUpperCase() === sym,
+                              )
+                                ? sym
+                                : '';
+                            })()}
+                            onChange={(e) => {
+                              const sym = normalizeText(e.target.value).toUpperCase();
+                              if (!sym) {
+                                setStockSellForm((prev) => ({
+                                  ...prev,
+                                  selectedSymbol: '',
+                                  qty: '',
+                                  sellPrice: '',
+                                  sellPct: 0,
+                                }));
+                                return;
+                              }
+                              const avail = sellFormAvailableQtyForSymbol(sym);
+                              const priceStr = marketPriceDefaultStringForSymbol(portfolioTableRows, sym);
+                              setStockSellForm((prev) => ({
+                                ...prev,
+                                selectedSymbol: sym,
+                                sellPct: avail > 0 ? 100 : 0,
+                                qty: avail > 0 ? String(avail) : '',
+                                sellPrice: priceStr,
+                              }));
+                            }}
+                          >
+                            <option value="">{t('whatif.sellSelectHoldingPlaceholder')}</option>
+                            {stockSellHoldingsOptions.map((row) => {
+                              const sym = String(row.symbol || '').toUpperCase();
+                              const labelName = row.name && String(row.name) !== sym ? String(row.name) : '';
+                              return (
+                                <option key={sym} value={sym}>
+                                  {labelName ? `${sym} — ${labelName}` : sym} ({formatQty(num(row.qty))})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </label>
+                        {stockSellHoldingsOptions.length === 0 ? (
+                          <p className="modalHint">{t('whatif.sellNoHoldingsWithQty')}</p>
+                        ) : null}
+                        {normalizeText(stockSellForm.selectedSymbol) ? (
+                          <p className="modalHint">
+                            {t('whatif.holdingQtyForSalesHint', {
+                              qty: formatQty(livePortfolioQtyForSymbol(stockSellForm.selectedSymbol)),
+                            })}
+                          </p>
+                        ) : null}
+                        <div className="modalGrid">
+                          <label className="modalLabel">
+                            {t('modals.quantity')}
+                            <input
+                              ref={stockSellQtyRef}
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={stockSellForm.qty}
+                              onChange={handleStockSellQtyChange}
+                              disabled={!(sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol) > 0)}
+                              placeholder={
+                                (() => {
+                                  const avail = sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol);
+                                  if (!(avail > 0)) return '0';
+                                  return `≤ ${formatQty(avail)}`;
+                                })()
+                              }
+                            />
+                          </label>
+                          <label className="modalLabel">
+                            {t('modals.sellPct')}
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={stockSellForm.sellPct}
+                              onChange={handleStockSellPctChange}
+                              className="modalRange"
+                              disabled={!(sellFormAvailableQtyForSymbol(stockSellForm.selectedSymbol) > 0)}
+                            />
+                            <div className="modalRangeMeta">
+                              <strong>
+                                {Number.isFinite(stockSellForm.sellPct)
+                                  ? `${Number(stockSellForm.sellPct).toFixed(1)}%`
+                                  : '0.0%'}
+                              </strong>
+                              <span>
+                                {t('modals.qtyShort')} {stockSellForm.qty || '0'}
+                              </span>
+                            </div>
+                          </label>
+                          <label className="modalLabel whatIfHypoSellModalGridFull">
+                            {t('whatif.sellPricePerUnit')}
+                            <input
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={stockSellForm.sellPrice}
+                              onChange={(e) =>
+                                setStockSellForm((prev) => ({
+                                  ...prev,
+                                  sellPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <footer className="modalFooter whatIfHypoBuyModalFooter">
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoSellStockModalOpen(false)}
+                        >
+                          {t('modals.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => {
+                            resetStockSellForm();
+                          }}
+                        >
+                          {t('whatif.hypoBuyModalClearForm')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn"
+                          onClick={() => {
+                            if (addStockHypotheticalSellToList()) setHypoSellStockModalOpen(false);
+                          }}
+                        >
+                          {t('whatif.addHypotheticalSellToList')}
+                        </button>
+                      </footer>
+                    </section>
+                  </div>
+                )}
+
+                {hypoSellCryptoModalOpen && (
+                  <div
+                    className="modalOverlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="hypo-sell-crypto-modal-title"
+                  >
+                    <section className="modalCard whatIfHypoSellModalCard">
+                      <header className="modalHeader">
+                        <h2 id="hypo-sell-crypto-modal-title">{t('whatif.hypoSellModalCryptoTitle')}</h2>
+                        <button
+                          type="button"
+                          className="modalCloseBtn"
+                          aria-label={t('modals.close')}
+                          onClick={() => setHypoSellCryptoModalOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </header>
+                      <div className="modalBody">
+                        <label className="modalLabel">
+                          {t('modals.asset')}
+                          <select
+                            className="modalSelect"
+                            value={(() => {
+                              const sym = normalizeText(cryptoSellForm.selectedSymbol).toUpperCase();
+                              if (!sym) return '';
+                              return cryptoSellHoldingsOptions.some(
+                                (r) => String(r.symbol || '').toUpperCase() === sym,
+                              )
+                                ? sym
+                                : '';
+                            })()}
+                            onChange={(e) => {
+                              const sym = normalizeText(e.target.value).toUpperCase();
+                              if (!sym) {
+                                setCryptoSellForm((prev) => ({
+                                  ...prev,
+                                  selectedSymbol: '',
+                                  qty: '',
+                                  sellPrice: '',
+                                  sellPct: 0,
+                                }));
+                                return;
+                              }
+                              const avail = sellFormAvailableQtyForSymbol(sym);
+                              const priceStr = marketPriceDefaultStringForSymbol(portfolioTableRows, sym);
+                              setCryptoSellForm((prev) => ({
+                                ...prev,
+                                selectedSymbol: sym,
+                                sellPct: avail > 0 ? 100 : 0,
+                                qty: avail > 0 ? String(avail) : '',
+                                sellPrice: priceStr,
+                              }));
+                            }}
+                          >
+                            <option value="">{t('whatif.sellSelectHoldingPlaceholder')}</option>
+                            {cryptoSellHoldingsOptions.map((row) => {
+                              const sym = String(row.symbol || '').toUpperCase();
+                              const labelName = row.name && String(row.name) !== sym ? String(row.name) : '';
+                              return (
+                                <option key={sym} value={sym}>
+                                  {labelName ? `${sym} — ${labelName}` : sym} ({formatQty(num(row.qty))})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </label>
+                        {cryptoSellHoldingsOptions.length === 0 ? (
+                          <p className="modalHint">{t('whatif.sellNoHoldingsWithQty')}</p>
+                        ) : null}
+                        {normalizeText(cryptoSellForm.selectedSymbol) ? (
+                          <p className="modalHint">
+                            {t('whatif.holdingQtyForSalesHint', {
+                              qty: formatQty(livePortfolioQtyForSymbol(cryptoSellForm.selectedSymbol)),
+                            })}
+                          </p>
+                        ) : null}
+                        <div className="modalGrid">
+                          <label className="modalLabel">
+                            {t('modals.quantity')}
+                            <input
+                              ref={cryptoSellQtyRef}
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={cryptoSellForm.qty}
+                              onChange={handleCryptoSellQtyChange}
+                              disabled={!(sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol) > 0)}
+                              placeholder={
+                                (() => {
+                                  const avail = sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol);
+                                  if (!(avail > 0)) return '0';
+                                  return `≤ ${formatQty(avail)}`;
+                                })()
+                              }
+                            />
+                          </label>
+                          <label className="modalLabel">
+                            {t('modals.sellPct')}
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={cryptoSellForm.sellPct}
+                              onChange={handleCryptoSellPctChange}
+                              className="modalRange"
+                              disabled={!(sellFormAvailableQtyForSymbol(cryptoSellForm.selectedSymbol) > 0)}
+                            />
+                            <div className="modalRangeMeta">
+                              <strong>
+                                {Number.isFinite(cryptoSellForm.sellPct)
+                                  ? `${Number(cryptoSellForm.sellPct).toFixed(1)}%`
+                                  : '0.0%'}
+                              </strong>
+                              <span>
+                                {t('modals.qtyShort')} {cryptoSellForm.qty || '0'}
+                              </span>
+                            </div>
+                          </label>
+                          <label className="modalLabel whatIfHypoSellModalGridFull">
+                            {t('whatif.sellPricePerUnit')}
+                            <input
+                              className="modalInput"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={cryptoSellForm.sellPrice}
+                              onChange={(e) =>
+                                setCryptoSellForm((prev) => ({
+                                  ...prev,
+                                  sellPrice: sanitizeDecimalInput(e.target.value, { allowNegative: false }),
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <footer className="modalFooter whatIfHypoBuyModalFooter">
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoSellCryptoModalOpen(false)}
+                        >
+                          {t('modals.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => {
+                            resetCryptoSellForm();
+                          }}
+                        >
+                          {t('whatif.hypoBuyModalClearForm')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn"
+                          onClick={() => {
+                            if (addCryptoHypotheticalSellToList()) setHypoSellCryptoModalOpen(false);
+                          }}
+                        >
+                          {t('whatif.addHypotheticalSellToList')}
+                        </button>
+                      </footer>
+                    </section>
+                  </div>
+                )}
 
               </>
             )}
