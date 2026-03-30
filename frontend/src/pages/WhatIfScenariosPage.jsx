@@ -720,20 +720,23 @@ export default function WhatIfScenariosPage({ hideValues }) {
     return Math.max(0, num(baselineRow?.qty));
   }
 
+  function hypotheticalBuyQtyForSymbol(symbol) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    if (!sym) return 0;
+    let sum = 0;
+    for (const r of buyRows) {
+      if (String(r.symbol || '').trim().toUpperCase() !== sym) continue;
+      sum += num(r.qty);
+    }
+    return sum;
+  }
+
   /**
-   * Max qty for sell form inputs: remaining scenario position (baseline + hypo buys − hypo sells),
-   * capped by live holdings minus total hypothetical sell qty for this symbol (matches aggregate “quantity”
-   * vs portfolio line). Purely hypothetical positions (no live holding) use scenario remaining only.
+   * Max qty for sell form inputs: remaining scenario position (baseline + hypo buys − hypo sells).
    */
   function sellFormAvailableQtyForSymbol(symbol, excludeRowId = null) {
-    const live = livePortfolioQtyForSymbol(symbol);
     const scenario = maxSellableQtyForSymbol(symbol, excludeRowId);
-    if (!(live > 0)) {
-      return scenario;
-    }
-    const committed = hypotheticalSellQtyCommittedForSymbol(symbol, excludeRowId);
-    const fromLiveHoldings = Math.max(0, live - committed);
-    return Math.min(scenario, fromLiveHoldings);
+    return scenario;
   }
 
   function handleStockSellPctChange(e) {
@@ -1657,8 +1660,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
     if (!isCrypto) {
       setStockSellForm({
         selectedSymbol: sym,
-        sellPct: avail > 0 ? 100 : 0,
-        qty: avail > 0 ? String(avail) : '',
+        sellPct: 0,
+        qty: '',
         sellPrice: priceStr,
       });
       setHypoSellStockModalOpen(true);
@@ -1666,8 +1669,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
     }
     setCryptoSellForm({
       selectedSymbol: sym,
-      sellPct: avail > 0 ? 100 : 0,
-      qty: avail > 0 ? String(avail) : '',
+      sellPct: 0,
+      qty: '',
       sellPrice: priceStr,
     });
     setHypoSellCryptoModalOpen(true);
@@ -4006,8 +4009,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
                               setStockSellForm((prev) => ({
                                 ...prev,
                                 selectedSymbol: sym,
-                                sellPct: avail > 0 ? 100 : 0,
-                                qty: avail > 0 ? String(avail) : '',
+                                sellPct: 0,
+                                qty: '',
                                 sellPrice: priceStr,
                               }));
                             }}
@@ -4037,6 +4040,20 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <div className="modalGrid">
                           <label className="modalLabel">
                             {t('modals.quantity')}
+                            {(() => {
+                              const sym = normalizeText(stockSellForm.selectedSymbol).toUpperCase();
+                              if (!sym) return null;
+                              const holding = livePortfolioQtyForSymbol(sym);
+                              const buys = hypotheticalBuyQtyForSymbol(sym);
+                              const sells = hypotheticalSellQtyCommittedForSymbol(sym);
+                              return (
+                                <span className="modalHint" style={{ marginTop: 4 }}>
+                                  {hideValues
+                                    ? '(Holding: — + Simulated buy: — - Simulated sell: —)'
+                                    : `(Holding: ${formatQty(holding)} + Simulated buy: ${formatQty(buys)} - Simulated sell: ${formatQty(sells)})`}
+                                </span>
+                              );
+                            })()}
                             <input
                               ref={stockSellQtyRef}
                               className="modalInput"
@@ -4177,8 +4194,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
                               setCryptoSellForm((prev) => ({
                                 ...prev,
                                 selectedSymbol: sym,
-                                sellPct: avail > 0 ? 100 : 0,
-                                qty: avail > 0 ? String(avail) : '',
+                                sellPct: 0,
+                                qty: '',
                                 sellPrice: priceStr,
                               }));
                             }}
@@ -4208,6 +4225,20 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <div className="modalGrid">
                           <label className="modalLabel">
                             {t('modals.quantity')}
+                            {(() => {
+                              const sym = normalizeText(cryptoSellForm.selectedSymbol).toUpperCase();
+                              if (!sym) return null;
+                              const holding = livePortfolioQtyForSymbol(sym);
+                              const buys = hypotheticalBuyQtyForSymbol(sym);
+                              const sells = hypotheticalSellQtyCommittedForSymbol(sym);
+                              return (
+                                <span className="modalHint" style={{ marginTop: 4 }}>
+                                  {hideValues
+                                    ? '(Holding: — + Simulated buy: — - Simulated sell: —)'
+                                    : `(Holding: ${formatQty(holding)} + Simulated buy: ${formatQty(buys)} - Simulated sell: ${formatQty(sells)})`}
+                                </span>
+                              );
+                            })()}
                             <input
                               ref={cryptoSellQtyRef}
                               className="modalInput"

@@ -29,10 +29,9 @@ export default function RecordSaleModal({ open, position, cashComponents, onClos
     if (!open) return;
     setError('');
     setTxDate(todayIsoDate());
-    const available = Number(position?.qty) || 0;
-    setSellPct(available > 0 ? 100 : 0);
-    // When slider is at 100%, we want to sell the full available qty.
-    setQty(available > 0 ? String(available) : '');
+    // Default to 0% (no prefilled qty). User can drag slider or type qty.
+    setSellPct(0);
+    setQty('');
     setPricePerUnit('');
     setFeeFlatTotal('');
     setCreditEnabled(false);
