@@ -21,6 +21,15 @@ export function formatTrendXAxisLabel(rawValue) {
   return raw;
 }
 
+function formatTrendXAxisLabelCompact(rawValue) {
+  const full = formatTrendXAxisLabel(rawValue);
+  // Prefer MM-DD on small screens to avoid unreadable ticks.
+  if (full.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(full)) {
+    return full.slice(5, 10);
+  }
+  return full;
+}
+
 /**
  * Recharts 3 ReferenceDot passes label `viewBox` as the dot's bounding rect (≈2r×2r), not the plot.
  * Center = viewBox.x + width/2; use usePlotArea() for real plot bounds when clamping.
@@ -223,7 +232,7 @@ export default function TrendLineChartWithMarkers({
     top: 42,
     right: isSmallScreen ? 22 : 40,
     left: isSmallScreen ? 22 : 36,
-    bottom: 36,
+    bottom: isSmallScreen ? 54 : 36,
   };
 
   return (
@@ -232,11 +241,17 @@ export default function TrendLineChartWithMarkers({
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
         <XAxis
           dataKey={xDataKey}
-          tickFormatter={formatTrendXAxisLabel}
-          tick={{ fill: '#94a3b8', fontSize: 12 }}
-          tickMargin={12}
-          interval={data.length <= 24 ? 0 : 'preserveStartEnd'}
-          minTickGap={data.length <= 24 ? 2 : 28}
+          tickFormatter={isSmallScreen ? formatTrendXAxisLabelCompact : formatTrendXAxisLabel}
+          tick={{
+            fill: '#94a3b8',
+            fontSize: isSmallScreen ? 11 : 12,
+            angle: isSmallScreen ? -35 : 0,
+            textAnchor: isSmallScreen ? 'end' : 'middle',
+          }}
+          height={isSmallScreen ? 46 : undefined}
+          tickMargin={isSmallScreen ? 10 : 12}
+          interval={isSmallScreen ? 'preserveStartEnd' : data.length <= 24 ? 0 : 'preserveStartEnd'}
+          minTickGap={isSmallScreen ? 26 : data.length <= 24 ? 2 : 28}
         />
         <YAxis
           domain={yDomain}
