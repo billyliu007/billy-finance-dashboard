@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS portfolio_position_transactions (
   avg_cost_per_unit NUMERIC(20, 8) NOT NULL,
   fee_per_unit NUMERIC(20, 8),
   fee_flat_total NUMERIC(20, 8),
+  deduct_cash_id UUID REFERENCES cash (id) ON DELETE SET NULL,
+  credit_cash_id UUID REFERENCES cash (id) ON DELETE SET NULL,
   cost_basis_per_unit NUMERIC(20, 8),
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

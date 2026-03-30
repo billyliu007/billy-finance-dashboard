@@ -34,7 +34,7 @@ export default function PortfolioPositionsTable({
   const [recordModalOpen, setRecordModalOpen] = useState(false);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [recordPosition, setRecordPosition] = useState(null);
-  const [deleteTxConfirm, setDeleteTxConfirm] = useState(null); // { symbol, txId, txType } | null
+  const [deleteTxConfirm, setDeleteTxConfirm] = useState(null); // { symbol, txId, txType, hasCashLink, adjustCash } | null
   const [salesHistoryState, setSalesHistoryState] = useState(() => ({
     open: false,
     symbol: '',
@@ -196,20 +196,22 @@ export default function PortfolioPositionsTable({
     }
   }
 
-  function requestDeleteTx(symbol, txId, txType) {
+  function requestDeleteTx(symbol, txId, txType, tx = null) {
     const sym = String(symbol || '').trim().toUpperCase();
     const id = String(txId || '').trim();
     if (!sym || !id) return;
     const kind = String(txType || '').trim().toUpperCase() || 'BUY';
-    setDeleteTxConfirm({ symbol: sym, txId: id, txType: kind });
+    const hasCashLink = Boolean(tx?.deductCashId || tx?.creditCashId);
+    setDeleteTxConfirm({ symbol: sym, txId: id, txType: kind, hasCashLink, adjustCash: hasCashLink });
   }
 
-  async function handleDeleteTxConfirmed(symbol, txId) {
+  async function handleDeleteTxConfirmed(symbol, txId, adjustCash = false) {
     const sym = String(symbol || '').trim().toUpperCase();
     const id = String(txId || '').trim();
     if (!sym || !id) return;
     try {
-      await deleteJson(`/api/portfolio/transactions/${encodeURIComponent(id)}`);
+      const qs = adjustCash ? '?adjustCash=1' : '';
+      await deleteJson(`/api/portfolio/transactions/${encodeURIComponent(id)}${qs}`);
       await loadTransactionsFor(sym);
       onRefresh?.({ mode: 'silent' });
     } catch (err) {
@@ -374,7 +376,7 @@ export default function PortfolioPositionsTable({
                       <button
                         type="button"
                         className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                        onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
+                        onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type, tx)}
                         aria-label="Delete purchase"
                         title="Delete"
                       >
@@ -476,7 +478,7 @@ export default function PortfolioPositionsTable({
                         <button
                           type="button"
                           className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                          onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
+                          onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type, tx)}
                           aria-label="Delete sale"
                           title="Delete"
                         >
@@ -716,7 +718,7 @@ export default function PortfolioPositionsTable({
                               <button
                                 type="button"
                                 className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                                onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
+                                onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type, tx)}
                                 aria-label="Delete purchase"
                                 title="Delete"
                               >
@@ -821,7 +823,7 @@ export default function PortfolioPositionsTable({
                                     <button
                                       type="button"
                                       className="headerIconBtn positionActionBtn positionActionBtnDanger"
-                                      onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type)}
+                                      onClick={() => requestDeleteTx(item.symbol || item.key, tx.id, tx.type, tx)}
                                       aria-label="Delete sale"
                                       title="Delete"
                                     >
@@ -932,6 +934,22 @@ export default function PortfolioPositionsTable({
             </div>
             <div className="modalBody">
               <p className="modalHint">This cannot be undone.</p>
+              <label className="modalLabelInlineCheck portfolioDeleteTxCashToggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(deleteTxConfirm.adjustCash)}
+                  disabled={!deleteTxConfirm.hasCashLink}
+                  onChange={(e) =>
+                    setDeleteTxConfirm((prev) => (prev ? { ...prev, adjustCash: e.target.checked } : prev))
+                  }
+                />
+                <span>Adjust cash account (reverse original deduction/credit)</span>
+              </label>
+              {!deleteTxConfirm.hasCashLink ? (
+                <p className="modalHint">
+                  Legacy transaction: no linked cash account. Cash won’t be adjusted.
+                </p>
+              ) : null}
             </div>
             <div className="modalFooter">
               <button type="button" className="modalBtn secondary" onClick={() => setDeleteTxConfirm(null)}>
@@ -943,8 +961,9 @@ export default function PortfolioPositionsTable({
                 onClick={async () => {
                   const sym = deleteTxConfirm.symbol;
                   const id = deleteTxConfirm.txId;
+                  const adjustCash = Boolean(deleteTxConfirm.adjustCash);
                   setDeleteTxConfirm(null);
-                  await handleDeleteTxConfirmed(sym, id);
+                  await handleDeleteTxConfirmed(sym, id, adjustCash);
                 }}
               >
                 Delete

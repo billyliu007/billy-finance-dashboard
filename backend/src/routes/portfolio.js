@@ -206,7 +206,10 @@ router.delete(
   asyncHandler(async (req, res) => {
     try {
       const transactionId = String(req.params?.id || '').trim();
-      const result = await deletePositionTransaction({ userId: req.auth.user.userId, transactionId });
+      const adjustCash =
+        String(req.query?.adjustCash || '').trim() === '1' ||
+        String(req.query?.adjustCash || '').trim().toLowerCase() === 'true';
+      const result = await deletePositionTransaction({ userId: req.auth.user.userId, transactionId, adjustCash });
       return res.status(200).json(result);
     } catch (error) {
       rethrowAsNotFoundOr400(error);

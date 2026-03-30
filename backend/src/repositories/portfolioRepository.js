@@ -1,5 +1,6 @@
 import { query, withTransaction } from '../db/client.js';
 import { findCoinbaseProduct, findCoinbaseQuoteCurrenciesByIds } from './marketReferenceRepository.js';
+import { computePositionTxCashReverseDelta } from '../services/portfolioCashAdjustments.js';
 
 /**
  * List portfolio positions for a user (symbol as name).
@@ -61,6 +62,8 @@ export async function listPositionTransactions(userId, symbol) {
             qty::float8 AS qty,
             avg_cost_per_unit::float8 AS "avgCostPerUnit",
             COALESCE(fee_flat_total::float8, (COALESCE(fee_per_unit, 0)::float8 * qty::float8)) AS "feeFlat",
+            deduct_cash_id AS "deductCashId",
+            credit_cash_id AS "creditCashId",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
@@ -205,10 +208,23 @@ export async function createPositionTransaction({
     const sellBasisPerUnit = txType === 'SELL' ? currentAvgCost : null;
 
     await client.query(
-      `INSERT INTO portfolio_position_transactions (user_id, symbol, type, tx_date, qty, avg_cost_per_unit, fee_per_unit, fee_flat_total, cost_basis_per_unit, notes)
-       VALUES ($1, $2, $3, $4::date, $5, $6, NULL, $7, $8, $9)
+      `INSERT INTO portfolio_position_transactions (
+          user_id,
+          symbol,
+          type,
+          tx_date,
+          qty,
+          avg_cost_per_unit,
+          fee_per_unit,
+          fee_flat_total,
+          deduct_cash_id,
+          credit_cash_id,
+          cost_basis_per_unit,
+          notes
+        )
+       VALUES ($1, $2, $3, $4::date, $5, $6, NULL, $7, $8, $9, $10, $11)
        RETURNING id`,
-      [resolvedUserId, sym, txType, date, q, cost, fee, sellBasisPerUnit, memo],
+      [resolvedUserId, sym, txType, date, q, cost, fee, deductId, creditId, sellBasisPerUnit, memo],
     );
 
     const cashId = deductId || creditId;
@@ -244,18 +260,92 @@ export async function createPositionTransaction({
   return { ok: true };
 }
 
-export async function deletePositionTransaction({ userId, transactionId }) {
+export async function deletePositionTransaction({ userId, transactionId, adjustCash = false }) {
   const resolvedUserId = String(userId || '').trim();
   const id = String(transactionId || '').trim();
   if (!resolvedUserId || !id) throw new Error('Missing user id or transaction id.');
-  const result = await query(
-    `DELETE FROM portfolio_position_transactions
-     WHERE user_id = $1 AND id = $2
-     RETURNING id`,
-    [resolvedUserId, id],
-  );
-  if (result.rowCount === 0) throw new Error('Transaction not found.');
-  return { ok: true };
+  return await withTransaction(async (client) => {
+    const txRow = await client.query(
+      `SELECT id,
+              upper(symbol) AS symbol,
+              upper(type) AS type,
+              qty::float8 AS qty,
+              avg_cost_per_unit::float8 AS "avgCostPerUnit",
+              COALESCE(fee_flat_total::float8, (COALESCE(fee_per_unit, 0)::float8 * qty::float8)) AS "feeFlat",
+              deduct_cash_id AS "deductCashId",
+              credit_cash_id AS "creditCashId"
+       FROM portfolio_position_transactions
+       WHERE user_id = $1 AND id = $2
+       FOR UPDATE`,
+      [resolvedUserId, id],
+    );
+    if (txRow.rowCount === 0) throw new Error('Transaction not found.');
+    const tx = txRow.rows[0];
+
+    // Delete first; cash reversal is best-effort only when linked cash exists.
+    await client.query(
+      `DELETE FROM portfolio_position_transactions
+       WHERE user_id = $1 AND id = $2`,
+      [resolvedUserId, id],
+    );
+
+    const cashId = tx.deductCashId || tx.creditCashId;
+    const hasCashLink = Boolean(cashId);
+    if (adjustCash && hasCashLink) {
+      // Silent skip if cash account no longer exists (requested behavior).
+      const cashRow = await client.query(
+        `SELECT id, upper(currency) AS currency
+         FROM cash
+         WHERE user_id = $1 AND id = $2
+         FOR UPDATE`,
+        [resolvedUserId, cashId],
+      );
+      if (cashRow.rowCount > 0) {
+        const positionCurrencyRow = await client.query(
+          `SELECT upper(currency) AS currency
+           FROM portfolio_positions
+           WHERE user_id = $1 AND upper(symbol) = $2`,
+          [resolvedUserId, String(tx.symbol || '').toUpperCase()],
+        );
+        const positionCurrency = String(positionCurrencyRow.rows?.[0]?.currency || 'USD').toUpperCase();
+        const cashCurrency = String(cashRow.rows[0].currency || '').toUpperCase();
+        if (positionCurrency === 'USDT' || positionCurrency === 'USDC') {
+          if (cashCurrency !== 'USDT' && cashCurrency !== 'USDC') {
+            throw new Error('This asset is USDT/USDC-based, so the cash item must be USDT or USDC.');
+          }
+        } else if (cashCurrency !== positionCurrency) {
+          throw new Error(`Cash currency mismatch: expected ${positionCurrency} for ${tx.symbol}.`);
+        }
+
+        const reverseDelta = computePositionTxCashReverseDelta({
+          type: tx.type,
+          qty: tx.qty,
+          pricePerUnit: tx.avgCostPerUnit,
+          feeFlat: tx.feeFlat,
+        });
+
+        if (Number.isFinite(reverseDelta) && Math.abs(reverseDelta) > 1e-12) {
+          await client.query(
+            `UPDATE cash
+             SET balance = balance + $3, updated_at = NOW()
+             WHERE user_id = $1 AND id = $2`,
+            [resolvedUserId, cashId, reverseDelta],
+          );
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      deleted: {
+        id: tx.id,
+        symbol: tx.symbol,
+        type: tx.type,
+        deductCashId: tx.deductCashId,
+        creditCashId: tx.creditCashId,
+      },
+    };
+  });
 }
 
 export async function listHistoricalSaleTransactions(userId, symbol) {
