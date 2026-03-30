@@ -84,24 +84,81 @@
 .whatIfTargetToolbarActions {
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-start;
+  gap: 8px;
+}
+
+.whatIfTargetCancelBtn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.whatIfTargetCancelBtn:hover:not(:disabled) {
+  border-color: rgba(203, 213, 225, 0.55);
+  background: rgba(30, 41, 59, 0.85);
+  color: #f8fafc;
+}
+
+.whatIfTargetCancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Per-row save (same action as “Apply target prices”): all breakpoints; larger tap target ≤900px. */
-.whatIfTableTarget tbody td:last-child {
+.whatIfTargetPriceCard .whatIfTargetPriceFieldRow .profitabilityInput {
+  flex: 1 1 0;
   min-width: 0;
-  vertical-align: middle;
+  width: auto;
+  max-width: none;
 }
 
-.whatIfTableTarget .whatIfTargetPriceFieldRow {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
+/* Match scenario toolbar ✓ buttons (headerIconBtn + whatIfIconBtn). */
+.whatIfTargetPriceCard .headerIconBtn.whatIfIconBtn.whatIfTargetPriceSaveBtn--pending {
+  border-color: rgba(165, 243, 252, 0.72);
+  color: #ecfeff;
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.22);
+}
+
+.whatIfTargetPriceCard .whatIfTargetInput--unsaved {
+  border-color: rgba(45, 212, 191, 0.62);
+  background: rgba(13, 148, 136, 0.16);
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.12);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.whatIfTargetPriceCard .whatIfTargetInput--unsaved:focus {
+  border-color: rgba(165, 243, 252, 0.75);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28);
+}
+
+.whatIfTargetPriceCard .whatIfTargetInput--unsaved:focus-visible {
+  border-color: rgba(165, 243, 252, 0.75);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whatIfTargetPriceCard .whatIfTargetInput--unsaved {
+    transition: none;
+  }
 }
 
 .whatIfTableTarget .whatIfTargetPriceFieldRow .profitabilityInput {
@@ -109,49 +166,6 @@
   min-width: 0;
   width: auto;
   max-width: none;
-}
-
-.whatIfTargetInlineSaveBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 10px;
-  border: 1px solid rgba(94, 234, 212, 0.55);
-  background: linear-gradient(120deg, rgba(14, 116, 144, 0.35), rgba(7, 89, 133, 0.25));
-  color: #ecfeff;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease,
-    opacity 0.2s ease,
-    filter 0.2s ease;
-}
-
-.whatIfTargetInlineSaveBtn--unsaved {
-  border-color: rgba(165, 243, 252, 0.7);
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.78), rgba(8, 145, 178, 0.62));
-  color: #f0fdfa;
-  box-shadow:
-    0 0 0 1px rgba(165, 243, 252, 0.2),
-    0 3px 16px rgba(20, 184, 166, 0.3);
-}
-
-.whatIfTargetInlineSaveIcon {
-  display: block;
-  flex-shrink: 0;
-}
-
-.whatIfTargetInlineSaveBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  filter: saturate(0.65);
 }
 
 .whatIfTableTarget .whatIfTargetInput--unsaved {
@@ -164,22 +178,103 @@
     box-shadow 0.2s ease;
 }
 
-.whatIfTableTarget .whatIfTargetInput--unsaved:focus {
-  border-color: rgba(165, 243, 252, 0.75);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28);
-}
-
+.whatIfTableTarget .whatIfTargetInput--unsaved:focus,
 .whatIfTableTarget .whatIfTargetInput--unsaved:focus-visible {
   border-color: rgba(165, 243, 252, 0.75);
   outline: none;
   box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .whatIfTableTarget .whatIfTargetInput--unsaved,
-  .whatIfTargetInlineSaveBtn {
-    transition: none;
+.whatIfHypoAggDesktopExpandCol {
+  width: 40px;
+}
+
+.whatIfHypoAggDesktopActionsCol {
+  width: 48px;
+  text-align: center;
+}
+
+.whatIfHypoAggNestedRow td {
+  padding: 0 8px 10px;
+  vertical-align: top;
+  background: rgba(15, 23, 42, 0.45);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.whatIfHypoNestedTableWrap {
+  padding: 4px 0 2px;
+  min-width: 0;
+}
+
+.whatIfHypoNestedLinesTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.whatIfHypoNestedLinesTable th,
+.whatIfHypoNestedLinesTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.whatIfHypoNestedLinesTable thead th {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9fb8d8;
+  font-weight: 650;
+}
+
+.whatIfHypoNestedLinesTableActionsCol {
+  width: 44px;
+  text-align: center;
+}
+
+.whatIfHypoAggPlCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.whatIfHypoAggPlPct {
+  font-size: 0.78rem;
+  opacity: 0.88;
+}
+
+.whatIfHypoAggPlPos {
+  color: #6ee7b7;
+}
+
+.whatIfHypoAggPlNeg {
+  color: #fca5a5;
+}
+
+@media (min-width: 901px) {
+  .whatIfTargetPriceMobileCards,
+  .whatIfHypoAggregateMobileCards {
+    display: none !important;
+  }
+
+  .whatIfTargetPriceDesktopTable,
+  .whatIfHypoAggregateDesktopTable {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .whatIfTargetPriceDesktopTable,
+  .whatIfHypoAggregateDesktopTable {
+    display: none !important;
+  }
+
+  .whatIfTargetPriceMobileCards,
+  .whatIfHypoAggregateMobileCards {
+    display: block;
   }
 }
 
@@ -259,12 +354,207 @@
   color: #fed7aa;
 }
 
-.whatIfTable.whatIfTable--hypoBuy thead {
-  background: rgba(13, 148, 136, 0.2);
+.whatIfHypotheticalAggregateWrap--buyCards {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-.whatIfTable.whatIfTable--hypoSell thead {
-  background: rgba(194, 65, 12, 0.22);
+.whatIfHypoBuyParentCards {
+  display: grid;
+  gap: 10px;
+}
+
+.whatIfHypoBuyParentCard {
+  border-color: rgba(45, 212, 191, 0.22);
+}
+
+.whatIfHypoAggregateDock strong {
+  color: #e2efff;
+}
+
+.whatIfHypoAggregateDock span {
+  color: #9fb8d8;
+  font-weight: 600;
+}
+
+.whatIfHypoSubtotalStrip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid rgba(45, 212, 191, 0.28);
+  border-radius: 12px;
+  background: rgba(6, 78, 59, 0.14);
+}
+
+.whatIfHypoSubtotalStripLabel {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #99f6e4;
+}
+
+.whatIfHypoSubtotalStripValue {
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: #e2efff;
+  font-variant-numeric: tabular-nums;
+}
+
+.whatIfHypoAggregateEmpty {
+  margin: 0;
+  padding: 14px 12px;
+}
+
+.whatIfHypotheticalAggregateWrap--sellCards {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.whatIfHypoSellParentCards {
+  display: grid;
+  gap: 10px;
+}
+
+.whatIfHypoSellParentCard {
+  border-color: rgba(251, 146, 60, 0.28);
+}
+
+.whatIfHypotheticalAggregateWrap--targetPriceCards {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.whatIfTargetPriceCards {
+  display: grid;
+  gap: 10px;
+}
+
+.whatIfTargetPriceCard {
+  border-color: rgba(56, 189, 248, 0.26);
+}
+
+.whatIfTargetPriceCard--unsaved {
+  border-color: rgba(45, 212, 191, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(94, 234, 212, 0.12),
+    0 4px 18px rgba(15, 118, 110, 0.12);
+}
+
+.whatIfTargetPriceDock strong {
+  color: #e2efff;
+  font-variant-numeric: tabular-nums;
+}
+
+.whatIfTargetPriceDock span {
+  color: #9fb8d8;
+  font-weight: 600;
+}
+
+.whatIfTargetPriceHeaderPrice {
+  display: block;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.whatIfTargetPriceQuickGrid .positionQuickItem .whatIfTargetPricePctInput {
+  margin-top: 4px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.whatIfTargetPriceTargetBlock {
+  margin-top: 0;
+}
+
+.whatIfTargetPriceTargetBlock > span:first-child {
+  display: block;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9fb8d8;
+}
+
+.whatIfTargetPriceTargetBlock .whatIfTargetPriceFieldRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-top: 4px;
+}
+
+.whatIfTargetPriceCard .positionQuickItem {
+  padding: 6px 8px;
+}
+
+.whatIfTargetPriceCard .profitabilityInput {
+  min-height: 0;
+  padding: 5px 8px;
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.whatIfTargetPriceInputPrefix.whatIfPricePrefix {
+  text-align: left;
+  min-width: 0;
+  flex-shrink: 0;
+  padding-right: 2px;
+  align-self: center;
+}
+
+.whatIfTargetPriceCard .whatIfTargetPriceFieldRow .headerIconBtn.whatIfIconBtn {
+  flex-shrink: 0;
+}
+
+.whatIfHypoAggregateDock--sell strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.whatIfHypoAggregateDock--sell span {
+  color: #9fb8d8;
+  font-weight: 600;
+}
+
+/* Match holdings: batch delete sits on the right (meta row must span full card width). */
+.whatIfHypoParentMetaActions.positionMetaList {
+  display: block;
+  width: 100%;
+}
+
+.whatIfHypoMetaRowActionsOnly.positionMetaRowWithActions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.whatIfHypoMetaRowActionsOnly .positionCardActionIcons {
+  margin-left: auto;
+}
+
+.whatIfHypoParentMetaActions {
+  margin-top: 2px;
+}
+
+.whatIfHypoSubtotalStrip--sell {
+  border-color: rgba(251, 146, 60, 0.35);
+  background: rgba(67, 20, 7, 0.18);
+}
+
+.whatIfHypoSubtotalStrip--sell .whatIfHypoSubtotalStripLabel {
+  color: #fdba74;
 }
 
 .whatIfHypotheticalAggregateTitle--hypoBuy {
@@ -294,35 +584,8 @@
   flex-shrink: 0;
 }
 
-.whatIfHypoSellDetailRow td {
-  padding: 0;
-  vertical-align: top;
-  background: rgba(67, 20, 7, 0.2);
-  border-top: none;
-}
-
-.whatIfHypoSellDetailWrap {
-  padding: 12px 14px 14px;
+.whatIfHypoNestedPanel.positionTxPanel--mobile {
   box-sizing: border-box;
-}
-
-.whatIfHypoSellDetailTable {
-  width: 100%;
-}
-
-.whatIfHypoBuyDetailRow td {
-  padding: 0;
-  vertical-align: top;
-  background: rgba(6, 78, 59, 0.14);
-  border-top: none;
-}
-
-.whatIfHypoBuyDetailWrap {
-  padding: 12px 14px 14px;
-  box-sizing: border-box;
-}
-
-.whatIfHypoBuyDetailTable {
   width: 100%;
 }
 
@@ -1051,6 +1314,8 @@
   .whatIfPanel,
   .whatIfSection,
   .whatIfSection .profitabilityTableWrap,
+  .whatIfSection .whatIfHypotheticalAggregateWrap--buyCards,
+  .whatIfSection .whatIfHypotheticalAggregateWrap--sellCards,
   .whatIfSection .profitabilityTable,
   .whatIfSection .profitabilityTable tbody,
   .whatIfSection .profitabilityTable tr,
@@ -1114,8 +1379,10 @@
     box-sizing: border-box;
   }
 
-  .whatIfTargetToolbarActions .whatIfStickySaveBtn {
-    width: 100%;
+  .whatIfTargetToolbarActions .whatIfStickySaveBtn,
+  .whatIfTargetToolbarActions .whatIfTargetCancelBtn {
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 44px;
     touch-action: manipulation;
   }
@@ -1184,53 +1451,23 @@
     min-width: 0;
   }
 
-  .whatIfTableTarget td[data-label] .profitabilityInput,
-  .whatIfTableTarget td[data-label] .rebalanceTargetWrap {
+  .whatIfTargetPriceCard .profitabilityInput,
+  .whatIfTargetPriceCard .rebalanceTargetWrap {
     width: 100%;
     max-width: 100%;
     justify-self: stretch;
   }
 
-  .whatIfTableTarget td[data-label] .profitabilityInput {
-    min-height: 44px;
+  .whatIfTargetPriceCard .profitabilityInput {
+    min-height: 38px;
     box-sizing: border-box;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
     touch-action: manipulation;
   }
 
   .whatIfTable td > * {
     min-width: 0;
-  }
-
-  .whatIfTable .whatIfHypoBuyDetailRow td {
-    display: block;
-    padding: 0;
-    border-bottom: none;
-  }
-
-  .whatIfTable .whatIfHypoBuyDetailRow td::before {
-    display: none;
-    content: '';
-  }
-
-  .whatIfTable .whatIfHypoBuyDetailWrap {
-    padding: 10px 8px 12px;
-  }
-
-  .whatIfTable .whatIfHypoSellDetailRow td {
-    display: block;
-    padding: 0;
-    border-bottom: none;
-  }
-
-  .whatIfTable .whatIfHypoSellDetailRow td::before {
-    display: none;
-    content: '';
-  }
-
-  .whatIfTable .whatIfHypoSellDetailWrap {
-    padding: 10px 8px 12px;
   }
 
   .whatIfTable .rebalanceTargetWrap {
@@ -1249,19 +1486,11 @@
     max-width: 100%;
   }
 
-  .whatIfTableTarget td[data-label] .whatIfTargetPriceFieldRow .profitabilityInput {
+  .whatIfTargetPriceCard .whatIfTargetPriceFieldRow .profitabilityInput {
     flex: 1 1 0;
     min-width: 0;
     width: auto;
     max-width: none;
-  }
-
-  .whatIfTargetInlineSaveBtn {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    touch-action: manipulation;
   }
 
   .whatIfPanel .rebalanceKpiRow .profitabilityCardValue {

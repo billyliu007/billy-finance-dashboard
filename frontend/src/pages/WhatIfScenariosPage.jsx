@@ -71,6 +71,22 @@ function formatPriceNumber(value, currency = 'USD') {
   }).format(num(value));
 }
 
+/** USD, USDT, USDC share $ in target-price simulation UI; other codes use Intl narrow symbol. */
+function targetSimulationCurrencyPrefix(currency) {
+  const c = String(currency || 'USD').trim().toUpperCase();
+  if (c === 'USD' || c === 'USDT' || c === 'USDC') return '$';
+  try {
+    const parts = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: c,
+      currencyDisplay: 'narrowSymbol',
+    }).formatToParts(0);
+    return parts.find((p) => p.type === 'currency')?.value ?? '';
+  } catch {
+    return '';
+  }
+}
+
 function emptyStockForm() {
   return { query: '', selectedSymbol: '', qty: '', buyPrice: '' };
 }
@@ -1324,6 +1340,29 @@ export default function WhatIfScenariosPage({ hideValues }) {
     }
   }
 
+  function cancelTargetPriceEdits() {
+    if (!activeScenarioId || !hasUnsavedTargetPrices || isPersistingInputs) return;
+    const synced = cloneSyncedTargetRows(lastSyncedTargetPricesRef.current);
+    setTargetPrices(synced);
+    const savedTargets = Array.isArray(results?.targetPrices) ? results.targetPrices : [];
+    const savedBySymbol = new Map(savedTargets.map((row) => [String(row.symbol || '').toUpperCase(), row]));
+    const rows = Array.isArray(results?.rows) ? results.rows : [];
+    const pctBySymbol = {};
+    for (const row of rows) {
+      const symbol = String(row.symbol || '').toUpperCase();
+      const baseline = num(row.baselinePrice);
+      const saved = savedBySymbol.get(symbol);
+      const target = synced.find((x) => String(x.symbol).toUpperCase() === symbol)?.targetPrice;
+      const targetNum = num(target);
+      pctBySymbol[symbol] =
+        saved && baseline > 0 && target !== ''
+          ? (((targetNum - baseline) / baseline) * 100).toFixed(2)
+          : '';
+    }
+    setTargetPricePctBySymbol(pctBySymbol);
+    setError('');
+  }
+
   function handleTargetPriceFieldKeyDown(e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
@@ -2222,156 +2261,334 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   <h3 className="whatIfHypotheticalAggregateTitle whatIfHypotheticalAggregateTitle--hypoBuy">
                     {t('whatif.hypotheticalAggregateTitle')}
                   </h3>
-                  <div className="profitabilityTableWrap whatIfHypotheticalAggregateWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate whatIfTable--hypoBuy">
-                      <thead>
-                        <tr>
-                          <th>{t('portfolio.asset')}</th>
-                          <th>{t('portfolio.quantity')}</th>
-                          <th>{t('portfolio.totalCostBasis')}</th>
-                          <th>{t('portfolio.avgCostPerUnit')}</th>
-                          <th className="whatIfHypoAggregateActionsTh">{t('netWorth.actions')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {aggregatedHypotheticalBuys.map((row) => {
-                          const aggKey = `${row.symbol}\0${row.currency}`;
-                          const isOpen = expandedHypoBuyKeys.has(aggKey);
-                          const lineCount = buyRows.reduce(
-                            (n, r) => n + (hypoBuyAggregateKey(r) === aggKey ? 1 : 0),
-                            0,
-                          );
-                          return (
-                            <Fragment key={aggKey}>
+                  <div className="whatIfHypotheticalAggregateWrap whatIfHypotheticalAggregateWrap--buyCards">
+                    <div className="whatIfHypoAggregateDesktopTable">
+                      <div className="profitabilityTableWrap">
+                        <table className="profitabilityTable whatIfTable whatIfHypoAggDesktopTable whatIfHypoAggDesktopTable--buy">
+                          <thead>
+                            <tr>
+                              <th className="whatIfHypoAggDesktopExpandCol" scope="col" aria-label="expand">
+                                {' '}
+                              </th>
+                              <th scope="col">{t('portfolio.asset')}</th>
+                              <th scope="col">{t('portfolio.quantity')}</th>
+                              <th scope="col">{t('portfolio.totalCostBasis')}</th>
+                              <th scope="col">{t('portfolio.avgCostPerUnit')}</th>
+                              <th scope="col">{t('whatif.hypoAggregateLineCountLabel')}</th>
+                              <th className="whatIfHypoAggDesktopActionsCol" scope="col">
+                                {t('modals.remove')}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {aggregatedHypotheticalBuys.map((row) => {
+                              const aggKey = `${row.symbol}\0${row.currency}`;
+                              const isOpen = expandedHypoBuyKeys.has(aggKey);
+                              const lineCount = buyRows.reduce(
+                                (n, r) => n + (hypoBuyAggregateKey(r) === aggKey ? 1 : 0),
+                                0,
+                              );
+                              return (
+                                <Fragment key={aggKey}>
+                                  <tr className="whatIfHypoAggParentRow">
+                                    <td data-label="">
+                                      <button
+                                        type="button"
+                                        className="headerIconBtn positionExpandBtn"
+                                        onClick={() =>
+                                          setExpandedHypoBuyKeys((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(aggKey)) next.delete(aggKey);
+                                            else next.add(aggKey);
+                                            return next;
+                                          })
+                                        }
+                                        disabled={lineCount === 0}
+                                        aria-expanded={isOpen}
+                                        aria-label={t('whatif.toggleHypotheticalBuyLines', { symbol: row.symbol })}
+                                        title={
+                                          isOpen
+                                            ? t('whatif.hideHypotheticalBuyLines')
+                                            : t('whatif.showHypotheticalBuyLines')
+                                        }
+                                      >
+                                        {isOpen ? '▾' : '▸'}
+                                      </button>
+                                    </td>
+                                    <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                                    <td data-label={t('portfolio.quantity')}>
+                                      {hideValues ? '—' : formatQty(row.totalQty)}
+                                    </td>
+                                    <td data-label={t('portfolio.totalCostBasis')}>
+                                      {hideValues ? '—' : formatCurrencyValue(row.totalCost, row.currency)}
+                                    </td>
+                                    <td data-label={t('portfolio.avgCostPerUnit')}>
+                                      {hideValues ? '—' : formatCurrencyValue(row.avgCost, row.currency)}
+                                    </td>
+                                    <td data-label={t('whatif.hypoAggregateLineCountLabel')}>{lineCount}</td>
+                                    <td data-label={t('modals.remove')}>
+                                      <button
+                                        type="button"
+                                        className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                        onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
+                                        disabled={lineCount === 0 || isPersistingInputs}
+                                        aria-label={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
+                                        title={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
+                                      >
+                                        ✕
+                                      </button>
+                                    </td>
+                                  </tr>
+                                  {isOpen && lineCount > 0 && (
+                                    <tr className="whatIfHypoAggNestedRow">
+                                      <td colSpan={7}>
+                                        <div className="whatIfHypoNestedTableWrap">
+                                          <table className="whatIfHypoNestedLinesTable">
+                                            <thead>
+                                              <tr>
+                                                <th scope="col">{t('whatif.simulatedBuyLinesSection')}</th>
+                                                <th scope="col">{t('portfolio.quantity')}</th>
+                                                <th scope="col">{t('modals.avgCostPerUnit')}</th>
+                                                <th scope="col">{t('portfolio.totalCostBasis')}</th>
+                                                <th className="whatIfHypoNestedLinesTableActionsCol" scope="col">
+                                                  {t('modals.remove')}
+                                                </th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {buyRows
+                                                .map((r, index) => ({ r, index }))
+                                                .filter(({ r }) => hypoBuyAggregateKey(r) === aggKey)
+                                                .map(({ r, index }, i) => {
+                                                  const quoteCcy = hypotheticalBuyQuoteCurrency(r);
+                                                  const lineCost = num(r.qty) * num(r.buyPrice);
+                                                  const lineNo = i + 1;
+                                                  return (
+                                                    <tr key={r.id || `hypo-buy-${aggKey}-${index}`}>
+                                                      <td data-label={t('whatif.simulatedBuyLinesSection')}>
+                                                        {t('whatif.simulatedBuyLineLabel', { n: lineNo })}
+                                                      </td>
+                                                      <td data-label={t('portfolio.quantity')}>
+                                                        {hideValues ? '—' : formatQty(r.qty)}
+                                                      </td>
+                                                      <td data-label={t('modals.avgCostPerUnit')}>
+                                                        {hideValues
+                                                          ? '—'
+                                                          : formatCurrencyValue(r.buyPrice, quoteCcy)}
+                                                      </td>
+                                                      <td data-label={t('portfolio.totalCostBasis')}>
+                                                        {hideValues
+                                                          ? '—'
+                                                          : formatCurrencyValue(lineCost, quoteCcy)}
+                                                      </td>
+                                                      <td data-label={t('modals.remove')}>
+                                                        <button
+                                                          type="button"
+                                                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                                          onClick={() => removeBuyRow(index)}
+                                                          aria-label={t('modals.remove')}
+                                                          title={t('modals.remove')}
+                                                        >
+                                                          ✕
+                                                        </button>
+                                                      </td>
+                                                    </tr>
+                                                  );
+                                                })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
+                            {aggregatedHypotheticalBuys.length === 0 && (
                               <tr>
-                                <td data-label={t('portfolio.asset')}>
-                                  <div className="positionAssetCell whatIfHypoBuyAssetCell">
-                                    <button
-                                      type="button"
-                                      className="headerIconBtn positionExpandBtn"
-                                      onClick={() =>
-                                        setExpandedHypoBuyKeys((prev) => {
-                                          const next = new Set(prev);
-                                          if (next.has(aggKey)) next.delete(aggKey);
-                                          else next.add(aggKey);
-                                          return next;
-                                        })
-                                      }
-                                      disabled={lineCount === 0}
-                                      aria-expanded={isOpen}
-                                      aria-label={t('whatif.toggleHypotheticalBuyLines', { symbol: row.symbol })}
-                                      title={
-                                        isOpen
-                                          ? t('whatif.hideHypotheticalBuyLines')
-                                          : t('whatif.showHypotheticalBuyLines')
-                                      }
-                                    >
-                                      {isOpen ? '▾' : '▸'}
-                                    </button>
-                                    <span className="positionAssetName">{row.symbol}</span>
-                                  </div>
-                                </td>
-                                <td data-label={t('portfolio.quantity')}>
-                                  {hideValues ? '—' : formatQty(row.totalQty)}
-                                </td>
-                                <td data-label={t('portfolio.totalCostBasis')}>
-                                  {hideValues ? '—' : formatCurrencyValue(row.totalCost, row.currency)}
-                                </td>
-                                <td data-label={t('portfolio.avgCostPerUnit')}>
-                                  {hideValues ? '—' : formatCurrencyValue(row.avgCost, row.currency)}
-                                </td>
-                                <td
-                                  className="whatIfHypoAggregateDeleteCell"
-                                  data-label={t('netWorth.actions')}
-                                >
+                                <td colSpan={7}>{t('whatif.hypotheticalAggregateEmpty')}</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="whatIfHypoAggregateMobileCards">
+                    <div className="positionClassCards whatIfHypoBuyParentCards">
+                      {aggregatedHypotheticalBuys.map((row) => {
+                        const aggKey = `${row.symbol}\0${row.currency}`;
+                        const isOpen = expandedHypoBuyKeys.has(aggKey);
+                        const lineCount = buyRows.reduce(
+                          (n, r) => n + (hypoBuyAggregateKey(r) === aggKey ? 1 : 0),
+                          0,
+                        );
+                        return (
+                          <section
+                            key={aggKey}
+                            className="positionDetailCard whatIfHypoBuyParentCard"
+                          >
+                            <header>
+                              <div className="positionNameCol">
+                                <div className="positionMobileTitleRow">
                                   <button
                                     type="button"
-                                    className="headerIconBtn positionActionBtnDanger whatIfIconBtn whatIfHypoAggregateBatchDeleteBtn"
+                                    className="headerIconBtn positionExpandBtn"
+                                    onClick={() =>
+                                      setExpandedHypoBuyKeys((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(aggKey)) next.delete(aggKey);
+                                        else next.add(aggKey);
+                                        return next;
+                                      })
+                                    }
+                                    disabled={lineCount === 0}
+                                    aria-expanded={isOpen}
+                                    aria-label={t('whatif.toggleHypotheticalBuyLines', { symbol: row.symbol })}
+                                    title={
+                                      isOpen
+                                        ? t('whatif.hideHypotheticalBuyLines')
+                                        : t('whatif.showHypotheticalBuyLines')
+                                    }
+                                  >
+                                    {isOpen ? '▾' : '▸'}
+                                  </button>
+                                  <h3>{row.symbol}</h3>
+                                </div>
+                                <span className="positionMarketMeta">
+                                  {t('whatif.hypoAggregateBuyMeta', { count: lineCount })}
+                                </span>
+                              </div>
+                              <div className="positionPnlDock whatIfHypoAggregateDock">
+                                <strong>
+                                  {hideValues ? '—' : formatCurrencyValue(row.totalCost, row.currency)}
+                                </strong>
+                                <span>{hideValues ? '—' : formatQty(row.totalQty)}</span>
+                              </div>
+                            </header>
+                            <div className="positionQuickGrid">
+                              <div className="positionQuickItem">
+                                <span>{t('portfolio.totalCostBasis')}</span>
+                                <strong>
+                                  {hideValues ? '—' : formatCurrencyValue(row.totalCost, row.currency)}
+                                </strong>
+                              </div>
+                              <div className="positionQuickItem">
+                                <span>{t('portfolio.avgCostPerUnit')}</span>
+                                <strong>
+                                  {hideValues ? '—' : formatCurrencyValue(row.avgCost, row.currency)}
+                                </strong>
+                              </div>
+                              <div className="positionQuickItem">
+                                <span>{t('portfolio.quantity')}</span>
+                                <strong>{hideValues ? '—' : formatQty(row.totalQty)}</strong>
+                              </div>
+                              <div className="positionQuickItem">
+                                <span>{t('whatif.hypoAggregateLineCountLabel')}</span>
+                                <strong>{lineCount}</strong>
+                              </div>
+                            </div>
+                            <dl className="positionMetaList whatIfHypoParentMetaActions">
+                              <div className="positionMetaRowWithActions whatIfHypoMetaRowActionsOnly">
+                                <div className="positionCardActionIcons">
+                                  <button
+                                    type="button"
+                                    className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                     onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
                                     disabled={lineCount === 0 || isPersistingInputs}
                                     aria-label={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
                                     title={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
                                   >
-                                    ×
+                                    ✕
                                   </button>
-                                </td>
-                              </tr>
-                              {isOpen && (
-                                <tr className="whatIfHypoBuyDetailRow">
-                                  <td colSpan={5}>
-                                    <div className="tableWrap whatIfHypoBuyDetailWrap">
-                                      <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable whatIfHypoBuyDetailTable">
-                                        <thead>
-                                          <tr>
-                                            <th>{t('portfolio.quantity')}</th>
-                                            <th>{t('modals.avgCostPerUnit')}</th>
-                                            <th>{t('portfolio.totalCostBasis')}</th>
-                                            <th>{t('netWorth.actions')}</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {buyRows.map((r, index) => {
-                                            if (hypoBuyAggregateKey(r) !== aggKey) return null;
-                                            const quoteCcy = hypotheticalBuyQuoteCurrency(r);
-                                            const lineCost = num(r.qty) * num(r.buyPrice);
-                                            return (
-                                              <tr key={r.id || `hypo-buy-${aggKey}-${index}`}>
-                                                <td data-label={t('portfolio.quantity')}>{r.qty}</td>
-                                                <td data-label={t('modals.avgCostPerUnit')}>{r.buyPrice}</td>
-                                                <td data-label={t('portfolio.totalCostBasis')}>
-                                                  {hideValues ? '—' : formatCurrencyValue(lineCost, quoteCcy)}
-                                                </td>
-                                                <td data-label={t('netWorth.actions')}>
-                                                  <button
-                                                    type="button"
-                                                    className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
-                                                    onClick={() => removeBuyRow(index)}
-                                                    aria-label={t('modals.remove')}
-                                                    title={t('modals.remove')}
-                                                  >
-                                                    -
-                                                  </button>
-                                                </td>
-                                              </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                      </table>
+                                </div>
+                              </div>
+                            </dl>
+                            {isOpen && (
+                              <div className="positionCardExpandedWrap">
+                                <div className="positionTxPanel positionTxPanel--mobile whatIfHypoNestedPanel">
+                                  <section className="positionTxSection positionTxSection--purchases">
+                                    <div className="positionTxSectionHeader">
+                                      <strong>{t('whatif.simulatedBuyLinesSection')}</strong>
                                     </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </Fragment>
-                          );
-                        })}
-                        {aggregatedHypotheticalBuys.length === 0 && (
-                          <tr>
-                            <td colSpan={5}>{t('whatif.noHypotheticalBuys')}</td>
-                          </tr>
-                        )}
-                        {aggregatedHypotheticalBuys.length > 0 &&
-                          hypotheticalAggregateCostSubtotals.map(([currency, totalCost]) => (
-                            <tr
-                              key={`hypo-agg-subtotal-${currency}`}
-                              className="whatIfAggregateSubtotalRow"
-                            >
-                              <td data-label={t('portfolio.asset')}>
-                                {hypotheticalAggregateCostSubtotals.length > 1
-                                  ? `${t('whatif.hypotheticalAggregateSubtotal')} (${currency})`
-                                  : t('whatif.hypotheticalAggregateSubtotal')}
-                              </td>
-                              <td data-label={t('portfolio.quantity')}>—</td>
-                              <td data-label={t('portfolio.totalCostBasis')}>
-                                {hideValues ? '—' : formatCurrencyValue(totalCost, currency)}
-                              </td>
-                              <td data-label={t('portfolio.avgCostPerUnit')}>—</td>
-                              <td className="whatIfHypoAggregateDeleteCell" data-label={t('netWorth.actions')}>
-                                —
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+                                    <div className="positionTxCards">
+                                      {buyRows
+                                        .map((r, index) => ({ r, index }))
+                                        .filter(({ r }) => hypoBuyAggregateKey(r) === aggKey)
+                                        .map(({ r, index }, i) => {
+                                          const quoteCcy = hypotheticalBuyQuoteCurrency(r);
+                                          const lineCost = num(r.qty) * num(r.buyPrice);
+                                          const lineNo = i + 1;
+                                          return (
+                                            <div
+                                              key={r.id || `hypo-buy-${aggKey}-${index}`}
+                                              className="positionTxCard"
+                                            >
+                                              <div className="positionTxCardTitleRow">
+                                                <strong>{t('whatif.simulatedBuyLineLabel', { n: lineNo })}</strong>
+                                                <button
+                                                  type="button"
+                                                  className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                                  onClick={() => removeBuyRow(index)}
+                                                  aria-label={t('modals.remove')}
+                                                  title={t('modals.remove')}
+                                                >
+                                                  ✕
+                                                </button>
+                                              </div>
+                                              <div className="positionTxCardGrid">
+                                                <div>
+                                                  <span>{t('portfolio.quantity')}</span>
+                                                  <strong>{hideValues ? '—' : formatQty(r.qty)}</strong>
+                                                </div>
+                                                <div>
+                                                  <span>{t('modals.avgCostPerUnit')}</span>
+                                                  <strong>
+                                                    {hideValues
+                                                      ? '—'
+                                                      : formatCurrencyValue(r.buyPrice, quoteCcy)}
+                                                  </strong>
+                                                </div>
+                                                <div>
+                                                  <span>{t('portfolio.totalCostBasis')}</span>
+                                                  <strong>
+                                                    {hideValues
+                                                      ? '—'
+                                                      : formatCurrencyValue(lineCost, quoteCcy)}
+                                                  </strong>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                  </section>
+                                </div>
+                              </div>
+                            )}
+                          </section>
+                        );
+                      })}
+                      {aggregatedHypotheticalBuys.length === 0 && (
+                        <p className="positionTxEmpty whatIfHypoAggregateEmpty">{t('whatif.noHypotheticalBuys')}</p>
+                      )}
+                    </div>
+                    </div>
+                      {aggregatedHypotheticalBuys.length > 0 &&
+                        hypotheticalAggregateCostSubtotals.map(([currency, totalCost]) => (
+                          <div
+                            key={`hypo-agg-subtotal-${currency}`}
+                            className="whatIfHypoSubtotalStrip whatIfHypoSubtotalStrip--buy"
+                          >
+                            <span className="whatIfHypoSubtotalStripLabel">
+                              {hypotheticalAggregateCostSubtotals.length > 1
+                                ? `${t('whatif.hypotheticalAggregateSubtotal')} (${currency})`
+                                : t('whatif.hypotheticalAggregateSubtotal')}
+                            </span>
+                            <strong className="whatIfHypoSubtotalStripValue">
+                              {hideValues ? '—' : formatCurrencyValue(totalCost, currency)}
+                            </strong>
+                          </div>
+                        ))}
                   </div>
                 </section>
 
@@ -2664,253 +2881,552 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   <h3 className="whatIfHypotheticalAggregateTitle whatIfHypotheticalAggregateTitle--hypoSell">
                     {t('whatif.hypotheticalSalesAggregateTitle')}
                   </h3>
-                  <div className="profitabilityTableWrap whatIfHypotheticalAggregateWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTablePurchasesAggregate whatIfTable--hypoSell">
-                      <thead>
-                        <tr>
-                          <th>{t('portfolio.asset')}</th>
-                          <th>{t('portfolio.quantity')}</th>
-                          <th>{t('modals.historyTableSellPrice')}</th>
-                          <th>{t('modals.historyTableCostPerUnit')}</th>
-                          <th>{t('modals.historyTableSaleAmount')}</th>
-                          <th>{t('modals.historyTableRealizedPl')}</th>
-                          <th>{t('modals.historyTableRealizedReturn')}</th>
-                          <th className="whatIfHypoAggregateActionsTh">{t('netWorth.actions')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {aggregatedHypotheticalSellSummary.map((row) => {
-                          const aggKey = `${row.symbol}\0${row.currency}`;
-                          const isOpen = expandedHypoSellKeys.has(aggKey);
-                          const lineCount = sellRows.reduce(
-                            (n, r) => n + (hypoSellAggregateKey(r) === aggKey ? 1 : 0),
-                            0,
-                          );
-                          return (
-                            <Fragment key={aggKey}>
-                              <tr>
-                                <td data-label={t('portfolio.asset')}>
-                                  <div className="positionAssetCell whatIfHypoSellAssetCell">
-                                    <button
-                                      type="button"
-                                      className="headerIconBtn positionExpandBtn"
-                                      onClick={() =>
-                                        setExpandedHypoSellKeys((prev) => {
-                                          const next = new Set(prev);
-                                          if (next.has(aggKey)) next.delete(aggKey);
-                                          else next.add(aggKey);
-                                          return next;
-                                        })
-                                      }
-                                      disabled={lineCount === 0}
-                                      aria-expanded={isOpen}
-                                      aria-label={t('whatif.toggleHypotheticalSellLines', { symbol: row.symbol })}
-                                      title={
-                                        isOpen
-                                          ? t('whatif.hideHypotheticalSellLines')
-                                          : t('whatif.showHypotheticalSellLines')
-                                      }
+                  <div className="whatIfHypotheticalAggregateWrap whatIfHypotheticalAggregateWrap--sellCards">
+                    <div className="whatIfHypoAggregateDesktopTable">
+                      <div className="profitabilityTableWrap">
+                        <table className="profitabilityTable whatIfTable whatIfHypoAggDesktopTable whatIfHypoAggDesktopTable--sell">
+                          <thead>
+                            <tr>
+                              <th className="whatIfHypoAggDesktopExpandCol" scope="col" aria-label="expand">
+                                {' '}
+                              </th>
+                              <th scope="col">{t('portfolio.asset')}</th>
+                              <th scope="col">{t('portfolio.quantity')}</th>
+                              <th scope="col">{t('modals.historyTableSellPrice')}</th>
+                              <th scope="col">{t('modals.historyTableSaleAmount')}</th>
+                              <th scope="col">{t('modals.historyTableRealizedPl')}</th>
+                              <th scope="col">{t('whatif.hypoAggregateSellLineCountLabel')}</th>
+                              <th className="whatIfHypoAggDesktopActionsCol" scope="col">
+                                {t('modals.remove')}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {aggregatedHypotheticalSellSummary.map((row) => {
+                              const aggKey = `${row.symbol}\0${row.currency}`;
+                              const isOpen = expandedHypoSellKeys.has(aggKey);
+                              const lineCount = sellRows.reduce(
+                                (n, r) => n + (hypoSellAggregateKey(r) === aggKey ? 1 : 0),
+                                0,
+                              );
+                              const plPos = row.totalRealizedPl >= 0;
+                              return (
+                                <Fragment key={aggKey}>
+                                  <tr className="whatIfHypoAggParentRow">
+                                    <td data-label="">
+                                      <button
+                                        type="button"
+                                        className="headerIconBtn positionExpandBtn"
+                                        onClick={() =>
+                                          setExpandedHypoSellKeys((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(aggKey)) next.delete(aggKey);
+                                            else next.add(aggKey);
+                                            return next;
+                                          })
+                                        }
+                                        disabled={lineCount === 0}
+                                        aria-expanded={isOpen}
+                                        aria-label={t('whatif.toggleHypotheticalSellLines', { symbol: row.symbol })}
+                                        title={
+                                          isOpen
+                                            ? t('whatif.hideHypotheticalSellLines')
+                                            : t('whatif.showHypotheticalSellLines')
+                                        }
+                                      >
+                                        {isOpen ? '▾' : '▸'}
+                                      </button>
+                                    </td>
+                                    <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                                    <td data-label={t('portfolio.quantity')}>
+                                      {hideValues ? '—' : formatQty(row.totalQty)}
+                                    </td>
+                                    <td data-label={t('modals.historyTableSellPrice')}>
+                                      {hideValues ? '—' : formatCurrencyValue(row.avgSell, row.currency)}
+                                    </td>
+                                    <td data-label={t('modals.historyTableSaleAmount')}>
+                                      {hideValues ? '—' : formatCurrencyValue(row.totalProceeds, row.currency)}
+                                    </td>
+                                    <td
+                                      data-label={t('modals.historyTableRealizedPl')}
+                                      className={plPos ? 'whatIfHypoAggPlPos' : 'whatIfHypoAggPlNeg'}
                                     >
-                                      {isOpen ? '▾' : '▸'}
-                                    </button>
-                                    <span className="positionAssetName">{row.symbol}</span>
-                                  </div>
-                                </td>
-                                <td data-label={t('portfolio.quantity')}>
-                                  {hideValues ? '—' : formatQty(row.totalQty)}
-                                </td>
-                                <td data-label={t('modals.historyTableSellPrice')}>
-                                  {hideValues ? '—' : formatCurrencyValue(row.avgSell, row.currency)}
-                                </td>
-                                <td data-label={t('modals.historyTableCostPerUnit')}>
-                                  {hideValues ? '—' : formatCurrencyValue(row.avgCostPerUnit, row.currency)}
-                                </td>
-                                <td data-label={t('modals.historyTableSaleAmount')}>
-                                  {hideValues ? '—' : formatCurrencyValue(row.totalProceeds, row.currency)}
-                                </td>
-                                <td
-                                  data-label={t('modals.historyTableRealizedPl')}
-                                  className={row.totalRealizedPl >= 0 ? 'pos' : 'neg'}
-                                >
-                                  {hideValues ? '—' : formatCurrencyValue(row.totalRealizedPl, row.currency)}
-                                </td>
-                                <td
-                                  data-label={t('modals.historyTableRealizedReturn')}
-                                  className={row.totalRealizedPl >= 0 ? 'pos' : 'neg'}
-                                >
-                                  {hideValues ? '—' : formatPercent(row.realizedPct)}
-                                </td>
-                                <td
-                                  className="whatIfHypoAggregateDeleteCell"
-                                  data-label={t('netWorth.actions')}
-                                >
+                                      <div className="whatIfHypoAggPlCell">
+                                        <span>
+                                          {hideValues ? '—' : formatCurrencyValue(row.totalRealizedPl, row.currency)}
+                                        </span>
+                                        <span className="whatIfHypoAggPlPct">
+                                          {hideValues ? '—' : formatPercent(row.realizedPct)}
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td data-label={t('whatif.hypoAggregateSellLineCountLabel')}>{lineCount}</td>
+                                    <td data-label={t('modals.remove')}>
+                                      <button
+                                        type="button"
+                                        className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                        onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
+                                        disabled={lineCount === 0 || isPersistingInputs}
+                                        aria-label={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
+                                        title={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
+                                      >
+                                        ✕
+                                      </button>
+                                    </td>
+                                  </tr>
+                                  {isOpen && lineCount > 0 && (
+                                    <tr className="whatIfHypoAggNestedRow">
+                                      <td colSpan={8}>
+                                        <div className="whatIfHypoNestedTableWrap">
+                                          <table className="whatIfHypoNestedLinesTable">
+                                            <thead>
+                                              <tr>
+                                                <th scope="col">{t('whatif.simulatedSellLinesSection')}</th>
+                                                <th scope="col">{t('modals.historyTableQty')}</th>
+                                                <th scope="col">{t('modals.historyTableSellPrice')}</th>
+                                                <th scope="col">{t('modals.historyTableCostPerUnit')}</th>
+                                                <th scope="col">{t('modals.historyTableSaleAmount')}</th>
+                                                <th scope="col">{t('modals.historyTableRealizedPl')}</th>
+                                                <th scope="col">{t('modals.historyTableRealizedReturn')}</th>
+                                                <th className="whatIfHypoNestedLinesTableActionsCol" scope="col">
+                                                  {t('modals.remove')}
+                                                </th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {sellRows
+                                                .map((r, index) => ({ r, index }))
+                                                .filter(({ r }) => hypoSellAggregateKey(r) === aggKey)
+                                                .map(({ r, index }, i) => {
+                                                  const quoteCcy = hypotheticalBuyQuoteCurrency(r);
+                                                  const metrics = hypotheticalSellMetricsByIndex[index];
+                                                  const proceeds =
+                                                    metrics?.proceeds ?? Math.max(0, num(r.qty) * num(r.sellPrice));
+                                                  const costPu = metrics?.costPerUnit ?? 0;
+                                                  const realizedPl = metrics?.realizedPl ?? 0;
+                                                  const realizedPct = metrics?.realizedReturnPct ?? 0;
+                                                  const lineNo = i + 1;
+                                                  const linePlPos = realizedPl >= 0;
+                                                  return (
+                                                    <tr key={r.id || `hypo-sell-${aggKey}-${index}`}>
+                                                      <td data-label={t('whatif.simulatedSellLinesSection')}>
+                                                        {t('whatif.simulatedSellLineLabel', { n: lineNo })}
+                                                      </td>
+                                                      <td data-label={t('modals.historyTableQty')}>
+                                                        {hideValues ? '—' : formatQty(r.qty)}
+                                                      </td>
+                                                      <td data-label={t('modals.historyTableSellPrice')}>
+                                                        {hideValues
+                                                          ? '—'
+                                                          : formatCurrencyValue(r.sellPrice, quoteCcy)}
+                                                      </td>
+                                                      <td data-label={t('modals.historyTableCostPerUnit')}>
+                                                        {hideValues ? '—' : formatCurrencyValue(costPu, quoteCcy)}
+                                                      </td>
+                                                      <td data-label={t('modals.historyTableSaleAmount')}>
+                                                        {hideValues
+                                                          ? '—'
+                                                          : formatCurrencyValue(proceeds, quoteCcy)}
+                                                      </td>
+                                                      <td
+                                                        data-label={t('modals.historyTableRealizedPl')}
+                                                        className={linePlPos ? 'whatIfHypoAggPlPos' : 'whatIfHypoAggPlNeg'}
+                                                      >
+                                                        {hideValues ? '—' : formatCurrencyValue(realizedPl, quoteCcy)}
+                                                      </td>
+                                                      <td
+                                                        data-label={t('modals.historyTableRealizedReturn')}
+                                                        className={linePlPos ? 'whatIfHypoAggPlPos' : 'whatIfHypoAggPlNeg'}
+                                                      >
+                                                        {hideValues ? '—' : formatPercent(realizedPct)}
+                                                      </td>
+                                                      <td data-label={t('modals.remove')}>
+                                                        <button
+                                                          type="button"
+                                                          className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                                          onClick={() => removeSellRow(index)}
+                                                          aria-label={t('modals.remove')}
+                                                          title={t('modals.remove')}
+                                                        >
+                                                          ✕
+                                                        </button>
+                                                      </td>
+                                                    </tr>
+                                                  );
+                                                })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
+                            {aggregatedHypotheticalSellSummary.length === 0 && (
+                              <tr>
+                                <td colSpan={8}>{t('whatif.hypotheticalSalesAggregateEmpty')}</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="whatIfHypoAggregateMobileCards">
+                    <div className="positionClassCards whatIfHypoSellParentCards">
+                      {aggregatedHypotheticalSellSummary.map((row) => {
+                        const aggKey = `${row.symbol}\0${row.currency}`;
+                        const isOpen = expandedHypoSellKeys.has(aggKey);
+                        const lineCount = sellRows.reduce(
+                          (n, r) => n + (hypoSellAggregateKey(r) === aggKey ? 1 : 0),
+                          0,
+                        );
+                        const plPos = row.totalRealizedPl >= 0;
+                        return (
+                          <section
+                            key={aggKey}
+                            className="positionDetailCard whatIfHypoSellParentCard"
+                          >
+                            <header>
+                              <div className="positionNameCol">
+                                <div className="positionMobileTitleRow">
                                   <button
                                     type="button"
-                                    className="headerIconBtn positionActionBtnDanger whatIfIconBtn whatIfHypoAggregateBatchDeleteBtn"
+                                    className="headerIconBtn positionExpandBtn"
+                                    onClick={() =>
+                                      setExpandedHypoSellKeys((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(aggKey)) next.delete(aggKey);
+                                        else next.add(aggKey);
+                                        return next;
+                                      })
+                                    }
+                                    disabled={lineCount === 0}
+                                    aria-expanded={isOpen}
+                                    aria-label={t('whatif.toggleHypotheticalSellLines', { symbol: row.symbol })}
+                                    title={
+                                      isOpen
+                                        ? t('whatif.hideHypotheticalSellLines')
+                                        : t('whatif.showHypotheticalSellLines')
+                                    }
+                                  >
+                                    {isOpen ? '▾' : '▸'}
+                                  </button>
+                                  <h3>{row.symbol}</h3>
+                                </div>
+                                <span className="positionMarketMeta">
+                                  {t('whatif.hypoAggregateSellMeta', { count: lineCount })}
+                                </span>
+                              </div>
+                              <div
+                                className={`positionPnlDock whatIfHypoAggregateDock whatIfHypoAggregateDock--sell${
+                                  plPos ? ' pos' : ' neg'
+                                }`}
+                              >
+                                <strong>
+                                  {hideValues ? '—' : formatCurrencyValue(row.totalRealizedPl, row.currency)}
+                                </strong>
+                                <span>{hideValues ? '—' : formatPercent(row.realizedPct)}</span>
+                              </div>
+                            </header>
+                            <div className="positionQuickGrid">
+                              <div className="positionQuickItem">
+                                <span>{t('portfolio.quantity')}</span>
+                                <strong>{hideValues ? '—' : formatQty(row.totalQty)}</strong>
+                              </div>
+                              <div className="positionQuickItem">
+                                <span>{t('modals.historyTableSellPrice')}</span>
+                                <strong>
+                                  {hideValues ? '—' : formatCurrencyValue(row.avgSell, row.currency)}
+                                </strong>
+                              </div>
+                              <div className="positionQuickItem">
+                                <span>{t('modals.historyTableSaleAmount')}</span>
+                                <strong>
+                                  {hideValues ? '—' : formatCurrencyValue(row.totalProceeds, row.currency)}
+                                </strong>
+                              </div>
+                              <div className="positionQuickItem">
+                                <span>{t('whatif.hypoAggregateSellLineCountLabel')}</span>
+                                <strong>{lineCount}</strong>
+                              </div>
+                            </div>
+                            <dl className="positionMetaList whatIfHypoParentMetaActions">
+                              <div className="positionMetaRowWithActions whatIfHypoMetaRowActionsOnly">
+                                <div className="positionCardActionIcons">
+                                  <button
+                                    type="button"
+                                    className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                     onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
                                     disabled={lineCount === 0 || isPersistingInputs}
                                     aria-label={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
                                     title={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
                                   >
-                                    ×
+                                    ✕
                                   </button>
-                                </td>
-                              </tr>
-                              {isOpen && (
-                                <tr className="whatIfHypoSellDetailRow">
-                                  <td colSpan={8}>
-                                    <div className="tableWrap whatIfHypoSellDetailWrap">
-                                      <table className="positionTxTable positionTxTransactionsTable positionTxAlignedTable whatIfHypoSellDetailTable">
-                                        <thead>
-                                          <tr>
-                                            <th>{t('modals.historyTableQty')}</th>
-                                            <th>{t('modals.historyTableSellPrice')}</th>
-                                            <th>{t('modals.historyTableCostPerUnit')}</th>
-                                            <th>{t('modals.historyTableSaleAmount')}</th>
-                                            <th>{t('modals.historyTableRealizedPl')}</th>
-                                            <th>{t('modals.historyTableRealizedReturn')}</th>
-                                            <th>{t('netWorth.actions')}</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {sellRows.map((r, index) => {
-                                            if (hypoSellAggregateKey(r) !== aggKey) return null;
-                                            const quoteCcy = hypotheticalBuyQuoteCurrency(r);
-                                            const metrics = hypotheticalSellMetricsByIndex[index];
-                                            const proceeds =
-                                              metrics?.proceeds ?? Math.max(0, num(r.qty) * num(r.sellPrice));
-                                            const costPu = metrics?.costPerUnit ?? 0;
-                                            const realizedPl = metrics?.realizedPl ?? 0;
-                                            const realizedPct = metrics?.realizedReturnPct ?? 0;
-                                            return (
-                                              <tr key={r.id || `hypo-sell-${aggKey}-${index}`}>
-                                                <td data-label={t('modals.historyTableQty')}>{r.qty}</td>
-                                                <td data-label={t('modals.historyTableSellPrice')}>{r.sellPrice}</td>
-                                                <td data-label={t('modals.historyTableCostPerUnit')}>
-                                                  {hideValues ? '—' : formatCurrencyValue(costPu, quoteCcy)}
-                                                </td>
-                                                <td data-label={t('modals.historyTableSaleAmount')}>
-                                                  {hideValues ? '—' : formatCurrencyValue(proceeds, quoteCcy)}
-                                                </td>
-                                                <td
-                                                  data-label={t('modals.historyTableRealizedPl')}
-                                                  className={realizedPl >= 0 ? 'pos' : 'neg'}
-                                                >
-                                                  {hideValues ? '—' : formatCurrencyValue(realizedPl, quoteCcy)}
-                                                </td>
-                                                <td
-                                                  data-label={t('modals.historyTableRealizedReturn')}
-                                                  className={realizedPl >= 0 ? 'pos' : 'neg'}
-                                                >
-                                                  {hideValues ? '—' : formatPercent(realizedPct)}
-                                                </td>
-                                                <td data-label={t('netWorth.actions')}>
-                                                  <button
-                                                    type="button"
-                                                    className="headerIconBtn positionActionBtnDanger whatIfIconBtn"
-                                                    onClick={() => removeSellRow(index)}
-                                                    aria-label={t('modals.remove')}
-                                                    title={t('modals.remove')}
-                                                  >
-                                                    -
-                                                  </button>
-                                                </td>
-                                              </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                      </table>
+                                </div>
+                              </div>
+                            </dl>
+                            {isOpen && (
+                              <div className="positionCardExpandedWrap">
+                                <div className="positionTxPanel positionTxPanel--mobile whatIfHypoNestedPanel">
+                                  <section className="positionTxSection positionTxSection--sold">
+                                    <div className="positionTxSectionHeader">
+                                      <strong>{t('whatif.simulatedSellLinesSection')}</strong>
                                     </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </Fragment>
-                          );
-                        })}
-                        {aggregatedHypotheticalSellSummary.length === 0 && (
-                          <tr>
-                            <td colSpan={8}>{t('whatif.noHypotheticalSales')}</td>
-                          </tr>
-                        )}
-                        {aggregatedHypotheticalSellSummary.length > 0 &&
-                          hypotheticalSellSubtotalsByCurrency.map((sub) => (
-                            <tr
-                              key={`sell-agg-subtotal-${sub.currency}`}
-                              className="whatIfAggregateSubtotalRow"
-                            >
-                              <td data-label={t('portfolio.asset')}>
-                                {hypotheticalSellSubtotalsByCurrency.length > 1
-                                  ? `${t('whatif.hypotheticalAggregateSubtotal')} (${sub.currency})`
-                                  : t('whatif.hypotheticalAggregateSubtotal')}
-                              </td>
-                              <td data-label={t('portfolio.quantity')}>
-                                {hideValues ? '—' : formatQty(sub.totalQty)}
-                              </td>
-                              <td data-label={t('modals.historyTableSellPrice')}>
-                                {hideValues ? '—' : formatCurrencyValue(sub.avgSell, sub.currency)}
-                              </td>
-                              <td data-label={t('modals.historyTableCostPerUnit')}>
-                                {hideValues ? '—' : formatCurrencyValue(sub.avgCostPerUnit, sub.currency)}
-                              </td>
-                              <td data-label={t('modals.historyTableSaleAmount')}>
-                                {hideValues ? '—' : formatCurrencyValue(sub.totalProceeds, sub.currency)}
-                              </td>
-                              <td
-                                data-label={t('modals.historyTableRealizedPl')}
-                                className={sub.totalRealizedPl >= 0 ? 'pos' : 'neg'}
-                              >
-                                {hideValues ? '—' : formatCurrencyValue(sub.totalRealizedPl, sub.currency)}
-                              </td>
-                              <td
-                                data-label={t('modals.historyTableRealizedReturn')}
-                                className={sub.totalRealizedPl >= 0 ? 'pos' : 'neg'}
-                              >
-                                {hideValues ? '—' : formatPercent(sub.realizedPct)}
-                              </td>
-                              <td className="whatIfHypoAggregateDeleteCell" data-label={t('netWorth.actions')}>
-                                —
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+                                    <div className="positionTxCards">
+                                      {sellRows
+                                        .map((r, index) => ({ r, index }))
+                                        .filter(({ r }) => hypoSellAggregateKey(r) === aggKey)
+                                        .map(({ r, index }, i) => {
+                                          const quoteCcy = hypotheticalBuyQuoteCurrency(r);
+                                          const metrics = hypotheticalSellMetricsByIndex[index];
+                                          const proceeds =
+                                            metrics?.proceeds ?? Math.max(0, num(r.qty) * num(r.sellPrice));
+                                          const costPu = metrics?.costPerUnit ?? 0;
+                                          const realizedPl = metrics?.realizedPl ?? 0;
+                                          const realizedPct = metrics?.realizedReturnPct ?? 0;
+                                          const lineNo = i + 1;
+                                          return (
+                                            <div
+                                              key={r.id || `hypo-sell-${aggKey}-${index}`}
+                                              className="positionTxCard"
+                                            >
+                                              <div className="positionTxCardTitleRow">
+                                                <strong>{t('whatif.simulatedSellLineLabel', { n: lineNo })}</strong>
+                                                <button
+                                                  type="button"
+                                                  className="headerIconBtn positionActionBtn positionActionBtnDanger"
+                                                  onClick={() => removeSellRow(index)}
+                                                  aria-label={t('modals.remove')}
+                                                  title={t('modals.remove')}
+                                                >
+                                                  ✕
+                                                </button>
+                                              </div>
+                                              <div className="positionTxCardGrid">
+                                                <div>
+                                                  <span>{t('modals.historyTableQty')}</span>
+                                                  <strong>{hideValues ? '—' : formatQty(r.qty)}</strong>
+                                                </div>
+                                                <div>
+                                                  <span>{t('modals.historyTableSellPrice')}</span>
+                                                  <strong>
+                                                    {hideValues
+                                                      ? '—'
+                                                      : formatCurrencyValue(r.sellPrice, quoteCcy)}
+                                                  </strong>
+                                                </div>
+                                                <div>
+                                                  <span>{t('modals.historyTableCostPerUnit')}</span>
+                                                  <strong>
+                                                    {hideValues
+                                                      ? '—'
+                                                      : formatCurrencyValue(costPu, quoteCcy)}
+                                                  </strong>
+                                                </div>
+                                                <div>
+                                                  <span>{t('modals.historyTableSaleAmount')}</span>
+                                                  <strong>
+                                                    {hideValues
+                                                      ? '—'
+                                                      : formatCurrencyValue(proceeds, quoteCcy)}
+                                                  </strong>
+                                                </div>
+                                                <div>
+                                                  <span>{t('modals.historyTableRealizedPl')}</span>
+                                                  <strong className={realizedPl >= 0 ? 'pos' : 'neg'}>
+                                                    {hideValues
+                                                      ? '—'
+                                                      : formatCurrencyValue(realizedPl, quoteCcy)}
+                                                  </strong>
+                                                </div>
+                                                <div>
+                                                  <span>{t('modals.historyTableRealizedReturn')}</span>
+                                                  <strong className={realizedPl >= 0 ? 'pos' : 'neg'}>
+                                                    {hideValues ? '—' : formatPercent(realizedPct)}
+                                                  </strong>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                  </section>
+                                </div>
+                              </div>
+                            )}
+                          </section>
+                        );
+                      })}
+                      {aggregatedHypotheticalSellSummary.length === 0 && (
+                        <p className="positionTxEmpty whatIfHypoAggregateEmpty">{t('whatif.noHypotheticalSales')}</p>
+                      )}
+                    </div>
+                    </div>
+                      {aggregatedHypotheticalSellSummary.length > 0 &&
+                        hypotheticalSellSubtotalsByCurrency.map((sub) => (
+                          <div
+                            key={`sell-agg-subtotal-${sub.currency}`}
+                            className="whatIfHypoSubtotalStrip whatIfHypoSubtotalStrip--sell"
+                          >
+                            <span className="whatIfHypoSubtotalStripLabel">
+                              {hypotheticalSellSubtotalsByCurrency.length > 1
+                                ? `${t('whatif.hypotheticalAggregateSubtotal')} (${sub.currency})`
+                                : t('whatif.hypotheticalAggregateSubtotal')}
+                            </span>
+                            <strong className="whatIfHypoSubtotalStripValue">
+                              {hideValues ? '—' : formatCurrencyValue(sub.totalProceeds, sub.currency)}
+                            </strong>
+                          </div>
+                        ))}
                   </div>
                 </section>
 
                 <section className="whatIfSection">
                   <h2>{t('whatif.featureATitle')}</h2>
-                  <p className="profitabilitySectionDesc">{t('whatif.featureADesc')}</p>
-                  <div className="profitabilityTableWrap">
-                    <table className="profitabilityTable whatIfTable whatIfTableTarget">
-                      <thead>
-                        <tr>
-                          <th>{t('portfolio.asset')}</th>
-                          <th>{`${t('whatif.currentPrice')} $`}</th>
-                          <th>{t('whatif.targetDeltaVsCurrentPct')}</th>
-                          <th>{`${t('whatif.targetPrice')} $`}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resultRows.map((row) => {
-                          const targetRow = targetPrices.find((x) => String(x.symbol).toUpperCase() === String(row.symbol).toUpperCase());
-                          const targetCurrency = targetRow?.currency || row.currency || 'USD';
-                          const symU = String(row.symbol || '').toUpperCase();
-                          const rowTargetDirty = unsavedTargetSymbolSet.has(symU);
-                          const targetPriceInputClass = `profitabilityInput${rowTargetDirty ? ' whatIfTargetInput--unsaved' : ''}`;
-                          const rowInlineSaveActive = rowTargetDirty && !isPersistingInputs;
-                          return (
-                            <tr key={row.symbol}>
-                              <td data-label={t('portfolio.asset')}>{row.symbol}</td>
-                              <td data-label={`${t('whatif.currentPrice')} $`}>
-                                {hideValues
-                                  ? '—'
-                                  : formatPriceNumber(row.baselinePrice, targetCurrency)}
-                              </td>
-                              <td data-label={t('whatif.targetDeltaVsCurrentPct')}>
+                  <div className="whatIfHypotheticalAggregateWrap whatIfHypotheticalAggregateWrap--targetPriceCards">
+                    <div className="whatIfTargetPriceDesktopTable profitabilityTableWrap">
+                      <table className="profitabilityTable whatIfTable whatIfTableTarget">
+                        <thead>
+                          <tr>
+                            <th>{t('portfolio.asset')}</th>
+                            <th>{t('whatif.currentPrice')}</th>
+                            <th>{t('whatif.targetDeltaVsCurrentPct')}</th>
+                            <th>{t('whatif.targetPrice')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {resultRows.map((row) => {
+                            const targetRow = targetPrices.find(
+                              (x) => String(x.symbol).toUpperCase() === String(row.symbol).toUpperCase(),
+                            );
+                            const targetCurrency = targetRow?.currency || row.currency || 'USD';
+                            const symU = String(row.symbol || '').toUpperCase();
+                            const rowTargetDirty = unsavedTargetSymbolSet.has(symU);
+                            const targetPriceInputClass = `profitabilityInput${rowTargetDirty ? ' whatIfTargetInput--unsaved' : ''}`;
+                            const rowInlineSaveActive = rowTargetDirty && !isPersistingInputs;
+                            const pricePrefix = targetSimulationCurrencyPrefix(targetCurrency);
+                            return (
+                              <tr key={row.symbol}>
+                                <td data-label={t('portfolio.asset')}>{row.symbol}</td>
+                                <td data-label={t('whatif.currentPrice')}>
+                                  {hideValues
+                                    ? '—'
+                                    : `${pricePrefix}${formatPriceNumber(row.baselinePrice, targetCurrency)}`}
+                                </td>
+                                <td data-label={t('whatif.targetDeltaVsCurrentPct')}>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    className="profitabilityInput"
+                                    value={targetPricePctBySymbol[row.symbol] ?? ''}
+                                    onChange={(e) =>
+                                      updateTargetPricePct(
+                                        row.symbol,
+                                        e.target.value,
+                                        row.baselinePrice,
+                                        targetCurrency,
+                                      )
+                                    }
+                                    onKeyDown={handleTargetPriceFieldKeyDown}
+                                    placeholder="0.0"
+                                    disabled={num(row.baselinePrice) <= 0}
+                                  />
+                                </td>
+                                <td data-label={t('whatif.targetPrice')}>
+                                  <span className="rebalanceTargetWrap whatIfTargetPriceFieldRow">
+                                    {!hideValues && (
+                                      <span
+                                        className="whatIfPricePrefix whatIfTargetPriceInputPrefix"
+                                        aria-hidden="true"
+                                      >
+                                        {pricePrefix}
+                                      </span>
+                                    )}
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      className={targetPriceInputClass}
+                                      value={targetRow?.targetPrice ?? ''}
+                                      onChange={(e) => {
+                                        const nextVal = e.target.value;
+                                        updateTargetPrice(row.symbol, nextVal, targetCurrency);
+                                        const baseline = num(row.baselinePrice);
+                                        const nextNum = num(nextVal);
+                                        setTargetPricePctBySymbol((prev) => ({
+                                          ...prev,
+                                          [row.symbol]:
+                                            baseline > 0 && nextVal !== ''
+                                              ? (((nextNum - baseline) / baseline) * 100).toFixed(2)
+                                              : '',
+                                        }));
+                                      }}
+                                      onKeyDown={handleTargetPriceFieldKeyDown}
+                                    />
+                                    <button
+                                      type="button"
+                                      className={`headerIconBtn whatIfIconBtn${rowInlineSaveActive ? ' whatIfTargetPriceSaveBtn--pending' : ''}`}
+                                      disabled={!hasUnsavedTargetPrices || isPersistingInputs}
+                                      aria-label={t('whatif.saveTargetPricesMobileAria')}
+                                      title={t('whatif.saveTargetPricesMobileAria')}
+                                      onClick={() => void saveTargetPricesNow()}
+                                    >
+                                      ✓
+                                    </button>
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="whatIfTargetPriceMobileCards">
+                    <div className="positionClassCards whatIfTargetPriceCards">
+                      {resultRows.map((row) => {
+                        const targetRow = targetPrices.find((x) => String(x.symbol).toUpperCase() === String(row.symbol).toUpperCase());
+                        const targetCurrency = targetRow?.currency || row.currency || 'USD';
+                        const symU = String(row.symbol || '').toUpperCase();
+                        const rowTargetDirty = unsavedTargetSymbolSet.has(symU);
+                        const targetPriceInputClass = `profitabilityInput${rowTargetDirty ? ' whatIfTargetInput--unsaved' : ''}`;
+                        const rowInlineSaveActive = rowTargetDirty && !isPersistingInputs;
+                        const pricePrefix = targetSimulationCurrencyPrefix(targetCurrency);
+                        const targetPriceDisplay =
+                          targetRow?.targetPrice !== '' && targetRow?.targetPrice != null
+                            ? `${pricePrefix}${formatPriceNumber(num(targetRow.targetPrice), targetCurrency)}`
+                            : null;
+                        return (
+                          <section
+                            key={row.symbol}
+                            className={`positionDetailCard whatIfTargetPriceCard${rowTargetDirty ? ' whatIfTargetPriceCard--unsaved' : ''}`}
+                          >
+                            <header>
+                              <div className="positionNameCol">
+                                <div className="positionMobileTitleRow">
+                                  <h3>{row.symbol}</h3>
+                                </div>
+                                <span className="positionMarketMeta whatIfTargetPriceHeaderPrice">
+                                  {hideValues
+                                    ? '—'
+                                    : `${pricePrefix}${formatPriceNumber(row.baselinePrice, targetCurrency)}`}
+                                </span>
+                              </div>
+                              <div className="positionPnlDock whatIfTargetPriceDock">
+                                <strong>
+                                  {hideValues ? '—' : targetPriceDisplay ?? '—'}
+                                </strong>
+                                <span>{t('whatif.targetPrice')}</span>
+                              </div>
+                            </header>
+                            <div className="positionQuickGrid whatIfTargetPriceQuickGrid">
+                              <div className="positionQuickItem">
+                                <span>{t('whatif.targetDeltaVsCurrentPct')}</span>
                                 <input
                                   type="number"
                                   step="0.1"
-                                  className="profitabilityInput"
+                                  className="profitabilityInput whatIfTargetPricePctInput"
                                   value={targetPricePctBySymbol[row.symbol] ?? ''}
                                   onChange={(e) =>
                                     updateTargetPricePct(
@@ -2924,9 +3440,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   placeholder="0.0"
                                   disabled={num(row.baselinePrice) <= 0}
                                 />
-                              </td>
-                              <td data-label={`${t('whatif.targetPrice')} $`}>
+                              </div>
+                              <div className="positionQuickItem whatIfTargetPriceTargetBlock">
+                                <span>{t('whatif.targetPrice')}</span>
                                 <span className="rebalanceTargetWrap whatIfTargetPriceFieldRow">
+                                  {!hideValues && (
+                                    <span
+                                      className="whatIfPricePrefix whatIfTargetPriceInputPrefix"
+                                      aria-hidden="true"
+                                    >
+                                      {pricePrefix}
+                                    </span>
+                                  )}
                                   <input
                                     type="number"
                                     min="0"
@@ -2950,40 +3475,35 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   />
                                   <button
                                     type="button"
-                                    className={`whatIfTargetInlineSaveBtn${rowInlineSaveActive ? ' whatIfTargetInlineSaveBtn--unsaved' : ''}`}
+                                    className={`headerIconBtn whatIfIconBtn${rowInlineSaveActive ? ' whatIfTargetPriceSaveBtn--pending' : ''}`}
                                     disabled={!hasUnsavedTargetPrices || isPersistingInputs}
                                     aria-label={t('whatif.saveTargetPricesMobileAria')}
                                     title={t('whatif.saveTargetPricesMobileAria')}
                                     onClick={() => void saveTargetPricesNow()}
                                   >
-                                    <svg
-                                      className="whatIfTargetInlineSaveIcon"
-                                      width="20"
-                                      height="20"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      aria-hidden="true"
-                                    >
-                                      <path
-                                        d="M20 6L9 17l-5-5"
-                                        stroke="currentColor"
-                                        strokeWidth="2.25"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
+                                    ✓
                                   </button>
                                 </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
+                    </div>
                   </div>
                   <div className={`whatIfTargetToolbar${targetSaveUiActive ? ' whatIfTargetToolbar--unsaved' : ''}`}>
                     <div className="whatIfTargetToolbarActions">
+                      {targetSaveUiActive && (
+                        <button
+                          type="button"
+                          className="whatIfTargetCancelBtn"
+                          disabled={isPersistingInputs}
+                          onClick={() => cancelTargetPriceEdits()}
+                        >
+                          {t('modals.cancel')}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={`whatIfStickySaveBtn${targetSaveUiActive ? ' whatIfStickySaveBtn--unsaved' : ''}`}
