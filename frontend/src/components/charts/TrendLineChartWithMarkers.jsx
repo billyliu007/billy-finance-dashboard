@@ -228,11 +228,13 @@ export default function TrendLineChartWithMarkers({
   const formatForTooltip = (v) => formatDisplayValue(Number(v) || 0);
 
   // Generous margins so ReferenceDot labels and month ticks are not clipped (Recharts SVG overflow is hidden).
+  const yAxisWidth = isSmallScreen ? 4 : 86;
   const chartMargin = {
-    top: 42,
-    right: isSmallScreen ? 22 : 40,
-    left: isSmallScreen ? 22 : 36,
-    bottom: isSmallScreen ? 54 : 36,
+    top: isSmallScreen ? 24 : 28,
+    right: isSmallScreen ? 10 : 18,
+    // Keep left margin minimal; most of the left gutter is y-axis width.
+    left: isSmallScreen ? 10 : 10,
+    bottom: isSmallScreen ? 46 : 28,
   };
 
   return (
@@ -250,8 +252,8 @@ export default function TrendLineChartWithMarkers({
           }}
           height={isSmallScreen ? 46 : undefined}
           tickMargin={isSmallScreen ? 10 : 12}
-          interval={isSmallScreen ? 'preserveStartEnd' : data.length <= 24 ? 0 : 'preserveStartEnd'}
-          minTickGap={isSmallScreen ? 26 : data.length <= 24 ? 2 : 28}
+          interval={data.length <= 10 ? 0 : 'preserveStartEnd'}
+          minTickGap={isSmallScreen ? 26 : 34}
         />
         <YAxis
           domain={yDomain}
@@ -260,8 +262,8 @@ export default function TrendLineChartWithMarkers({
           tickFormatter={
             isSmallScreen ? undefined : (value) => formatMaybeHidden(hideValues, formatForTooltip, Number(value) || 0, '')
           }
-          width={isSmallScreen ? 4 : 120}
-          tickMargin={isSmallScreen ? 0 : 8}
+          width={yAxisWidth}
+          tickMargin={isSmallScreen ? 0 : 6}
         />
         <Tooltip
           formatter={(value) => [

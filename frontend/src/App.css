@@ -2673,7 +2673,7 @@ textarea.modalInput {
 }
 
 .chartArea.compact {
-  height: 290px;
+  height: 330px;
 }
 
 /* Recharts clips SVG overflow by default; allow marker callouts to extend into margins */

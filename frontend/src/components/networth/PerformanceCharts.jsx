@@ -10,11 +10,29 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { useEffect, useState } from 'react';
 import { formatBaseCurrency, formatLocalDateTime, formatMaybeHidden, formatPercent } from '../../utils/formatters.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 import TrendLineChartWithMarkers, { formatTrendXAxisLabel } from '../charts/TrendLineChartWithMarkers.jsx';
 
 const NET_WORTH_X_KEY = 'dateTimeLabel';
+
+function formatTrendXAxisLabelCompact(rawValue) {
+  const full = formatTrendXAxisLabel(rawValue);
+  if (full.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(full)) {
+    return full.slice(5, 10);
+  }
+  return full;
+}
+
+function formatMonthXAxisLabel(rawValue) {
+  const full = formatTrendXAxisLabel(rawValue);
+  // Monthly return chart: show YYYY-MM only to avoid overlap.
+  if (full.length >= 7 && /^\d{4}-\d{2}/.test(full)) {
+    return full.slice(0, 7);
+  }
+  return full;
+}
 
 function ActivePeriodBar(props) {
   const {
@@ -86,6 +104,26 @@ function PeriodReturnTooltip({ active, payload, hideValues, baseCurrency = 'USD'
 export default function PerformanceCharts({ hideValues, cashflowData, derivedSeries, netWorthDomain, baseCurrency = 'USD' }) {
   const { t } = useLanguage();
   const formatValue = (v) => formatBaseCurrency(v, baseCurrency);
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 980px)');
+    const update = () => setIsSmallScreen(mediaQuery.matches);
+
+    update();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', update);
+      return () => mediaQuery.removeEventListener('change', update);
+    }
+
+    mediaQuery.addListener(update);
+    return () => mediaQuery.removeListener(update);
+  }, []);
+
+  // Keep chart plot areas vertically aligned across the two cards (desktop + responsive).
+  const CHART_MARGIN = isSmallScreen
+    ? { top: 24, right: 10, left: 10, bottom: 46 }
+    : { top: 28, right: 18, left: 10, bottom: 28 };
 
   return (
     <div className="portfolioCharts">
@@ -111,9 +149,22 @@ export default function PerformanceCharts({ hideValues, cashflowData, derivedSer
         <h2>{t('netWorth.monthlyReturn')}</h2>
         <div className="chartArea compact">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={derivedSeries} margin={{ top: 8, right: 18, left: 8, bottom: 8 }}>
+            <BarChart data={derivedSeries} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="date" tickFormatter={formatTrendXAxisLabel} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={isSmallScreen ? formatTrendXAxisLabelCompact : formatMonthXAxisLabel}
+                tick={{
+                  fill: '#94a3b8',
+                  fontSize: isSmallScreen ? 11 : 12,
+                  angle: isSmallScreen ? -35 : 0,
+                  textAnchor: isSmallScreen ? 'end' : 'middle',
+                }}
+                height={isSmallScreen ? 46 : undefined}
+                tickMargin={isSmallScreen ? 10 : 12}
+                interval={isSmallScreen ? 'preserveStartEnd' : derivedSeries.length <= 12 ? 0 : 'preserveStartEnd'}
+                minTickGap={isSmallScreen ? 26 : 34}
+              />
               <YAxis tickFormatter={(value) => `${value}%`} tick={{ fill: '#94a3b8', fontSize: 12 }} />
               <Tooltip
                 content={<PeriodReturnTooltip hideValues={hideValues} baseCurrency={baseCurrency} t={t} />}
