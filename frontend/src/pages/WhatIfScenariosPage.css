@@ -226,6 +226,12 @@
   box-sizing: border-box;
 }
 
+/* Ensure + and ✕ icons are visually same size in aggregate rows */
+.whatIfHypoAggActionsCell .headerIconBtn {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
 /* Teal accent + icon sizing (matches headerIconBtn + whatIfIconBtn elsewhere on this page) */
 .whatIfHypoAggAddBtn {
   border-color: rgba(45, 212, 191, 0.45) !important;
