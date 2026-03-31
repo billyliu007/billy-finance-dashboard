@@ -194,6 +194,189 @@ export function buildAssetsSnapshotPrompt({ cashComponents, positions, language 
 }
 
 /**
+ * Build prompt: current asset snapshot (assets only) + selected scenario simulated buys/sells/targets.
+ * @param {{ cashComponents: unknown[]; positions: unknown[]; language?: string; scenarioResults: Record<string, unknown> | null }} opts
+ * @returns {string}
+ */
+export function buildScenarioSnapshotPrompt({
+  cashComponents,
+  positions,
+  language = 'en',
+  scenarioResults,
+}) {
+  const now = new Date().toISOString();
+  const isZh = language === 'zh';
+  const scenario = scenarioResults?.scenario ?? {};
+  const scenarioName = String(scenario?.name || '').trim() || (isZh ? '（未命名）' : '(unnamed)');
+  const scenarioId = scenario?.id != null ? String(scenario.id) : '';
+
+  const cash = (cashComponents || [])
+    .map((c) => ({
+      name: String(c?.name || (isZh ? '现金' : 'Cash')).trim(),
+      currency: String(c?.currency || 'USD').trim().toUpperCase(),
+      balance: Number(c?.balance ?? 0),
+    }))
+    .filter((c) => c.name || c.currency);
+
+  const cashAssets = cash.filter((c) => Number.isFinite(c.balance) && c.balance >= 0);
+
+  const rows = Array.isArray(positions) ? positions : [];
+  const byClass = new Map();
+  for (const row of rows) {
+    const cls = String(row?.category || 'Other').trim() || 'Other';
+    if (!byClass.has(cls)) byClass.set(cls, []);
+    byClass.get(cls).push(row);
+  }
+
+  const targetPrices = Array.isArray(scenarioResults?.targetPrices) ? scenarioResults.targetPrices : [];
+  const hypotheticalPurchases = Array.isArray(scenarioResults?.hypotheticalPurchases)
+    ? scenarioResults.hypotheticalPurchases
+    : [];
+  const hypotheticalSales = Array.isArray(scenarioResults?.hypotheticalSales)
+    ? scenarioResults.hypotheticalSales
+    : [];
+  const baseline = scenarioResults?.baseline ?? {};
+  const scenarioTotals = scenarioResults?.scenarioTotals ?? {};
+
+  const lines = [];
+  lines.push(
+    isZh
+      ? '你是一位专业的投资顾问。请结合我当前的资产快照与下方所选情景的模拟买入、模拟卖出与目标价，给出分析与建议。'
+      : 'You are a professional investment advisor. Using my current asset snapshot and the selected scenario’s simulated buys, simulated sells, and target prices below, provide analysis and suggestions.'
+  );
+  lines.push(
+    isZh
+      ? '请关注：情景相对现状的仓位与风险变化、目标价隐含回报与可行性、模拟交易对现金/成本的影响。'
+      : 'Focus on: how the scenario changes exposure vs. today, feasibility of target prices, and how simulated trades affect cash and cost basis.'
+  );
+  lines.push('');
+  lines.push(isZh ? `数据快照时间（UTC）：${now}` : `Data snapshot time (UTC): ${now}`);
+  lines.push(
+    isZh
+      ? `所选情景：${scenarioName}${scenarioId ? ` | id=${scenarioId}` : ''}`
+      : `Selected scenario: ${scenarioName}${scenarioId ? ` | id=${scenarioId}` : ''}`
+  );
+  lines.push('');
+
+  lines.push(isZh ? '## 当前资产快照（仅资产，不含负债）' : '## Current asset snapshot (assets only, no debt)');
+  lines.push(isZh ? '### 现金（资产）' : '### Cash (assets)');
+  if (cashAssets.length === 0) {
+    lines.push(isZh ? '- （无）' : '- (none)');
+  } else {
+    for (const item of cashAssets) {
+      lines.push(`- ${item.name}: ${formatNumber(item.balance)} ${item.currency}`);
+    }
+  }
+  lines.push('');
+
+  lines.push(isZh ? '### 持仓（按资产类别分组）' : '### Holdings (grouped by asset class)');
+  if (rows.length === 0) {
+    lines.push(isZh ? '- （无）' : '- (none)');
+  } else {
+    for (const [cls, clsRows] of Array.from(byClass.entries())) {
+      lines.push(`#### ${cls}`);
+      for (const p of clsRows) {
+        lines.push(
+          [
+            `- ${p?.name ?? p?.symbol ?? (isZh ? '未知' : 'Unknown')}`,
+            `symbol=${p?.symbol ?? ''}`,
+            `qty=${formatNumber(p?.qty, { maxFrac: 8 })}`,
+            `avgCost=${formatMoneyUsd(p?.purchasePrice)}`,
+            `costBasis=${formatMoneyUsd(p?.totalPurchaseCost)}`,
+            `marketPrice=${formatMoneyUsd(p?.currentPrice)}`,
+            `marketValue=${formatMoneyUsd(p?.currentValue)}`,
+            `weight=${formatPct(p?.weightPct)}`,
+            `unrealizedPnL=${formatMoneyUsd(p?.pnl)}`,
+            `unrealizedReturn=${formatPct(p?.pnlPct)}`,
+          ].join(' | ')
+        );
+      }
+      lines.push('');
+    }
+  }
+
+  lines.push(isZh ? '## 情景建模摘要（相对基准组合）' : '## Scenario modeled summary (vs. baseline portfolio)');
+  lines.push(
+    isZh
+      ? `- 基准组合市值=${formatMoneyUsd(baseline?.totalValue)} | 情景组合市值=${formatMoneyUsd(scenarioTotals?.value)}`
+      : `- Baseline portfolio value=${formatMoneyUsd(baseline?.totalValue)} | Scenario portfolio value=${formatMoneyUsd(scenarioTotals?.value)}`
+  );
+  lines.push(
+    isZh
+      ? `- 基准成本基础=${formatMoneyUsd(baseline?.totalCost)} | 情景成本基础=${formatMoneyUsd(scenarioTotals?.cost)}`
+      : `- Baseline cost basis=${formatMoneyUsd(baseline?.totalCost)} | Scenario cost basis=${formatMoneyUsd(scenarioTotals?.cost)}`
+  );
+  lines.push('');
+
+  lines.push(isZh ? '## 模拟买入（按保存顺序）' : '## Simulated buys (in saved order)');
+  if (hypotheticalPurchases.length === 0) {
+    lines.push(isZh ? '- （无）' : '- (none)');
+  } else {
+    for (const b of hypotheticalPurchases) {
+      const cur = b?.currency ? String(b.currency).toUpperCase() : '';
+      lines.push(
+        isZh
+          ? `- ${b?.symbol ?? 'N/A'} | 数量=${formatNumber(b?.qty, { maxFrac: 8 })} | 买入价=${formatNumber(b?.buyPrice)} ${cur || 'USD'}`
+          : `- ${b?.symbol ?? 'N/A'} | qty=${formatNumber(b?.qty, { maxFrac: 8 })} | buyPrice=${formatNumber(b?.buyPrice)} ${cur || 'USD'}`
+      );
+    }
+  }
+  lines.push('');
+
+  lines.push(isZh ? '## 模拟卖出（按保存顺序）' : '## Simulated sells (in saved order)');
+  if (hypotheticalSales.length === 0) {
+    lines.push(isZh ? '- （无）' : '- (none)');
+  } else {
+    for (const s of hypotheticalSales) {
+      const cur = s?.currency ? String(s.currency).toUpperCase() : '';
+      const fee =
+        s?.feeFlat != null && Number.isFinite(Number(s.feeFlat))
+          ? formatNumber(s.feeFlat)
+          : isZh
+            ? '—'
+            : '—';
+      lines.push(
+        isZh
+          ? `- ${s?.symbol ?? 'N/A'} | 数量=${formatNumber(s?.qty, { maxFrac: 8 })} | 卖出价=${formatNumber(s?.sellPrice)} ${cur || 'USD'} | 固定费用=${fee} ${cur || 'USD'}`
+          : `- ${s?.symbol ?? 'N/A'} | qty=${formatNumber(s?.qty, { maxFrac: 8 })} | sellPrice=${formatNumber(s?.sellPrice)} ${cur || 'USD'} | feeFlat=${fee} ${cur || 'USD'}`
+      );
+    }
+  }
+  lines.push('');
+
+  lines.push(isZh ? '## 目标价' : '## Target prices');
+  if (targetPrices.length === 0) {
+    lines.push(isZh ? '- （无）' : '- (none)');
+  } else {
+    for (const t of targetPrices) {
+      const cur = t?.currency ? String(t.currency).toUpperCase() : '';
+      lines.push(
+        isZh
+          ? `- ${t?.symbol ?? 'N/A'}: ${formatNumber(t?.targetPrice)} ${cur || 'USD'}`
+          : `- ${t?.symbol ?? 'N/A'}: ${formatNumber(t?.targetPrice)} ${cur || 'USD'}`
+      );
+    }
+  }
+  lines.push('');
+
+  lines.push(isZh ? '## 输出格式' : '## Output format');
+  lines.push(
+    isZh
+      ? '- 先总结情景相对现状的关键变化（3-6 条）。'
+      : '- Summarize key changes vs. your current snapshot (3-6 bullets).'
+  );
+  lines.push(
+    isZh
+      ? '- 逐标的点评目标价与模拟买卖是否合理，并给出风险与执行要点。'
+      : '- For each symbol with targets or simulated trades, comment on reasonableness, risks, and execution notes.'
+  );
+  lines.push(
+    isZh ? '- 给出可执行的下一步建议（按优先级）。' : '- Provide prioritized, actionable next steps.');
+
+  return lines.join('\n');
+}
+
+/**
  * Build trading performance expert review prompt.
  * @param {{ analytics: any; language?: string }} opts
  * @returns {string}
