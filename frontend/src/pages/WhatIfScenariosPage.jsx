@@ -836,6 +836,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setError,
     t('errors.failedLoadSymbols'),
   );
+  const stockSymbolsSorted = useMemo(() => {
+    const q = normalizeText(stockForm.query).toUpperCase();
+    if (!q || stockSymbols.length === 0) return stockSymbols;
+    const exact = stockSymbols.find((s) => String(s.symbol || '').toUpperCase() === q);
+    if (!exact) return stockSymbols;
+    return [exact, ...stockSymbols.filter((s) => String(s.symbol || '').toUpperCase() !== q)];
+  }, [stockSymbols, stockForm.query]);
   const { items: cryptoProducts, isLoading: isLoadingCryptoProducts } = useDebouncedSearch(
     cryptoForm.query,
     Boolean(activeScenarioId),
@@ -3657,7 +3664,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             )}
                             {!isLoadingStockSymbols && stockSymbols.length > 0 && (
                               <ul>
-                                {stockSymbols.map((item) => (
+                                {stockSymbolsSorted.map((item) => (
                                   <li key={item.symbol}>
                                     <button
                                       type="button"

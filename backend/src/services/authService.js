@@ -11,6 +11,7 @@ import {
   upsertIdentity,
   createUser,
 } from '../repositories/userRepository.js';
+import { getGoogleOAuthRedirectUri } from '../lib/requestHelpers.js';
 
 const SESSION_COOKIE_NAME = 'bf_session';
 const SESSION_TTL_MS = Number(process.env.AUTH_SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 14);
@@ -129,16 +130,16 @@ function makeStateToken(provider) {
   return createHash('sha256').update(raw).digest('hex');
 }
 
-export function buildGoogleAuthUrl() {
+export function buildGoogleAuthUrl(req) {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const callbackUrl = process.env.GOOGLE_OAUTH_CALLBACK_URL;
-  if (!clientId || !callbackUrl) {
+  if (!clientId) {
     throw new Error('Google OAuth is not configured.');
   }
+  const redirectUri = getGoogleOAuthRedirectUri(req || null);
   const state = makeStateToken('google');
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: callbackUrl,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
     prompt: 'select_account',
@@ -165,12 +166,14 @@ export function buildAppleAuthUrl() {
   return `https://appleid.apple.com/auth/authorize?${params.toString()}`;
 }
 
-export async function completeGoogleLogin(code) {
+export async function completeGoogleLogin(code, redirectUri) {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const callbackUrl = process.env.GOOGLE_OAUTH_CALLBACK_URL;
-  if (!clientId || !clientSecret || !callbackUrl) {
+  if (!clientId || !clientSecret) {
     throw new Error('Google OAuth is not configured.');
+  }
+  if (!redirectUri) {
+    throw new Error('Google OAuth redirect URI is missing.');
   }
 
   const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -180,12 +183,20 @@ export async function completeGoogleLogin(code) {
       code,
       client_id: clientId,
       client_secret: clientSecret,
-      redirect_uri: callbackUrl,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
   });
   if (!tokenResponse.ok) {
-    throw new Error('Google token exchange failed.');
+    const raw = await tokenResponse.text();
+    let detail = '';
+    try {
+      const body = JSON.parse(raw);
+      detail = body.error_description || body.error || '';
+    } catch {
+      // ignore
+    }
+    throw new Error(detail ? `Google token exchange failed: ${detail}` : 'Google token exchange failed.');
   }
   const tokenBody = await tokenResponse.json();
   const accessToken = tokenBody?.access_token;

@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { getErrorMessage, redirectToFrontend } from '../lib/requestHelpers.js';
+import {
+  getErrorMessage,
+  getGoogleOAuthRedirectUri,
+  redirectToFrontend,
+} from '../lib/requestHelpers.js';
 import {
   buildAppleAuthUrl,
   buildGoogleAuthUrl,
@@ -23,34 +27,42 @@ router.get('/providers', (_req, res) => {
   });
 });
 
-router.get('/google/start', (_req, res) => {
+router.get('/google/start', (req, res) => {
   try {
-    return res.redirect(buildGoogleAuthUrl());
+    return res.redirect(buildGoogleAuthUrl(req));
   } catch (error) {
     // Full-page <a href> navigation: avoid raw 400 JSON (Chrome "HTTP ERROR 400").
-    return redirectToFrontend(res, '/login', getErrorMessage(error));
+    return redirectToFrontend(res, '/login', getErrorMessage(error), req);
   }
 });
 
 router.get('/google/callback', async (req, res) => {
   try {
+    const oauthError = req.query.error ? String(req.query.error) : '';
+    if (oauthError) {
+      const desc = req.query.error_description
+        ? String(req.query.error_description)
+        : oauthError;
+      return redirectToFrontend(res, '/login', desc, req);
+    }
     const code = String(req.query.code || '');
     if (!code) {
-      return redirectToFrontend(res, '/login', 'Google authorization code missing.');
+      return redirectToFrontend(res, '/login', 'Google authorization code missing.', req);
     }
-    const login = await completeGoogleLogin(code);
+    const redirectUri = getGoogleOAuthRedirectUri(req);
+    const login = await completeGoogleLogin(code, redirectUri);
     res.setHeader('Set-Cookie', buildSessionCookie(login.sessionToken));
-    return redirectToFrontend(res, '/');
+    return redirectToFrontend(res, '/', null, req);
   } catch (error) {
-    return redirectToFrontend(res, '/login', getErrorMessage(error));
+    return redirectToFrontend(res, '/login', getErrorMessage(error), req);
   }
 });
 
-router.get('/apple/start', (_req, res) => {
+router.get('/apple/start', (req, res) => {
   try {
     return res.redirect(buildAppleAuthUrl());
   } catch (error) {
-    return redirectToFrontend(res, '/login', getErrorMessage(error));
+    return redirectToFrontend(res, '/login', getErrorMessage(error), req);
   }
 });
 
@@ -58,13 +70,13 @@ router.all('/apple/callback', async (req, res) => {
   try {
     const code = String(req.query.code || req.body?.code || '');
     if (!code) {
-      return redirectToFrontend(res, '/login', 'Apple authorization code missing.');
+      return redirectToFrontend(res, '/login', 'Apple authorization code missing.', req);
     }
     const login = await completeAppleLogin(code);
     res.setHeader('Set-Cookie', buildSessionCookie(login.sessionToken));
-    return redirectToFrontend(res, '/');
+    return redirectToFrontend(res, '/', null, req);
   } catch (error) {
-    return redirectToFrontend(res, '/login', getErrorMessage(error));
+    return redirectToFrontend(res, '/login', getErrorMessage(error), req);
   }
 });
 

@@ -7,6 +7,11 @@ import { mountRoutes } from './routes/index.js';
 export default function createApp() {
   const app = express();
 
+  // So req.protocol / secure match the public URL behind TLS terminators (OAuth redirect_uri, etc.).
+  if (['1', 'true', 'yes'].includes(String(process.env.TRUST_PROXY || '').toLowerCase())) {
+    app.set('trust proxy', 1);
+  }
+
   app.use(
     cors({
       origin: (origin, cb) => cb(null, origin || true),

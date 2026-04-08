@@ -1,7 +1,13 @@
 import { query } from '../db/client.js';
 
+/** Escape `%`, `_`, and `\` for use in ILIKE patterns (PostgreSQL default escape `\`). */
+function escapeILikePattern(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 /**
  * Search US stock symbols by symbol or security name (excludes test issues).
+ * Ranks: exact ticker → ticker prefix → ticker substring → name-only match (so e.g. TSLA is first for query "TSLA").
  * @param {{ queryText?: string, limit?: number }} [options]
  * @returns {Promise<object[]>}
  */
@@ -11,7 +17,11 @@ export async function listUsStockSymbols({ queryText, limit = 50 } = {}) {
     return [];
   }
 
-  const like = `%${trimmed}%`;
+  const safe = escapeILikePattern(trimmed);
+  const likeAny = `%${safe}%`;
+  const likePrefix = `${safe}%`;
+  const lim = Math.max(1, Math.min(Number(limit) || 50, 200));
+
   const result = await query(
     `SELECT symbol,
             security_name AS "securityName",
@@ -19,9 +29,16 @@ export async function listUsStockSymbols({ queryText, limit = 50 } = {}) {
      FROM us_stock_symbols
      WHERE (symbol ILIKE $1 OR security_name ILIKE $1)
        AND COALESCE(test_issue, FALSE) = FALSE
-     ORDER BY symbol ASC
-     LIMIT $2`,
-    [like, Math.max(1, Math.min(Number(limit) || 50, 200))],
+     ORDER BY
+       CASE
+         WHEN UPPER(symbol) = UPPER($2::text) THEN 0
+         WHEN symbol ILIKE $3 THEN 1
+         WHEN symbol ILIKE $1 THEN 2
+         ELSE 3
+       END,
+       symbol ASC
+     LIMIT $4`,
+    [likeAny, trimmed, likePrefix, lim],
   );
   return result.rows;
 }

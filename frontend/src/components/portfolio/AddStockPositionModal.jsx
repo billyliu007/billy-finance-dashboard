@@ -45,9 +45,9 @@ export default function AddStockPositionModal({ open, onClose, onSaved }) {
   const symbolsSorted = useMemo(() => {
     const q = normalizeText(query).toUpperCase();
     if (!q || symbols.length === 0) return symbols;
-    const exact = symbols.find((s) => s.symbol === q);
+    const exact = symbols.find((s) => String(s.symbol || '').toUpperCase() === q);
     if (!exact) return symbols;
-    return [exact, ...symbols.filter((s) => s.symbol !== q)];
+    return [exact, ...symbols.filter((s) => String(s.symbol || '').toUpperCase() !== q)];
   }, [symbols, query]);
 
   function handleQuantityChange(e) {

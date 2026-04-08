@@ -15,6 +15,16 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            const host = req.headers.host;
+            if (host) {
+              proxyReq.setHeader('X-Forwarded-Host', host);
+            }
+            const proto = req.socket?.encrypted ? 'https' : 'http';
+            proxyReq.setHeader('X-Forwarded-Proto', proto);
+          });
+        },
       },
     },
   },
