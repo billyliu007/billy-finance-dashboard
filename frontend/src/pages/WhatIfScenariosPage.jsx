@@ -33,6 +33,19 @@ function num(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Controlled target price fields: preserve partial decimals (e.g. "0.") while typing.
+ * Using num("0.") yields 0 and the trailing dot is lost on the next render, so values like 0.9 cannot be entered.
+ */
+function coerceTargetPriceInputValue(raw) {
+  if (raw === '' || raw == null) return '';
+  const s = String(raw);
+  if (s === '.' || s === '-' || s === '-.') return s;
+  if (s.endsWith('.')) return s;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : s;
+}
+
 /** Same as `computeInputsHash([], [], [])` for empty editor state. */
 const EMPTY_WHATIF_INPUTS_HASH = JSON.stringify({ targetRows: [], purchaseRows: [], saleRows: [] });
 
@@ -1169,7 +1182,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
 
   function updateTargetPrice(symbol, value, currency) {
     const sym = String(symbol || '').trim().toUpperCase();
-    const nextNum = value === '' ? '' : num(value);
+    const nextNum = coerceTargetPriceInputValue(value);
     setTargetPrices((prev) => {
       const existing = prev.find((row) => String(row.symbol).toUpperCase() === sym);
       if (!existing)
@@ -1184,7 +1197,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
 
   function updateTargetPrice2(symbol, value, currency) {
     const sym = String(symbol || '').trim().toUpperCase();
-    const nextNum = value === '' ? '' : num(value);
+    const nextNum = coerceTargetPriceInputValue(value);
     setTargetPrices((prev) => {
       const existing = prev.find((row) => String(row.symbol).toUpperCase() === sym);
       if (!existing)
