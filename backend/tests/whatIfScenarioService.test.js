@@ -37,6 +37,44 @@ test('computeWhatIfFromData applies target price over market and buy-price fallb
   assert.equal(aapl.scenarioPriceSource, 'target-price');
   assert.equal(msft.scenarioPrice, 300);
   assert.equal(msft.scenarioPriceSource, 'buy-price-fallback');
+  assert.equal(result.hasSecondaryTargetPrices, false);
+  assert.equal(result.scenarioTotals2, undefined);
+});
+
+test('computeWhatIfFromData second target price produces scenarioTotals2 and weights', () => {
+  const result = computeWhatIfFromData({
+    scenario: { id: 's1', name: 'Base', isActive: true },
+    targetPrices: [{ symbol: 'AAPL', targetPrice: 200, targetPrice2: 250, currency: 'USD' }],
+    hypotheticalPurchases: [],
+    baselineRows: [
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        category: 'US Stock Assets',
+        currency: 'USD',
+        qty: 10,
+        purchasePrice: 100,
+        totalPurchaseCost: 1000,
+        currentPrice: 180,
+      },
+    ],
+    baselineTotalValue: 1800,
+    baselineTotalCost: 1000,
+    baseCurrency: 'USD',
+    fxRates: { USD: 1 },
+    fetchedPriceMap: new Map(),
+  });
+
+  assert.equal(result.hasSecondaryTargetPrices, true);
+  assert.ok(result.scenarioTotals2);
+  assert.equal(result.scenarioTotals.value, 2000);
+  assert.equal(result.scenarioTotals2.value, 2500);
+  const aapl = result.rows.find((row) => row.symbol === 'AAPL');
+  assert.equal(aapl.scenarioPrice, 200);
+  assert.equal(aapl.scenarioPrice2, 250);
+  assert.ok(Math.abs(aapl.scenarioWeightPct - 100) < 1e-6);
+  assert.ok(Math.abs(aapl.scenarioWeightPct2 - 100) < 1e-6);
+  assert.ok(result.portfolioBaseTotals.deltaValue2 > result.portfolioBaseTotals.deltaValue);
 });
 
 test('computeWhatIfFromData uses fetched market price for new symbol without target', () => {

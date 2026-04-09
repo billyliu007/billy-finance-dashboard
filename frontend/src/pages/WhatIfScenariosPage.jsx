@@ -23,6 +23,7 @@ function cloneSyncedTargetRows(rows) {
   return (rows || []).map((r) => ({
     symbol: String(r?.symbol || '').trim().toUpperCase(),
     targetPrice: r.targetPrice,
+    targetPrice2: r.targetPrice2,
     currency: r.currency ?? '',
   }));
 }
@@ -61,6 +62,27 @@ function normalizedPositiveTargetFromRows(rows, symbol) {
   const row = (rows || []).find((x) => String(x?.symbol || '').trim().toUpperCase() === sym);
   const p = num(row?.targetPrice);
   return p > 0 ? p : null;
+}
+
+function normalizedPositiveTarget2FromRows(rows, symbol) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  const row = (rows || []).find((x) => String(x?.symbol || '').trim().toUpperCase() === sym);
+  const p = num(row?.targetPrice2);
+  return p > 0 ? p : null;
+}
+
+/** Rebuild TP2 % inputs from target rows and scenario result rows (baseline price). */
+function buildTargetPrice2PctMap(targetRows, baselineRows) {
+  const pct2 = {};
+  for (const row of baselineRows || []) {
+    const sym = String(row.symbol || '').toUpperCase();
+    if (!sym) continue;
+    const tr = (targetRows || []).find((x) => String(x.symbol).toUpperCase() === sym);
+    const baseline = num(row.baselinePrice);
+    const t2 = num(tr?.targetPrice2);
+    pct2[sym] = baseline > 0 && t2 > 0 ? (((t2 - baseline) / baseline) * 100).toFixed(2) : '';
+  }
+  return pct2;
 }
 
 function formatPriceNumber(value, currency = 'USD') {
@@ -547,6 +569,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   /** Last target rows accepted by the server; hypothetical saves use this so in-flight target edits are not persisted until blur/debounced save. */
   const [lastSyncedTargetPrices, setLastSyncedTargetPrices] = useState([]);
   const [targetPricePctBySymbol, setTargetPricePctBySymbol] = useState({});
+  const [targetPrice2PctBySymbol, setTargetPrice2PctBySymbol] = useState({});
   const [buyRows, setBuyRows] = useState([]);
   const [sellRows, setSellRows] = useState([]);
   const [adjustScenarioCashForHypotheticals, setAdjustScenarioCashForHypotheticals] = useState(true);
@@ -596,6 +619,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   function resetScenarioEditorState() {
     setTargetPrices([]);
     setTargetPricePctBySymbol({});
+    setTargetPrice2PctBySymbol({});
     setBuyRows([]);
     setSellRows([]);
     setLastSyncedTargetPrices([]);
@@ -620,9 +644,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
       .map((row) => ({
         symbol: String(row?.symbol || '').trim().toUpperCase(),
         targetPrice: num(row?.targetPrice),
+        targetPrice2: num(row?.targetPrice2),
         currency: String(row?.currency || '').trim().toUpperCase() || null,
       }))
-      .filter((row) => row.symbol && row.targetPrice > 0)
+      .filter((row) => row.symbol && (row.targetPrice > 0 || row.targetPrice2 > 0))
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
     const purchaseRows = (nextBuyRows || [])
@@ -869,6 +894,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setTargetPrices([]);
       setLastSyncedTargetPrices([]);
       setTargetPricePctBySymbol({});
+      setTargetPrice2PctBySymbol({});
       setBuyRows([]);
       setSellRows([]);
       setStockForm(emptyStockForm());
@@ -892,34 +918,46 @@ export default function WhatIfScenariosPage({ hideValues }) {
         const symbol = String(row.symbol || '').toUpperCase();
         const saved = savedBySymbol.get(symbol);
         if (saved) {
+          const tp2Saved = num(saved.targetPrice2);
           return {
             symbol,
             targetPrice: saved.targetPrice,
+            targetPrice2: tp2Saved > 0 ? saved.targetPrice2 : '',
             currency: saved.currency || row.currency || 'USD',
           };
         }
         return {
           symbol,
           targetPrice: num(row.baselinePrice) > 0 ? row.baselinePrice : '',
+          targetPrice2: '',
           currency: row.currency || 'USD',
         };
       });
       const pctBySymbol = {};
+      const pct2BySymbol = {};
       for (const row of resultRows) {
         const symbol = String(row.symbol || '').toUpperCase();
         const baseline = num(row.baselinePrice);
         const saved = savedBySymbol.get(symbol);
-        const target = prefilledTargets.find((x) => String(x.symbol).toUpperCase() === symbol)?.targetPrice;
+        const pref = prefilledTargets.find((x) => String(x.symbol).toUpperCase() === symbol);
+        const target = pref?.targetPrice;
         const targetNum = num(target);
         // Keep % input empty by default; only prefill when a saved target price exists.
         pctBySymbol[symbol] =
           saved && baseline > 0 && target !== ''
             ? (((targetNum - baseline) / baseline) * 100).toFixed(2)
             : '';
+        const t2 = pref?.targetPrice2;
+        const t2Num = num(t2);
+        pct2BySymbol[symbol] =
+          saved && baseline > 0 && num(saved?.targetPrice2) > 0 && t2 !== ''
+            ? (((t2Num - baseline) / baseline) * 100).toFixed(2)
+            : '';
       }
       setTargetPrices(prefilledTargets);
       setLastSyncedTargetPrices(cloneSyncedTargetRows(prefilledTargets));
       setTargetPricePctBySymbol(pctBySymbol);
+      setTargetPrice2PctBySymbol(pct2BySymbol);
       const mappedBuys = mapApiHypotheticalPurchasesToBuyRows(resultRes?.hypotheticalPurchases);
       setBuyRows(mappedBuys);
       const mappedSales = mapApiHypotheticalSalesToSellRows(resultRes?.hypotheticalSales);
@@ -1134,10 +1172,26 @@ export default function WhatIfScenariosPage({ hideValues }) {
     const nextNum = value === '' ? '' : num(value);
     setTargetPrices((prev) => {
       const existing = prev.find((row) => String(row.symbol).toUpperCase() === sym);
-      if (!existing) return [...prev, { symbol: sym, targetPrice: nextNum, currency: currency || '' }];
+      if (!existing)
+        return [...prev, { symbol: sym, targetPrice: nextNum, targetPrice2: '', currency: currency || '' }];
       return prev.map((row) =>
         String(row.symbol).toUpperCase() === sym
           ? { ...row, targetPrice: nextNum, currency: currency || row.currency }
+          : row,
+      );
+    });
+  }
+
+  function updateTargetPrice2(symbol, value, currency) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    const nextNum = value === '' ? '' : num(value);
+    setTargetPrices((prev) => {
+      const existing = prev.find((row) => String(row.symbol).toUpperCase() === sym);
+      if (!existing)
+        return [...prev, { symbol: sym, targetPrice: '', targetPrice2: nextNum, currency: currency || '' }];
+      return prev.map((row) =>
+        String(row.symbol).toUpperCase() === sym
+          ? { ...row, targetPrice2: nextNum, currency: currency || row.currency }
           : row,
       );
     });
@@ -1156,6 +1210,19 @@ export default function WhatIfScenariosPage({ hideValues }) {
     updateTargetPrice(sym, target, currency);
   }
 
+  function updateTargetPrice2Pct(symbol, value, baselinePrice, currency) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    const baseline = num(baselinePrice);
+    setTargetPrice2PctBySymbol((prev) => ({ ...prev, [sym]: value }));
+    if (!baseline || value === '' || value === '-' || value === '.' || value === '-.') {
+      return;
+    }
+    const pct = Number(value);
+    if (!Number.isFinite(pct)) return;
+    const target = baseline * (1 + pct / 100);
+    updateTargetPrice2(sym, target, currency);
+  }
+
   const persistScenarioInputs = useCallback(async (scenarioId, nextTargetPrices, nextBuyRows, nextSellRows = []) => {
     const execute = async () => {
       if (!scenarioId) return false;
@@ -1163,10 +1230,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
       for (const row of nextTargetPrices || []) {
         const symbol = String(row?.symbol || '').trim().toUpperCase();
         const targetPrice = num(row?.targetPrice);
+        const targetPrice2 = num(row?.targetPrice2);
         const currency = String(row?.currency || '').trim().toUpperCase() || null;
-        if (!symbol || targetPrice <= 0) continue;
+        if (!symbol || (targetPrice <= 0 && targetPrice2 <= 0)) continue;
         // Last writer wins for duplicate symbols, preventing unique-key failures server-side.
-        dedupedTargetRows.set(symbol, { symbol, targetPrice, currency });
+        dedupedTargetRows.set(symbol, {
+          symbol,
+          targetPrice: targetPrice > 0 ? targetPrice : 0,
+          targetPrice2: targetPrice2 > 0 ? targetPrice2 : 0,
+          currency,
+        });
       }
       const targetRows = Array.from(dedupedTargetRows.values());
       const purchaseRows = nextBuyRows
@@ -1315,6 +1388,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
     [activeScenarioId, lastSyncedTargetPrices, targetPrices],
   );
   const targetSaveUiActive = hasUnsavedTargetPrices && !isPersistingInputs;
+  const hasTargetPrice2ToClear = useMemo(
+    () =>
+      Boolean(activeScenarioId) &&
+      (Boolean(results?.hasSecondaryTargetPrices) ||
+        (targetPrices || []).some((r) => num(r?.targetPrice2) > 0)),
+    [activeScenarioId, results?.hasSecondaryTargetPrices, targetPrices],
+  );
 
   useEffect(() => {
     if (!isDirty || isLoading || isScenarioLoading) return;
@@ -1415,6 +1495,37 @@ export default function WhatIfScenariosPage({ hideValues }) {
     }
   }
 
+  async function clearAllTargetPrice2AndSave() {
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
+    if (
+      !results?.hasSecondaryTargetPrices &&
+      !(targetPricesRef.current || []).some((r) => num(r?.targetPrice2) > 0)
+    ) {
+      return;
+    }
+    const sid = activeScenarioIdRef.current;
+    const br = buyRowsRef.current;
+    const sr = sellRowsRef.current;
+    const beforeRows = cloneSyncedTargetRows(targetPricesRef.current);
+    const baselineRows = Array.isArray(results?.rows) ? results.rows : [];
+    const clearedRows = beforeRows.map((r) => ({ ...r, targetPrice2: '' }));
+    setTargetPrices(clearedRows);
+    setTargetPrice2PctBySymbol({});
+    try {
+      const savedHash = await persistScenarioInputs(sid, clearedRows, br, sr);
+      if (savedHash === false || activeScenarioIdRef.current !== sid) return;
+      setLastSavedHash(savedHash);
+      setLastSyncedTargetPrices(cloneSyncedTargetRows(clearedRows));
+      setError('');
+    } catch (err) {
+      if (activeScenarioIdRef.current === sid) {
+        setTargetPrices(beforeRows);
+        setTargetPrice2PctBySymbol(buildTargetPrice2PctMap(beforeRows, baselineRows));
+        setError(err?.message || t('errors.failedUpdate'));
+      }
+    }
+  }
+
   function cancelTargetPriceEdits() {
     if (!activeScenarioId || !hasUnsavedTargetPrices || isPersistingInputs) return;
     const synced = cloneSyncedTargetRows(lastSyncedTargetPricesRef.current);
@@ -1423,18 +1534,27 @@ export default function WhatIfScenariosPage({ hideValues }) {
     const savedBySymbol = new Map(savedTargets.map((row) => [String(row.symbol || '').toUpperCase(), row]));
     const rows = Array.isArray(results?.rows) ? results.rows : [];
     const pctBySymbol = {};
+    const pct2BySymbol = {};
     for (const row of rows) {
       const symbol = String(row.symbol || '').toUpperCase();
       const baseline = num(row.baselinePrice);
       const saved = savedBySymbol.get(symbol);
-      const target = synced.find((x) => String(x.symbol).toUpperCase() === symbol)?.targetPrice;
+      const syncRow = synced.find((x) => String(x.symbol).toUpperCase() === symbol);
+      const target = syncRow?.targetPrice;
       const targetNum = num(target);
       pctBySymbol[symbol] =
         saved && baseline > 0 && target !== ''
           ? (((targetNum - baseline) / baseline) * 100).toFixed(2)
           : '';
+      const t2 = syncRow?.targetPrice2;
+      const t2Num = num(t2);
+      pct2BySymbol[symbol] =
+        saved && baseline > 0 && num(saved?.targetPrice2) > 0 && t2 !== ''
+          ? (((t2Num - baseline) / baseline) * 100).toFixed(2)
+          : '';
     }
     setTargetPricePctBySymbol(pctBySymbol);
+    setTargetPrice2PctBySymbol(pct2BySymbol);
     setError('');
   }
 
@@ -1779,24 +1899,33 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   const resultRows = Array.isArray(results?.rows) ? results.rows : [];
+  const hasSecondaryTargetPrices = Boolean(results?.hasSecondaryTargetPrices);
   const weightChartRows = useMemo(() => {
     const raw = Array.isArray(results?.rows) ? results.rows : [];
+    const dual = Boolean(results?.hasSecondaryTargetPrices);
     return [...raw]
       .sort((a, b) => String(a.symbol || '').localeCompare(String(b.symbol || '')))
       .map((row) => {
         const scenarioQty = num(row.qty);
         const scenarioPrice = num(row.scenarioPrice);
         const scenarioValue = num(row.scenarioValue);
+        const scenarioPrice2 = dual ? num(row.scenarioPrice2) : 0;
+        const scenarioValue2 = dual ? num(row.scenarioValue2) : 0;
+        const scenarioWeight2 = dual ? Number(row.scenarioWeightPct2) || 0 : 0;
+        const baselineW = Number(row.baselineWeightPct) || 0;
         const currency = String(row.currency || 'USD').trim() || 'USD';
         return {
           name: String(row.symbol || ''),
-          baselineWeight: Number(row.baselineWeightPct) || 0,
+          baselineWeight: baselineW,
           scenarioWeight: Number(row.scenarioWeightPct) || 0,
-          deltaVsBaseline:
-            (Number(row.scenarioWeightPct) || 0) - (Number(row.baselineWeightPct) || 0),
+          deltaVsBaseline: (Number(row.scenarioWeightPct) || 0) - baselineW,
+          scenarioWeight2,
+          delta2VsBaseline: dual ? scenarioWeight2 - baselineW : 0,
           scenarioQty,
           scenarioPrice,
           scenarioValue,
+          scenarioPrice2,
+          scenarioValue2,
           currency,
         };
       });
@@ -1819,7 +1948,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
       if (!sym) continue;
       const d = normalizedPositiveTargetFromRows(targetPrices, sym);
       const s = normalizedPositiveTargetFromRows(lastSyncedTargetPrices, sym);
-      if (d !== s) set.add(sym);
+      const d2 = normalizedPositiveTarget2FromRows(targetPrices, sym);
+      const s2 = normalizedPositiveTarget2FromRows(lastSyncedTargetPrices, sym);
+      if (d !== s || d2 !== s2) set.add(sym);
     }
     return set;
   }, [resultRows, targetPrices, lastSyncedTargetPrices]);
@@ -1846,6 +1977,20 @@ export default function WhatIfScenariosPage({ hideValues }) {
     (adjustScenarioCashForHypotheticals ? hypotheticalProceedsBase - hypotheticalCostBase : 0);
   const netWorthDelta = scenarioNetWorth - baselineNetWorth;
   const netWorthDeltaPct = baselineNetWorth > 0 ? (netWorthDelta / baselineNetWorth) * 100 : 0;
+
+  const scenarioTotal2 = num(results?.scenarioTotals2?.value);
+  const scenarioUnrealized2 = num(results?.scenarioTotals2?.pnl);
+  const scenarioUnrealizedPct2 = scenarioCostBasis > 0 ? (scenarioUnrealized2 / scenarioCostBasis) * 100 : 0;
+  const unrealizedDelta2 = scenarioUnrealized2 - baselineUnrealized;
+  const unrealizedDeltaPct2 = scenarioUnrealizedPct2 - baselineUnrealizedPct;
+  const portfolioValueDelta2 = scenarioTotal2 - baselineTotal;
+  const portfolioDeltaInBase2 = num(results?.portfolioBaseTotals?.deltaValue2);
+  const scenarioNetWorth2 =
+    baselineNetWorth +
+    portfolioDeltaInBase2 +
+    (adjustScenarioCashForHypotheticals ? hypotheticalProceedsBase - hypotheticalCostBase : 0);
+  const netWorthDelta2 = scenarioNetWorth2 - baselineNetWorth;
+  const netWorthDeltaPct2 = baselineNetWorth > 0 ? (netWorthDelta2 / baselineNetWorth) * 100 : 0;
 
   const hypoPurchaseFunding = useMemo(() => {
     const requiredMap = sumHypotheticalBuyCostByQuoteBucket(buyRows);
@@ -3090,6 +3235,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             <th>{t('whatif.currentPrice')}</th>
                             <th>{t('whatif.targetDeltaVsCurrentPct')}</th>
                             <th>{t('whatif.targetPrice')}</th>
+                            <th>{t('whatif.targetDeltaVsCurrentPct2')}</th>
+                            <th>{t('whatif.targetPrice2')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3173,6 +3320,58 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     </button>
                                   </span>
                                 </td>
+                                <td data-label={t('whatif.targetDeltaVsCurrentPct2')}>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    className="profitabilityInput"
+                                    value={targetPrice2PctBySymbol[row.symbol] ?? ''}
+                                    onChange={(e) =>
+                                      updateTargetPrice2Pct(
+                                        row.symbol,
+                                        e.target.value,
+                                        row.baselinePrice,
+                                        targetCurrency,
+                                      )
+                                    }
+                                    onKeyDown={handleTargetPriceFieldKeyDown}
+                                    placeholder="0.0"
+                                    disabled={num(row.baselinePrice) <= 0}
+                                  />
+                                </td>
+                                <td data-label={t('whatif.targetPrice2')}>
+                                  <span className="rebalanceTargetWrap whatIfTargetPriceFieldRow">
+                                    {!hideValues && (
+                                      <span
+                                        className="whatIfPricePrefix whatIfTargetPriceInputPrefix"
+                                        aria-hidden="true"
+                                      >
+                                        {pricePrefix}
+                                      </span>
+                                    )}
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      className={targetPriceInputClass}
+                                      value={targetRow?.targetPrice2 ?? ''}
+                                      onChange={(e) => {
+                                        const nextVal = e.target.value;
+                                        updateTargetPrice2(row.symbol, nextVal, targetCurrency);
+                                        const baseline = num(row.baselinePrice);
+                                        const nextNum = num(nextVal);
+                                        setTargetPrice2PctBySymbol((prev) => ({
+                                          ...prev,
+                                          [row.symbol]:
+                                            baseline > 0 && nextVal !== ''
+                                              ? (((nextNum - baseline) / baseline) * 100).toFixed(2)
+                                              : '',
+                                        }));
+                                      }}
+                                      onKeyDown={handleTargetPriceFieldKeyDown}
+                                    />
+                                  </span>
+                                </td>
                               </tr>
                             );
                           })}
@@ -3193,6 +3392,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           targetRow?.targetPrice !== '' && targetRow?.targetPrice != null
                             ? `${pricePrefix}${formatPriceNumber(num(targetRow.targetPrice), targetCurrency)}`
                             : null;
+                        const targetPrice2Display =
+                          targetRow?.targetPrice2 !== '' && targetRow?.targetPrice2 != null
+                            ? `${pricePrefix}${formatPriceNumber(num(targetRow.targetPrice2), targetCurrency)}`
+                            : null;
                         return (
                           <section
                             key={row.symbol}
@@ -3209,11 +3412,19 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     : `${pricePrefix}${formatPriceNumber(row.baselinePrice, targetCurrency)}`}
                                 </span>
                               </div>
-                              <div className="positionPnlDock whatIfTargetPriceDock">
-                                <strong>
-                                  {hideValues ? '—' : targetPriceDisplay ?? '—'}
-                                </strong>
-                                <span>{t('whatif.targetPrice')}</span>
+                              <div className="whatIfTargetPriceHeaderTargets">
+                                <div className="positionPnlDock whatIfTargetPriceDock">
+                                  <strong>
+                                    {hideValues ? '—' : targetPriceDisplay ?? '—'}
+                                  </strong>
+                                  <span>{t('whatif.targetPrice')}</span>
+                                </div>
+                                <div className="positionPnlDock whatIfTargetPriceDock whatIfTargetPriceDock--secondary">
+                                  <strong>
+                                    {hideValues ? '—' : targetPrice2Display ?? '—'}
+                                  </strong>
+                                  <span>{t('whatif.targetPrice2')}</span>
+                                </div>
                               </div>
                             </header>
                             <div className="positionQuickGrid whatIfTargetPriceQuickGrid">
@@ -3269,18 +3480,74 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     }}
                                     onKeyDown={handleTargetPriceFieldKeyDown}
                                   />
-                                  <button
-                                    type="button"
-                                    className={`headerIconBtn whatIfIconBtn${rowInlineSaveActive ? ' whatIfTargetPriceSaveBtn--pending' : ''}`}
-                                    disabled={!hasUnsavedTargetPrices || isPersistingInputs}
-                                    aria-label={t('whatif.saveTargetPricesMobileAria')}
-                                    title={t('whatif.saveTargetPricesMobileAria')}
-                                    onClick={() => void saveTargetPricesNow()}
-                                  >
-                                    ✓
-                                  </button>
                                 </span>
                               </div>
+                              <div className="positionQuickItem">
+                                <span>{t('whatif.targetDeltaVsCurrentPct2')}</span>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  className="profitabilityInput whatIfTargetPricePctInput"
+                                  value={targetPrice2PctBySymbol[row.symbol] ?? ''}
+                                  onChange={(e) =>
+                                    updateTargetPrice2Pct(
+                                      row.symbol,
+                                      e.target.value,
+                                      row.baselinePrice,
+                                      targetCurrency,
+                                    )
+                                  }
+                                  onKeyDown={handleTargetPriceFieldKeyDown}
+                                  placeholder="0.0"
+                                  disabled={num(row.baselinePrice) <= 0}
+                                />
+                              </div>
+                              <div className="positionQuickItem whatIfTargetPriceTargetBlock">
+                                <span>{t('whatif.targetPrice2')}</span>
+                                <span className="rebalanceTargetWrap whatIfTargetPriceFieldRow">
+                                  {!hideValues && (
+                                    <span
+                                      className="whatIfPricePrefix whatIfTargetPriceInputPrefix"
+                                      aria-hidden="true"
+                                    >
+                                      {pricePrefix}
+                                    </span>
+                                  )}
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.0001"
+                                    className={targetPriceInputClass}
+                                    value={targetRow?.targetPrice2 ?? ''}
+                                    onChange={(e) => {
+                                      const nextVal = e.target.value;
+                                      updateTargetPrice2(row.symbol, nextVal, targetCurrency);
+                                      const baseline = num(row.baselinePrice);
+                                      const nextNum = num(nextVal);
+                                      setTargetPrice2PctBySymbol((prev) => ({
+                                        ...prev,
+                                        [row.symbol]:
+                                          baseline > 0 && nextVal !== ''
+                                            ? (((nextNum - baseline) / baseline) * 100).toFixed(2)
+                                            : '',
+                                      }));
+                                    }}
+                                    onKeyDown={handleTargetPriceFieldKeyDown}
+                                  />
+                                </span>
+                              </div>
+                            </div>
+                            <div className="whatIfTargetPriceMobileSaveRow">
+                              <button
+                                type="button"
+                                className={`headerIconBtn whatIfIconBtn whatIfTargetPriceMobileSaveBtn${rowInlineSaveActive ? ' whatIfTargetPriceSaveBtn--pending' : ''}`}
+                                disabled={!hasUnsavedTargetPrices || isPersistingInputs}
+                                aria-label={t('whatif.saveTargetPricesMobileAria')}
+                                title={t('whatif.saveTargetPricesMobileAria')}
+                                onClick={() => void saveTargetPricesNow()}
+                              >
+                                ✓
+                              </button>
                             </div>
                           </section>
                         );
@@ -3290,6 +3557,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
                   <div className={`whatIfTargetToolbar${targetSaveUiActive ? ' whatIfTargetToolbar--unsaved' : ''}`}>
                     <div className="whatIfTargetToolbarActions">
+                      {hasTargetPrice2ToClear && (
+                        <button
+                          type="button"
+                          className="whatIfClearTarget2Btn"
+                          disabled={isPersistingInputs}
+                          aria-label={t('whatif.clearTargetPrice2Aria')}
+                          title={t('whatif.clearTargetPrice2Aria')}
+                          onClick={() => void clearAllTargetPrice2AndSave()}
+                        >
+                          {t('whatif.clearTargetPrice2')}
+                        </button>
+                      )}
                       {targetSaveUiActive && (
                         <button
                           type="button"
@@ -3407,21 +3686,58 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           {hideValues ? '—' : formatCurrencyValue(baselineNetWorth, baseCurrency)}
                         </span>
                       </div>
-                      <div className="profitabilityCard">
-                        <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorth')}</span>
-                        <span className="profitabilityCardValue">
-                          {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
-                        </span>
-                      </div>
-                      <div className="profitabilityCard">
-                        <span className="profitabilityCardLabel">{t('whatif.netWorthDelta')}</span>
-                        <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
-                          {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
-                        </span>
-                        <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
-                          {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
-                        </small>
-                      </div>
+                      {hasSecondaryTargetPrices ? (
+                        <>
+                          <div className="profitabilityCard">
+                            <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorthTarget1')}</span>
+                            <span className="profitabilityCardValue">
+                              {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
+                            </span>
+                          </div>
+                          <div className="profitabilityCard">
+                            <span className="profitabilityCardLabel">{t('whatif.netWorthDeltaTarget1')}</span>
+                            <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
+                              {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
+                            </span>
+                            <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                              {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
+                            </small>
+                          </div>
+                          <div className="profitabilityCard">
+                            <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorthTarget2')}</span>
+                            <span className="profitabilityCardValue">
+                              {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth2, baseCurrency)}
+                            </span>
+                          </div>
+                          <div className="profitabilityCard">
+                            <span className="profitabilityCardLabel">{t('whatif.netWorthDeltaTarget2')}</span>
+                            <span className={`profitabilityCardValue ${netWorthDelta2 >= 0 ? 'pos' : 'neg'}`}>
+                              {hideValues ? '—' : formatCurrencyValue(netWorthDelta2, baseCurrency)}
+                            </span>
+                            <small className={`profitabilityCardSub ${netWorthDeltaPct2 >= 0 ? 'pos' : 'neg'}`}>
+                              {hideValues ? '—' : formatPercent(netWorthDeltaPct2)}
+                            </small>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="profitabilityCard">
+                            <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorth')}</span>
+                            <span className="profitabilityCardValue">
+                              {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
+                            </span>
+                          </div>
+                          <div className="profitabilityCard">
+                            <span className="profitabilityCardLabel">{t('whatif.netWorthDelta')}</span>
+                            <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
+                              {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
+                            </span>
+                            <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                              {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
+                            </small>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -3435,24 +3751,67 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         {hideValues ? '—' : formatPercent(baselineUnrealizedPct)}
                       </small>
                     </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.scenarioUnrealizedPl')}</span>
-                      <span className={`profitabilityCardValue ${scenarioUnrealized >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatMoney(scenarioUnrealized)}
-                      </span>
-                      <small className={`profitabilityCardSub ${scenarioUnrealized >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatPercent(scenarioUnrealizedPct)}
-                      </small>
-                    </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.plDelta')}</span>
-                      <span className={`profitabilityCardValue ${unrealizedDelta >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatMoney(unrealizedDelta)}
-                      </span>
-                      <small className={`profitabilityCardSub ${unrealizedDeltaPct >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatPercent(unrealizedDeltaPct)}
-                      </small>
-                    </div>
+                    {hasSecondaryTargetPrices ? (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioUnrealizedPlTarget1')}</span>
+                          <span className={`profitabilityCardValue ${scenarioUnrealized >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(scenarioUnrealized)}
+                          </span>
+                          <small className={`profitabilityCardSub ${scenarioUnrealized >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(scenarioUnrealizedPct)}
+                          </small>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.plDeltaTarget1')}</span>
+                          <span className={`profitabilityCardValue ${unrealizedDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(unrealizedDelta)}
+                          </span>
+                          <small className={`profitabilityCardSub ${unrealizedDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(unrealizedDeltaPct)}
+                          </small>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioUnrealizedPlTarget2')}</span>
+                          <span className={`profitabilityCardValue ${scenarioUnrealized2 >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(scenarioUnrealized2)}
+                          </span>
+                          <small className={`profitabilityCardSub ${scenarioUnrealized2 >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(scenarioUnrealizedPct2)}
+                          </small>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.plDeltaTarget2')}</span>
+                          <span className={`profitabilityCardValue ${unrealizedDelta2 >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(unrealizedDelta2)}
+                          </span>
+                          <small className={`profitabilityCardSub ${unrealizedDeltaPct2 >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(unrealizedDeltaPct2)}
+                          </small>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioUnrealizedPl')}</span>
+                          <span className={`profitabilityCardValue ${scenarioUnrealized >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(scenarioUnrealized)}
+                          </span>
+                          <small className={`profitabilityCardSub ${scenarioUnrealized >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(scenarioUnrealizedPct)}
+                          </small>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.plDelta')}</span>
+                          <span className={`profitabilityCardValue ${unrealizedDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(unrealizedDelta)}
+                          </span>
+                          <small className={`profitabilityCardSub ${unrealizedDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(unrealizedDeltaPct)}
+                          </small>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="profitabilitySellDownResult rebalanceKpiRow">
@@ -3460,16 +3819,43 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <span className="profitabilityCardLabel">{t('whatif.baselineValue')}</span>
                       <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(baselineTotal)}</span>
                     </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.scenarioValue')}</span>
-                      <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioTotal)}</span>
-                    </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.portfolioValueDelta')}</span>
-                      <span className={`profitabilityCardValue ${portfolioValueDelta >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatMoney(portfolioValueDelta)}
-                      </span>
-                    </div>
+                    {hasSecondaryTargetPrices ? (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioValueTarget1')}</span>
+                          <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioTotal)}</span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.portfolioValueDeltaTarget1')}</span>
+                          <span className={`profitabilityCardValue ${portfolioValueDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(portfolioValueDelta)}
+                          </span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioValueTarget2')}</span>
+                          <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioTotal2)}</span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.portfolioValueDeltaTarget2')}</span>
+                          <span className={`profitabilityCardValue ${portfolioValueDelta2 >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(portfolioValueDelta2)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioValue')}</span>
+                          <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioTotal)}</span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.portfolioValueDelta')}</span>
+                          <span className={`profitabilityCardValue ${portfolioValueDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(portfolioValueDelta)}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="profitabilitySellDownResult rebalanceKpiRow">
@@ -3477,16 +3863,43 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <span className="profitabilityCardLabel">{t('whatif.baselineCostBasis')}</span>
                       <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(baselineCostBasis)}</span>
                     </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.scenarioCostBasis')}</span>
-                      <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioCostBasis)}</span>
-                    </div>
-                    <div className="profitabilityCard">
-                      <span className="profitabilityCardLabel">{t('whatif.costBasisDelta')}</span>
-                      <span className={`profitabilityCardValue ${costBasisDelta >= 0 ? 'pos' : 'neg'}`}>
-                        {hideValues ? '—' : formatMoney(costBasisDelta)}
-                      </span>
-                    </div>
+                    {hasSecondaryTargetPrices ? (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioCostBasisTarget1')}</span>
+                          <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioCostBasis)}</span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.costBasisDeltaTarget1')}</span>
+                          <span className={`profitabilityCardValue ${costBasisDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(costBasisDelta)}
+                          </span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioCostBasisTarget2')}</span>
+                          <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioCostBasis)}</span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.costBasisDeltaTarget2')}</span>
+                          <span className={`profitabilityCardValue ${costBasisDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(costBasisDelta)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioCostBasis')}</span>
+                          <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(scenarioCostBasis)}</span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.costBasisDelta')}</span>
+                          <span className={`profitabilityCardValue ${costBasisDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatMoney(costBasisDelta)}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                   </div>
 
@@ -3539,11 +3952,23 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                         <span>{hideValues ? '—' : formatPercent(p.baselineWeight)}</span>
                                       </p>
                                       <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>{t('whatif.weightTooltipScenario')}</span>
+                                        <span>
+                                          {t(
+                                            hasSecondaryTargetPrices
+                                              ? 'whatif.weightTooltipScenarioTarget1'
+                                              : 'whatif.weightTooltipScenario',
+                                          )}
+                                        </span>
                                         <span>{hideValues ? '—' : formatPercent(p.scenarioWeight)}</span>
                                       </p>
                                       <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>{t('whatif.weightDeltaVsBaseline')}</span>
+                                        <span>
+                                          {t(
+                                            hasSecondaryTargetPrices
+                                              ? 'whatif.weightDeltaVsBaselineTarget1'
+                                              : 'whatif.weightDeltaVsBaseline',
+                                          )}
+                                        </span>
                                         <span
                                           className={
                                             hideValues
@@ -3556,12 +3981,40 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                           {hideValues ? '—' : formatPercent(p.deltaVsBaseline)}
                                         </span>
                                       </p>
+                                      {hasSecondaryTargetPrices ? (
+                                        <>
+                                          <p className="whatIfScenarioWeightTooltipRow">
+                                            <span>{t('whatif.weightTooltipScenarioTarget2')}</span>
+                                            <span>{hideValues ? '—' : formatPercent(p.scenarioWeight2)}</span>
+                                          </p>
+                                          <p className="whatIfScenarioWeightTooltipRow">
+                                            <span>{t('whatif.weightDeltaVsBaselineTarget2')}</span>
+                                            <span
+                                              className={
+                                                hideValues
+                                                  ? undefined
+                                                  : p.delta2VsBaseline >= 0
+                                                    ? 'pos'
+                                                    : 'neg'
+                                              }
+                                            >
+                                              {hideValues ? '—' : formatPercent(p.delta2VsBaseline)}
+                                            </span>
+                                          </p>
+                                        </>
+                                      ) : null}
                                       <p className="whatIfScenarioWeightTooltipRow whatIfScenarioWeightTooltipRow--divider">
                                         <span>{t('whatif.weightTooltipScenarioQty')}</span>
                                         <span>{hideValues ? '—' : formatQty(p.scenarioQty)}</span>
                                       </p>
                                       <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>{t('whatif.weightTooltipScenarioTargetPrice')}</span>
+                                        <span>
+                                          {t(
+                                            hasSecondaryTargetPrices
+                                              ? 'whatif.weightTooltipScenarioTargetPrice1'
+                                              : 'whatif.weightTooltipScenarioTargetPrice',
+                                          )}
+                                        </span>
                                         <span>
                                           {hideValues
                                             ? '—'
@@ -3569,11 +4022,35 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                         </span>
                                       </p>
                                       <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>{t('whatif.weightTooltipScenarioMarketValue')}</span>
+                                        <span>
+                                          {t(
+                                            hasSecondaryTargetPrices
+                                              ? 'whatif.weightTooltipScenarioMarketValue1'
+                                              : 'whatif.weightTooltipScenarioMarketValue',
+                                          )}
+                                        </span>
                                         <span>
                                           {hideValues ? '—' : formatCurrencyValue(p.scenarioValue, p.currency)}
                                         </span>
                                       </p>
+                                      {hasSecondaryTargetPrices ? (
+                                        <>
+                                          <p className="whatIfScenarioWeightTooltipRow">
+                                            <span>{t('whatif.weightTooltipScenarioTargetPrice2')}</span>
+                                            <span>
+                                              {hideValues
+                                                ? '—'
+                                                : `${formatPriceNumber(p.scenarioPrice2, p.currency)} ${p.currency}`}
+                                            </span>
+                                          </p>
+                                          <p className="whatIfScenarioWeightTooltipRow">
+                                            <span>{t('whatif.weightTooltipScenarioMarketValue2')}</span>
+                                            <span>
+                                              {hideValues ? '—' : formatCurrencyValue(p.scenarioValue2, p.currency)}
+                                            </span>
+                                          </p>
+                                        </>
+                                      ) : null}
                                     </div>
                                   );
                                 }}
@@ -3601,7 +4078,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 />
                               </Bar>
                               <Bar
-                                name={t('whatif.weightLegendScenario')}
+                                name={
+                                  hasSecondaryTargetPrices
+                                    ? t('whatif.weightLegendScenarioTarget1')
+                                    : t('whatif.weightLegendScenario')
+                                }
                                 dataKey="scenarioWeight"
                                 fill="rgba(94, 234, 212, 0.52)"
                                 radius={[4, 4, 0, 0]}
@@ -3616,6 +4097,24 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   formatter={formatWeightBarLabel}
                                 />
                               </Bar>
+                              {hasSecondaryTargetPrices ? (
+                                <Bar
+                                  name={t('whatif.weightLegendScenarioTarget2')}
+                                  dataKey="scenarioWeight2"
+                                  fill="rgba(167, 139, 250, 0.55)"
+                                  radius={[4, 4, 0, 0]}
+                                  isAnimationActive={false}
+                                  activeBar={<ActiveWhatIfWeightBar />}
+                                >
+                                  <LabelList
+                                    dataKey="scenarioWeight2"
+                                    position="top"
+                                    fill="#e9d5ff"
+                                    fontSize={10}
+                                    formatter={formatWeightBarLabel}
+                                  />
+                                </Bar>
+                              ) : null}
                             </BarChart>
                           </ResponsiveContainer>
                         </div>

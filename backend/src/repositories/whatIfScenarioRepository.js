@@ -14,12 +14,18 @@ function normalizeTargetPriceInputRows(resolvedRows) {
   resolvedRows.forEach((item, index) => {
     const symbol = normalizeSymbol(item?.symbol);
     const targetPrice = Number(item?.targetPrice);
+    const targetPrice2Raw = item?.targetPrice2;
+    const targetPrice2 =
+      targetPrice2Raw == null || targetPrice2Raw === '' ? 0 : Number(targetPrice2Raw);
     const currency = normalizeCurrency(item?.currency);
     if (!symbol) throw new Error(`Target price row ${index + 1}: symbol is required.`);
     if (!Number.isFinite(targetPrice) || targetPrice < 0) {
       throw new Error(`Target price row ${index + 1}: targetPrice must be 0 or greater.`);
     }
-    bySymbol.set(symbol, { symbol, targetPrice, currency });
+    if (!Number.isFinite(targetPrice2) || targetPrice2 < 0) {
+      throw new Error(`Target price row ${index + 1}: targetPrice2 must be 0 or greater.`);
+    }
+    bySymbol.set(symbol, { symbol, targetPrice, targetPrice2, currency });
   });
   return Array.from(bySymbol.values());
 }
@@ -141,7 +147,7 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
     if (found.rowCount === 0) throw new Error('Scenario not found.');
 
     const targets = await client.query(
-      `SELECT symbol, target_price, currency
+      `SELECT symbol, target_price, target_price_2, currency
        FROM whatif_target_prices
        WHERE scenario_id = $1
        ORDER BY symbol ASC`,
@@ -191,9 +197,15 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
 
     for (const row of targets.rows) {
       await client.query(
-        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, currency)
-         VALUES ($1, $2, $3, $4)`,
-        [newId, normalizeSymbol(row.symbol), Number(row.target_price), normalizeCurrency(row.currency)],
+        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, target_price_2, currency)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          newId,
+          normalizeSymbol(row.symbol),
+          Number(row.target_price),
+          Number(row.target_price_2) || 0,
+          normalizeCurrency(row.currency),
+        ],
       );
     }
     for (const row of purchases.rows) {
@@ -315,6 +327,7 @@ export async function listWhatIfTargetPrices({ userId, scenarioId }) {
   const result = await query(
     `SELECT symbol,
             target_price::float8 AS "targetPrice",
+            COALESCE(target_price_2, 0)::float8 AS "targetPrice2",
             COALESCE(NULLIF(TRIM(currency), ''), NULL) AS currency
      FROM whatif_target_prices
      WHERE scenario_id = $1
@@ -324,6 +337,7 @@ export async function listWhatIfTargetPrices({ userId, scenarioId }) {
   return result.rows.map((row) => ({
     symbol: normalizeSymbol(row.symbol),
     targetPrice: Number(row.targetPrice) || 0,
+    targetPrice2: Number(row.targetPrice2) || 0,
     currency: normalizeCurrency(row.currency),
   }));
 }
@@ -338,9 +352,9 @@ export async function replaceWhatIfTargetPrices({ userId, scenarioId, rows }) {
     await client.query(`DELETE FROM whatif_target_prices WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalized) {
       await client.query(
-        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, currency)
-         VALUES ($1, $2, $3, $4)`,
-        [scenarioId, row.symbol, row.targetPrice, row.currency],
+        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, target_price_2, currency)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [scenarioId, row.symbol, row.targetPrice, row.targetPrice2, row.currency],
       );
     }
     await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);
@@ -406,9 +420,9 @@ export async function replaceWhatIfScenarioInputs({ userId, scenarioId, targetRo
     await client.query(`DELETE FROM whatif_target_prices WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalizedTargets) {
       await client.query(
-        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, currency)
-         VALUES ($1, $2, $3, $4)`,
-        [scenarioId, row.symbol, row.targetPrice, row.currency],
+        `INSERT INTO whatif_target_prices (scenario_id, symbol, target_price, target_price_2, currency)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [scenarioId, row.symbol, row.targetPrice, row.targetPrice2, row.currency],
       );
     }
     await client.query(`DELETE FROM whatif_hypothetical_purchases WHERE scenario_id = $1`, [scenarioId]);

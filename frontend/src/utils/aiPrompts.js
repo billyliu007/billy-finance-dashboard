@@ -237,17 +237,27 @@ export function buildScenarioSnapshotPrompt({
     : [];
   const baseline = scenarioResults?.baseline ?? {};
   const scenarioTotals = scenarioResults?.scenarioTotals ?? {};
+  const scenarioTotals2 = scenarioResults?.scenarioTotals2 ?? null;
+  const hasSecondaryTargetPrices = Boolean(scenarioResults?.hasSecondaryTargetPrices);
 
   const lines = [];
   lines.push(
     isZh
-      ? '你是一位专业的投资顾问。请结合我当前的资产快照与下方所选情景的模拟买入、模拟卖出与目标价，给出分析与建议。'
-      : 'You are a professional investment advisor. Using my current asset snapshot and the selected scenario’s simulated buys, simulated sells, and target prices below, provide analysis and suggestions.'
+      ? hasSecondaryTargetPrices
+        ? '你是一位专业的投资顾问。请结合我当前的资产快照与下方所选情景的模拟买入、模拟卖出、目标价（含部分标的的第二目标价），给出分析与建议。'
+        : '你是一位专业的投资顾问。请结合我当前的资产快照与下方所选情景的模拟买入、模拟卖出与目标价，给出分析与建议。'
+      : hasSecondaryTargetPrices
+        ? 'You are a professional investment advisor. Using my current asset snapshot and the selected scenario’s simulated buys, simulated sells, and target prices (including a second target price where provided for some holdings), provide analysis and suggestions.'
+        : 'You are a professional investment advisor. Using my current asset snapshot and the selected scenario’s simulated buys, simulated sells, and target prices below, provide analysis and suggestions.'
   );
   lines.push(
     isZh
-      ? '请关注：情景相对现状的仓位与风险变化、目标价隐含回报与可行性、模拟交易对现金/成本的影响。'
-      : 'Focus on: how the scenario changes exposure vs. today, feasibility of target prices, and how simulated trades affect cash and cost basis.'
+      ? hasSecondaryTargetPrices
+        ? '请关注：两套目标价情景下相对现状的仓位与风险差异、各目标价隐含回报与可行性、模拟交易对现金/成本的影响。'
+        : '请关注：情景相对现状的仓位与风险变化、目标价隐含回报与可行性、模拟交易对现金/成本的影响。'
+      : hasSecondaryTargetPrices
+        ? 'Focus on: how the primary vs. secondary target-price scenarios change exposure and risk vs. today, feasibility of each target level, and how simulated trades affect cash and cost basis.'
+        : 'Focus on: how the scenario changes exposure vs. today, feasibility of target prices, and how simulated trades affect cash and cost basis.'
   );
   lines.push('');
   lines.push(isZh ? `数据快照时间（UTC）：${now}` : `Data snapshot time (UTC): ${now}`);
@@ -298,9 +308,20 @@ export function buildScenarioSnapshotPrompt({
   lines.push(isZh ? '## 情景建模摘要（相对基准组合）' : '## Scenario modeled summary (vs. baseline portfolio)');
   lines.push(
     isZh
-      ? `- 基准组合市值=${formatMoneyUsd(baseline?.totalValue)} | 情景组合市值=${formatMoneyUsd(scenarioTotals?.value)}`
-      : `- Baseline portfolio value=${formatMoneyUsd(baseline?.totalValue)} | Scenario portfolio value=${formatMoneyUsd(scenarioTotals?.value)}`
+      ? hasSecondaryTargetPrices
+        ? `- 基准组合市值=${formatMoneyUsd(baseline?.totalValue)} | 情景组合市值（目标价1）=${formatMoneyUsd(scenarioTotals?.value)}`
+        : `- 基准组合市值=${formatMoneyUsd(baseline?.totalValue)} | 情景组合市值=${formatMoneyUsd(scenarioTotals?.value)}`
+      : hasSecondaryTargetPrices
+        ? `- Baseline portfolio value=${formatMoneyUsd(baseline?.totalValue)} | Scenario portfolio value (target 1)=${formatMoneyUsd(scenarioTotals?.value)}`
+        : `- Baseline portfolio value=${formatMoneyUsd(baseline?.totalValue)} | Scenario portfolio value=${formatMoneyUsd(scenarioTotals?.value)}`
   );
+  if (hasSecondaryTargetPrices && scenarioTotals2 && Number.isFinite(Number(scenarioTotals2?.value))) {
+    lines.push(
+      isZh
+        ? `- 情景组合市值（目标价2）=${formatMoneyUsd(scenarioTotals2.value)}`
+        : `- Scenario portfolio value (target 2)=${formatMoneyUsd(scenarioTotals2.value)}`
+    );
+  }
   lines.push(
     isZh
       ? `- 基准成本基础=${formatMoneyUsd(baseline?.totalCost)} | 情景成本基础=${formatMoneyUsd(scenarioTotals?.cost)}`
@@ -344,17 +365,54 @@ export function buildScenarioSnapshotPrompt({
   }
   lines.push('');
 
-  lines.push(isZh ? '## 目标价' : '## Target prices');
+  lines.push(
+    isZh
+      ? hasSecondaryTargetPrices
+        ? '## 目标价（目标价1；若填写则含目标价2）'
+        : '## 目标价'
+      : hasSecondaryTargetPrices
+        ? '## Target prices (primary; second target where entered)'
+        : '## Target prices'
+  );
   if (targetPrices.length === 0) {
     lines.push(isZh ? '- （无）' : '- (none)');
   } else {
+    let printedAny = false;
     for (const t of targetPrices) {
       const cur = t?.currency ? String(t.currency).toUpperCase() : '';
-      lines.push(
-        isZh
-          ? `- ${t?.symbol ?? 'N/A'}: ${formatNumber(t?.targetPrice)} ${cur || 'USD'}`
-          : `- ${t?.symbol ?? 'N/A'}: ${formatNumber(t?.targetPrice)} ${cur || 'USD'}`
-      );
+      const cc = cur || 'USD';
+      const tp1 = Number(t?.targetPrice);
+      const tp2 = Number(t?.targetPrice2);
+      const has1 = Number.isFinite(tp1) && tp1 > 0;
+      const has2 = Number.isFinite(tp2) && tp2 > 0;
+      if (!has1 && !has2) continue;
+      printedAny = true;
+      if (has1 && has2) {
+        lines.push(
+          isZh
+            ? `- ${t?.symbol ?? 'N/A'}: 目标价1=${formatNumber(tp1)} ${cc}；目标价2=${formatNumber(tp2)} ${cc}`
+            : `- ${t?.symbol ?? 'N/A'}: target1=${formatNumber(tp1)} ${cc}; target2=${formatNumber(tp2)} ${cc}`
+        );
+      } else if (has1) {
+        lines.push(
+          isZh
+            ? hasSecondaryTargetPrices
+              ? `- ${t?.symbol ?? 'N/A'}: 目标价1=${formatNumber(tp1)} ${cc}`
+              : `- ${t?.symbol ?? 'N/A'}: ${formatNumber(tp1)} ${cc}`
+            : hasSecondaryTargetPrices
+              ? `- ${t?.symbol ?? 'N/A'}: target1=${formatNumber(tp1)} ${cc}`
+              : `- ${t?.symbol ?? 'N/A'}: ${formatNumber(tp1)} ${cc}`
+        );
+      } else {
+        lines.push(
+          isZh
+            ? `- ${t?.symbol ?? 'N/A'}: 目标价2=${formatNumber(tp2)} ${cc}（未设目标价1）`
+            : `- ${t?.symbol ?? 'N/A'}: target2=${formatNumber(tp2)} ${cc} (primary target not set)`
+        );
+      }
+    }
+    if (!printedAny) {
+      lines.push(isZh ? '- （无有效目标价）' : '- (no positive target prices)');
     }
   }
   lines.push('');
@@ -367,8 +425,12 @@ export function buildScenarioSnapshotPrompt({
   );
   lines.push(
     isZh
-      ? '- 逐标的点评目标价与模拟买卖是否合理，并给出风险与执行要点。'
-      : '- For each symbol with targets or simulated trades, comment on reasonableness, risks, and execution notes.'
+      ? hasSecondaryTargetPrices
+        ? '- 逐标的点评目标价1与目标价2（如适用）及模拟买卖是否合理，并比较两套目标价下的差异与风险。'
+        : '- 逐标的点评目标价与模拟买卖是否合理，并给出风险与执行要点。'
+      : hasSecondaryTargetPrices
+        ? '- For each symbol with targets or simulated trades, comment on reasonableness of target 1 vs. target 2 (where both exist), risks, and how the two scenarios differ.'
+        : '- For each symbol with targets or simulated trades, comment on reasonableness, risks, and execution notes.'
   );
   lines.push(
     isZh ? '- 给出可执行的下一步建议（按优先级）。' : '- Provide prioritized, actionable next steps.');

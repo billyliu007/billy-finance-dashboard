@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS whatif_target_prices (
   scenario_id UUID NOT NULL REFERENCES whatif_scenarios (id) ON DELETE CASCADE,
   symbol TEXT NOT NULL,
   target_price NUMERIC(20, 8) NOT NULL,
+  target_price_2 NUMERIC(20, 8) NOT NULL DEFAULT 0,
   currency TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

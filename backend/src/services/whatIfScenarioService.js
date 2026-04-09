@@ -54,9 +54,10 @@ function stableInputsHash({ targetPrices = [], hypotheticalPurchases = [], hypot
     .map((r) => ({
       symbol: toUpper(r?.symbol),
       targetPrice: numberOrZero(r?.targetPrice),
+      targetPrice2: numberOrZero(r?.targetPrice2),
       currency: toUpper(r?.currency || '') || null,
     }))
-    .filter((r) => r.symbol && r.targetPrice > 0)
+    .filter((r) => r.symbol && (r.targetPrice > 0 || r.targetPrice2 > 0))
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
   const buys = (hypotheticalPurchases || [])
@@ -183,6 +184,7 @@ export function computeWhatIfFromData({
   fetchedPriceMap = new Map(),
 }) {
   const targetMap = new Map(targetPrices.map((row) => [toUpper(row.symbol), row]));
+  const hasSecondaryTargetPrices = (targetPrices || []).some((r) => numberOrZero(r?.targetPrice2) > 0);
 
   const rowsBySymbol = new Map(
     baselineRows.map((row) => [
@@ -274,6 +276,7 @@ export function computeWhatIfFromData({
   const scenarioRows = Array.from(rowsBySymbol.values()).map((row) => {
     const override = targetMap.get(row.symbol);
     const overridePrice = numberOrZero(override?.targetPrice);
+    const overridePrice2 = numberOrZero(override?.targetPrice2);
     const fetched = fetchedPriceMap.get(row.symbol);
     const marketPrice = row.baselinePrice > 0 ? row.baselinePrice : numberOrZero(fetched?.price);
     const marketSource = row.baselinePrice > 0 ? 'dashboard' : fetched?.source || 'none';
@@ -282,7 +285,7 @@ export function computeWhatIfFromData({
     const baselineValue = row.baselineQty * marketPrice;
     const scenarioValue = row.scenarioQty * scenarioPrice;
     const pnl = scenarioValue - row.scenarioCostBasis;
-    return {
+    const baseRow = {
       symbol: row.symbol,
       name: row.name,
       category: row.category,
@@ -299,6 +302,20 @@ export function computeWhatIfFromData({
       scenarioValue,
       pnl,
     };
+    if (!hasSecondaryTargetPrices) return baseRow;
+    const scenarioPrice2 =
+      overridePrice2 > 0 ? overridePrice2 : marketPrice > 0 ? marketPrice : row.scenarioAvgCost;
+    const scenarioSource2 =
+      overridePrice2 > 0 ? 'target-price' : marketPrice > 0 ? marketSource : 'buy-price-fallback';
+    const scenarioValue2 = row.scenarioQty * scenarioPrice2;
+    const pnl2 = scenarioValue2 - row.scenarioCostBasis;
+    return {
+      ...baseRow,
+      scenarioPrice2,
+      scenarioPriceSource2: scenarioSource2,
+      scenarioValue2,
+      pnl2,
+    };
   });
 
   const scenarioTotals = scenarioRows.reduce(
@@ -310,6 +327,18 @@ export function computeWhatIfFromData({
     },
     { value: 0, cost: 0, pnl: 0 },
   );
+
+  const scenarioTotals2 = hasSecondaryTargetPrices
+    ? scenarioRows.reduce(
+        (acc, row) => {
+          acc.value += numberOrZero(row.scenarioValue2);
+          acc.cost += numberOrZero(row.scenarioCostBasis ?? row.costBasis);
+          acc.pnl += numberOrZero(row.pnl2);
+          return acc;
+        },
+        { value: 0, cost: 0, pnl: 0 },
+      )
+    : null;
 
   const base = toUpper(baseCurrency || 'USD') || 'USD';
   const resolvedFxRates = {
@@ -350,6 +379,14 @@ export function computeWhatIfFromData({
     { baseCurrency: base, baselineValue: 0, scenarioValue: 0, missingCount: 0 },
   );
   portfolioBaseTotals.deltaValue = portfolioBaseTotals.scenarioValue - portfolioBaseTotals.baselineValue;
+  if (hasSecondaryTargetPrices) {
+    const scenarioValue2BaseSum = scenarioRows.reduce((sum, row) => {
+      const scenarioValue2Base = toBaseValue(numberOrZero(row.scenarioValue2), row.currency);
+      return sum + (scenarioValue2Base == null ? 0 : scenarioValue2Base);
+    }, 0);
+    portfolioBaseTotals.scenarioValue2 = scenarioValue2BaseSum;
+    portfolioBaseTotals.deltaValue2 = scenarioValue2BaseSum - portfolioBaseTotals.baselineValue;
+  }
   portfolioBaseTotals.hypotheticalCostBase = (hypotheticalPurchases || []).reduce((sum, item) => {
     const qty = numberOrZero(item?.qty);
     const buyPrice = numberOrZero(item?.buyPrice);
@@ -366,11 +403,18 @@ export function computeWhatIfFromData({
     return sum + (proceedsBase == null ? 0 : proceedsBase);
   }, 0);
 
-  const enrichedRows = scenarioRows.map((row) => ({
-    ...row,
-    baselineWeightPct: baselineTotalValue > 0 ? (numberOrZero(row.baselineValue) / baselineTotalValue) * 100 : 0,
-    scenarioWeightPct: scenarioTotals.value > 0 ? (numberOrZero(row.scenarioValue) / scenarioTotals.value) * 100 : 0,
-  }));
+  const enrichedRows = scenarioRows.map((row) => {
+    const enriched = {
+      ...row,
+      baselineWeightPct: baselineTotalValue > 0 ? (numberOrZero(row.baselineValue) / baselineTotalValue) * 100 : 0,
+      scenarioWeightPct: scenarioTotals.value > 0 ? (numberOrZero(row.scenarioValue) / scenarioTotals.value) * 100 : 0,
+    };
+    if (hasSecondaryTargetPrices && scenarioTotals2) {
+      enriched.scenarioWeightPct2 =
+        scenarioTotals2.value > 0 ? (numberOrZero(row.scenarioValue2) / scenarioTotals2.value) * 100 : 0;
+    }
+    return enriched;
+  });
 
   return {
     scenario: {
@@ -383,7 +427,9 @@ export function computeWhatIfFromData({
       totalCost: baselineTotalCost,
     },
     scenarioTotals,
+    ...(hasSecondaryTargetPrices && scenarioTotals2 ? { scenarioTotals2 } : {}),
     portfolioBaseTotals,
+    hasSecondaryTargetPrices,
     targetPrices,
     hypotheticalPurchases,
     hypotheticalSales,

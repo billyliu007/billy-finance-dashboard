@@ -118,6 +118,34 @@
   cursor: not-allowed;
 }
 
+.whatIfClearTarget2Btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 113, 133, 0.42);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecdd3;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.whatIfClearTarget2Btn:hover:not(:disabled) {
+  border-color: rgba(253, 164, 175, 0.55);
+  background: rgba(153, 27, 27, 0.32);
+  color: #fff1f2;
+}
+
+.whatIfClearTarget2Btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Per-row save (same action as “Apply target prices”): all breakpoints; larger tap target ≤900px. */
 .whatIfTargetPriceCard .whatIfTargetPriceFieldRow .profitabilityInput {
   flex: 1 1 0;
@@ -183,6 +211,10 @@
   border-color: rgba(165, 243, 252, 0.75);
   outline: none;
   box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28);
+}
+
+.whatIfTargetPriceDesktopTable .whatIfTableTarget {
+  min-width: min(100%, 920px);
 }
 
 .whatIfHypoAggDesktopExpandCol {
@@ -668,6 +700,39 @@
     0 4px 18px rgba(15, 118, 110, 0.12);
 }
 
+.whatIfTargetPriceCard header {
+  align-items: flex-start;
+}
+
+/* Group TP1 + TP2 summary so prices and labels share one row (no stray horizontal rule above TP2). */
+.whatIfTargetPriceHeaderTargets {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex-shrink: 0;
+  gap: 0;
+  min-width: 0;
+}
+
+.whatIfTargetPriceHeaderTargets .whatIfTargetPriceDock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  text-align: right;
+  gap: 2px;
+  min-width: 0;
+}
+
+.whatIfTargetPriceHeaderTargets .whatIfTargetPriceDock--secondary {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  padding-left: 12px;
+  margin-left: 10px;
+  border-left: 1px solid rgba(148, 163, 184, 0.28);
+}
+
 .whatIfTargetPriceDock strong {
   color: #e2efff;
   font-variant-numeric: tabular-nums;
@@ -676,6 +741,17 @@
 .whatIfTargetPriceDock span {
   color: #9fb8d8;
   font-weight: 600;
+}
+
+.whatIfTargetPriceHeaderTargets .whatIfTargetPriceDock strong {
+  font-size: 1.02rem;
+  line-height: 1.15;
+}
+
+.whatIfTargetPriceHeaderTargets .whatIfTargetPriceDock span {
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
 .whatIfTargetPriceHeaderPrice {
@@ -735,6 +811,21 @@
 }
 
 .whatIfTargetPriceCard .whatIfTargetPriceFieldRow .headerIconBtn.whatIfIconBtn {
+  flex-shrink: 0;
+}
+
+/* Per-card save: outside the 2×2 grid, bottom-right of the mobile target card */
+.whatIfTargetPriceMobileSaveRow {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding-top: 2px;
+}
+
+.whatIfTargetPriceMobileSaveRow .whatIfTargetPriceMobileSaveBtn.headerIconBtn.whatIfIconBtn {
   flex-shrink: 0;
 }
 
@@ -1764,7 +1855,8 @@
   }
 
   .whatIfTargetToolbarActions .whatIfStickySaveBtn,
-  .whatIfTargetToolbarActions .whatIfTargetCancelBtn {
+  .whatIfTargetToolbarActions .whatIfTargetCancelBtn,
+  .whatIfTargetToolbarActions .whatIfClearTarget2Btn {
     flex: 1 1 0;
     min-width: 0;
     min-height: 44px;
@@ -1875,6 +1967,12 @@
     min-width: 0;
     width: auto;
     max-width: none;
+  }
+
+  .whatIfTargetPriceMobileSaveRow .whatIfTargetPriceMobileSaveBtn.headerIconBtn.whatIfIconBtn {
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
   }
 
   .whatIfPanel .rebalanceKpiRow .profitabilityCardValue {
