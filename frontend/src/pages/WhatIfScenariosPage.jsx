@@ -2082,27 +2082,29 @@ export default function WhatIfScenariosPage({ hideValues }) {
                 </header>
 
                 <div className="whatIfScenarioControls">
-                  <div className="whatIfScenarioSelectBlock">
-                    <label className="whatIfScenarioPicker">
-                      <span className="whatIfScenarioPickerLabel">{t('whatif.activeScenarioLabel')}</span>
-                      <div className="whatIfScenarioSelectInner">
-                        <select
-                          id="whatif-scenario-select"
-                          className="profitabilitySelect whatIfScenarioSelect"
-                          value={activeScenarioId}
-                          onChange={(e) => handleActivateScenario(e.target.value)}
-                          disabled={isBusy}
-                        >
-                          <option value="">{t('whatif.selectScenario')}</option>
-                          {scenarios.map((row) => (
-                            <option key={row.id} value={row.id}>
-                              {row.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </label>
-                  </div>
+                  {!isAddingScenario && (
+                    <div className="whatIfScenarioSelectBlock">
+                      <label className="whatIfScenarioPicker">
+                        <span className="whatIfScenarioPickerLabel">{t('whatif.activeScenarioLabel')}</span>
+                        <div className="whatIfScenarioSelectInner">
+                          <select
+                            id="whatif-scenario-select"
+                            className="profitabilitySelect whatIfScenarioSelect"
+                            value={activeScenarioId}
+                            onChange={(e) => handleActivateScenario(e.target.value)}
+                            disabled={isBusy}
+                          >
+                            <option value="">{t('whatif.selectScenario')}</option>
+                            {scenarios.map((row) => (
+                              <option key={row.id} value={row.id}>
+                                {row.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </label>
+                    </div>
+                  )}
 
                   <div
                     className="whatIfScenarioNameActions"
@@ -2302,7 +2304,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       type="button"
                       className="whatIfScenarioToolBtn whatIfScenarioToolBtn--danger headerIconBtn whatIfIconBtn positionActionBtnDanger"
                       onClick={handleDeleteScenario}
-                      disabled={!activeScenarioId || isBusy}
+                      disabled={!activeScenarioId || isBusy || isAddingScenario}
                       aria-label={t('whatif.deleteScenario')}
                       title={t('whatif.deleteScenario')}
                     >
