@@ -13,6 +13,7 @@ import ProfitabilityPage from './pages/ProfitabilityPage.jsx';
 import RebalancePage from './pages/RebalancePage.jsx';
 import WhatIfScenariosPage from './pages/WhatIfScenariosPage.jsx';
 import DevelopmentPage from './pages/DevelopmentPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import OnboardingPage from './pages/OnboardingPage.jsx';
 import { fetchJson, postJson } from './utils/api.js';
@@ -122,6 +123,7 @@ export default function App() {
             {SHOW_DEVELOPMENT_PAGE && (
               <Route path="/development" element={<DevelopmentPage frontendVersion={buildVersion} />} />
             )}
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/net-worth" replace />} />
             </Routes>
           </main>

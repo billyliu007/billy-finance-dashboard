@@ -875,6 +875,12 @@
   background: rgba(127, 29, 29, 0.5);
 }
 
+a.userMenuLink.userMenuItem {
+  display: block;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
 .userMenuDivider {
   margin: 4px 0 2px;
   border-top: 1px solid rgba(30, 64, 175, 0.6);
@@ -3320,4 +3326,138 @@ tbody tr:hover td {
   .profitabilityTable--trades td:nth-child(7) {
     display: none;
   }
+}
+
+/* --- Settings (API keys) --- */
+.settingsCard h2 {
+  margin: 0 0 6px;
+  font-size: 1.08rem;
+  font-weight: 650;
+  color: #f8fbff;
+}
+
+.settingsCardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.settingsCardDesc {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  max-width: 52ch;
+}
+
+.settingsPrimaryBtn {
+  border: 1px solid rgba(94, 234, 212, 0.45);
+  background: linear-gradient(120deg, rgba(14, 116, 144, 0.28), rgba(7, 89, 133, 0.2));
+  color: #ecfeff;
+  border-radius: 10px;
+  font-weight: 650;
+  padding: 9px 14px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.settingsPrimaryBtn:hover {
+  border-color: rgba(94, 234, 212, 0.65);
+}
+
+.settingsMuted {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.settingsTableWrap {
+  margin-top: 4px;
+}
+
+.settingsBadge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.settingsBadgeActive {
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: #bbf7d0;
+}
+
+.settingsBadgeRevoked {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #cbd5e1;
+}
+
+.settingsDangerLink {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #fca5a5;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.settingsDangerLink:hover {
+  color: #fecaca;
+}
+
+.settingsInput {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.75);
+  color: #f1f5f9;
+  font-size: 0.9rem;
+}
+
+.settingsFieldHint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.settingsRevealWarning {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: #fecaca;
+  line-height: 1.45;
+}
+
+.settingsTokenBox {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-all;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.65);
+  color: #e2e8f0;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.settingsRevealActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
 }

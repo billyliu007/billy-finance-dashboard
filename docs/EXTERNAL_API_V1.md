@@ -4,7 +4,9 @@ This document describes the **read-only HTTP API** for accessing your own net wo
 
 ## Status
 
-Implementation is complete in the backend: migration `20260411_user_api_tokens.sql`, routes under `/api/v1`, and Personal Access Token (PAT) management under `/api/user/api-tokens`. Apply database migrations and set `API_TOKEN_PEPPER` in production before issuing tokens (see [`backend/.env.example`](../backend/.env.example)).
+Implementation is complete: migration `20260411_user_api_tokens.sql`, routes under `/api/v1`, and PAT management under `/api/user/api-tokens`. In the web app, open the **user menu (avatar) → Settings** to create, list, and revoke API keys without using curl.
+
+Apply database migrations and set `API_TOKEN_PEPPER` in production before issuing tokens (see [`backend/.env.example`](../backend/.env.example)).
 
 ---
 
@@ -15,7 +17,7 @@ Every `/api/v1/...` request must identify **your user account**. Use one of the 
 ### Recommended: Personal Access Token (PAT)
 
 1. Sign in to the web app with your normal login (for example Google) so the browser has a session cookie.
-2. Create a PAT (see [Token management](#token-management) below). The response body includes **`token` exactly once** — copy it immediately and store it securely (password manager, secret env var, etc.).
+2. Create a PAT: use **Settings** in the user menu, or call the HTTP API (see [Token management](#token-management) below). The server returns **`token` exactly once** — copy it immediately and store it securely (password manager, secret env var, etc.).
 3. On each API call, send:
 
 ```http

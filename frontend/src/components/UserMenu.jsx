@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 
 function getInitials(name, email) {
@@ -59,6 +60,15 @@ export default function UserMenu({ user, onLogout }) {
               {t('userMenu.chinese')}
             </button>
           </div>
+          <div className="userMenuDivider" />
+          <Link
+            to="/settings"
+            className="userMenuItem userMenuLink"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            {t('userMenu.settings')}
+          </Link>
           {/* Privacy mode toggle removed: always show full values. */}
           <div className="userMenuDivider" />
           <button
