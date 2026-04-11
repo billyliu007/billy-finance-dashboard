@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildNetWorthPayload } from '../src/services/netWorthService.js';
+import { buildCashUsdDetailForApi, buildNetWorthPayload } from '../src/services/netWorthService.js';
 
 function mockCashComponents() {
   return [
@@ -113,4 +113,13 @@ test('buildNetWorthPayload CNY base: stays zero when only USD cash and FX missin
   });
 
   assert.ok(Math.abs(payload.overview.totalNetWorth) < 1e-9);
+});
+
+test('buildCashUsdDetailForApi maps balances and USD values', () => {
+  const rows = buildCashUsdDetailForApi(mockCashComponents(), { SGD: 0.75, USD: 1, CNY: 0.14 });
+  assert.strictEqual(rows.length, 3);
+  const usdRow = rows.find((r) => r.currency === 'USD');
+  assert.ok(usdRow);
+  assert.strictEqual(usdRow.valueUsd, 7000);
+  assert.strictEqual(usdRow.fxComplete, true);
 });

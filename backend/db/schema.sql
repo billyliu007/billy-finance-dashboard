@@ -30,6 +30,17 @@ CREATE TABLE IF NOT EXISTS user_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_api_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS cash (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -176,6 +187,7 @@ CREATE TABLE IF NOT EXISTS currencies (
 CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_api_tokens_user_active ON user_api_tokens (user_id) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_cash_user_id ON cash (user_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_positions_user_id ON portfolio_positions (user_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_position_tx_user_symbol ON portfolio_position_transactions (user_id, symbol);

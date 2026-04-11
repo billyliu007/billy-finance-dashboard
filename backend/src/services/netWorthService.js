@@ -54,6 +54,34 @@ function buildDetailRows(cashComponents, fxRates) {
   });
 }
 
+/**
+ * Cash rows with USD valuation for API consumers (USD pivot matches dashboard).
+ * @param {object[]} cashComponents
+ * @param {Record<string, number>} fxRatesOverride rates as USD per 1 unit of currency
+ * @returns {object[]}
+ */
+export function buildCashUsdDetailForApi(cashComponents, fxRatesOverride = {}) {
+  const fxRates = {
+    USD: 1,
+    ...Object.entries(fxRatesOverride).reduce((acc, [currency, rate]) => {
+      const parsedRate = Number(rate);
+      if (Number.isFinite(parsedRate) && parsedRate > 0) {
+        acc[String(currency || '').toUpperCase()] = parsedRate;
+      }
+      return acc;
+    }, {}),
+  };
+  return buildDetailRows(cashComponents, fxRates).map((row) => ({
+    id: row.key,
+    name: row.name,
+    currency: row.currency,
+    balance: row.value,
+    fxRateToUsd: row.fxRate,
+    valueUsd: row.usdValue,
+    fxComplete: row.found,
+  }));
+}
+
 function computeUsdPositionsTotal(positions, stockQuotes = {}, cryptoQuotes = {}) {
   return (positions || []).reduce((sum, asset) => {
     const qty = Number(asset?.qty || 0);

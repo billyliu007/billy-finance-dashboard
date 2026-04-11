@@ -11,6 +11,8 @@ import {
   upsertIdentity,
   createUser,
 } from '../repositories/userRepository.js';
+import { API_TOKEN_PREFIX, readBearerToken } from '../lib/apiTokenCrypto.js';
+import { resolveUserFromApiTokenPlain } from '../repositories/apiTokenRepository.js';
 import { getGoogleOAuthRedirectUri } from '../lib/requestHelpers.js';
 
 const SESSION_COOKIE_NAME = 'bf_session';
@@ -107,22 +109,62 @@ export async function resolveOrCreateDemoUser() {
   return created;
 }
 
+function sessionRowToAuthUser(sessionRow) {
+  return {
+    userId: sessionRow.userId,
+    email: sessionRow.email,
+    displayName: sessionRow.displayName,
+    publicId: sessionRow.publicId,
+    onboardingCompleted: sessionRow.onboardingCompleted,
+    baseCurrency: sessionRow.baseCurrency,
+  };
+}
+
 export async function resolveSessionFromRequest(req) {
-  const token = readSessionTokenFromCookie(req.headers.cookie);
-  if (!token) {
-    return null;
-  }
   await clearExpiredSessions();
-  const session = await findSession(token);
-  if (!session) {
+
+  const cookieToken = readSessionTokenFromCookie(req.headers.cookie);
+  if (cookieToken) {
+    const session = await findSession(cookieToken);
+    if (session) {
+      const expiresMs = new Date(session.expiresAt).getTime();
+      if (Number.isFinite(expiresMs) && expiresMs > Date.now()) {
+        return { token: cookieToken, user: sessionRowToAuthUser(session) };
+      }
+      await deleteSession(cookieToken);
+    }
+  }
+
+  const bearer = readBearerToken(req.headers.authorization);
+  if (!bearer) {
     return null;
   }
-  const expiresMs = new Date(session.expiresAt).getTime();
-  if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) {
-    await deleteSession(token);
+
+  if (bearer.startsWith(API_TOKEN_PREFIX)) {
+    const user = await resolveUserFromApiTokenPlain(bearer);
+    if (!user) {
+      return null;
+    }
+    const { apiTokenId, ...rest } = user;
+    return { token: null, user: rest, apiTokenId };
+  }
+
+  const sessionFromBearer = await findSession(bearer);
+  if (sessionFromBearer) {
+    const expiresMs = new Date(sessionFromBearer.expiresAt).getTime();
+    if (!Number.isFinite(expiresMs) || expiresMs <= Date.now()) {
+      await deleteSession(bearer);
+      return null;
+    }
+    return { token: bearer, user: sessionRowToAuthUser(sessionFromBearer) };
+  }
+
+  const patUser = await resolveUserFromApiTokenPlain(bearer);
+  if (!patUser) {
     return null;
   }
-  return { token, user: session };
+  const { apiTokenId, ...rest } = patUser;
+  return { token: null, user: rest, apiTokenId };
 }
 
 function makeStateToken(provider) {

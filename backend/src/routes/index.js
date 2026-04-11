@@ -10,6 +10,7 @@ import internalRouter from './internal.js';
 import devRouter from './dev.js';
 import profitabilityRouter from './profitability.js';
 import whatIfRouter from './whatif.js';
+import externalV1Router from './externalV1.js';
 
 export function mountRoutes(app) {
   app.use('/api/auth', authRouter);
@@ -24,4 +25,5 @@ export function mountRoutes(app) {
   app.use('/api/currencies', currenciesRouter);
   app.use('/api/internal', internalRouter);
   app.use('/api/dev', devRouter);
+  app.use('/api/v1', externalV1Router);
 }
