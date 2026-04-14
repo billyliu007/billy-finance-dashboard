@@ -9,6 +9,14 @@ function normalizeCurrency(currency) {
   return cur || null;
 }
 
+const MAX_HYPOTHETICAL_COMMENT_LEN = 2000;
+
+function normalizeHypotheticalComment(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  return s.length > MAX_HYPOTHETICAL_COMMENT_LEN ? s.slice(0, MAX_HYPOTHETICAL_COMMENT_LEN) : s;
+}
+
 function normalizeTargetPriceInputRows(resolvedRows) {
   const bySymbol = new Map();
   resolvedRows.forEach((item, index) => {
@@ -46,7 +54,8 @@ function normalizeHypotheticalPurchaseInputRows(resolvedRows) {
     if (!Number.isFinite(buyPrice) || buyPrice < 0) {
       throw new Error(`Hypothetical buy row ${index + 1}: buyPrice must be 0 or greater.`);
     }
-    return { symbol, qty, buyPrice, currency };
+    const comment = normalizeHypotheticalComment(item?.comment);
+    return { symbol, qty, buyPrice, currency, comment };
   });
 }
 
@@ -66,7 +75,8 @@ function normalizeHypotheticalSaleInputRows(resolvedRows) {
     if (feeFlat != null && (!Number.isFinite(feeFlat) || feeFlat < 0)) {
       throw new Error(`Hypothetical sale row ${index + 1}: feeFlat must be 0 or greater when provided.`);
     }
-    return { symbol, qty, sellPrice, feeFlat, currency };
+    const comment = normalizeHypotheticalComment(item?.comment);
+    return { symbol, qty, sellPrice, feeFlat, currency, comment };
   });
 }
 
@@ -154,14 +164,14 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
       [resolvedSourceId],
     );
     const purchases = await client.query(
-      `SELECT symbol, qty, buy_price, currency
+      `SELECT symbol, qty, buy_price, currency, comment_text
        FROM whatif_hypothetical_purchases
        WHERE scenario_id = $1
        ORDER BY created_at ASC`,
       [resolvedSourceId],
     );
     const sales = await client.query(
-      `SELECT symbol, qty, sell_price, fee_flat, currency
+      `SELECT symbol, qty, sell_price, fee_flat, currency, comment_text
        FROM whatif_hypothetical_sales
        WHERE scenario_id = $1
        ORDER BY created_at ASC`,
@@ -210,21 +220,22 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
     }
     for (const row of purchases.rows) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency)
-         VALUES ($1, $2, $3, $4, $5)`,
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           newId,
           normalizeSymbol(row.symbol),
           Number(row.qty),
           Number(row.buy_price),
           normalizeCurrency(row.currency),
+          row.comment_text == null || String(row.comment_text).trim() === '' ? null : String(row.comment_text).trim(),
         ],
       );
     }
     for (const row of sales.rows) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency, comment_text)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           newId,
           normalizeSymbol(row.symbol),
@@ -232,6 +243,7 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
           Number(row.sell_price),
           row.fee_flat == null ? null : Number(row.fee_flat),
           normalizeCurrency(row.currency),
+          row.comment_text == null || String(row.comment_text).trim() === '' ? null : String(row.comment_text).trim(),
         ],
       );
     }
@@ -370,7 +382,8 @@ export async function listWhatIfHypotheticalPurchases({ userId, scenarioId }) {
             symbol,
             qty::float8 AS qty,
             buy_price::float8 AS "buyPrice",
-            COALESCE(NULLIF(TRIM(currency), ''), NULL) AS currency
+            COALESCE(NULLIF(TRIM(currency), ''), NULL) AS currency,
+            NULLIF(TRIM(comment_text), '') AS comment
      FROM whatif_hypothetical_purchases
      WHERE scenario_id = $1
      ORDER BY created_at ASC`,
@@ -382,6 +395,7 @@ export async function listWhatIfHypotheticalPurchases({ userId, scenarioId }) {
     qty: Number(row.qty) || 0,
     buyPrice: Number(row.buyPrice) || 0,
     currency: normalizeCurrency(row.currency),
+    comment: row.comment == null ? null : String(row.comment),
   }));
 }
 
@@ -395,9 +409,9 @@ export async function replaceWhatIfHypotheticalPurchases({ userId, scenarioId, r
     await client.query(`DELETE FROM whatif_hypothetical_purchases WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalized) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency],
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency, row.comment],
       );
     }
     await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);
@@ -428,17 +442,17 @@ export async function replaceWhatIfScenarioInputs({ userId, scenarioId, targetRo
     await client.query(`DELETE FROM whatif_hypothetical_purchases WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalizedPurchases) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency],
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency, row.comment],
       );
     }
     await client.query(`DELETE FROM whatif_hypothetical_sales WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalizedSales) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [scenarioId, row.symbol, row.qty, row.sellPrice, row.feeFlat, row.currency],
+        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency, comment_text)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [scenarioId, row.symbol, row.qty, row.sellPrice, row.feeFlat, row.currency, row.comment],
       );
     }
     await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);
@@ -459,7 +473,8 @@ export async function listWhatIfHypotheticalSales({ userId, scenarioId }) {
             qty::float8 AS qty,
             sell_price::float8 AS "sellPrice",
             fee_flat::float8 AS "feeFlat",
-            COALESCE(NULLIF(TRIM(currency), ''), NULL) AS currency
+            COALESCE(NULLIF(TRIM(currency), ''), NULL) AS currency,
+            NULLIF(TRIM(comment_text), '') AS comment
      FROM whatif_hypothetical_sales
      WHERE scenario_id = $1
      ORDER BY created_at ASC`,
@@ -472,6 +487,7 @@ export async function listWhatIfHypotheticalSales({ userId, scenarioId }) {
     sellPrice: Number(row.sellPrice) || 0,
     feeFlat: row.feeFlat == null ? null : Number(row.feeFlat),
     currency: normalizeCurrency(row.currency),
+    comment: row.comment == null ? null : String(row.comment),
   }));
 }
 
@@ -485,9 +501,9 @@ export async function replaceWhatIfHypotheticalSales({ userId, scenarioId, rows 
     await client.query(`DELETE FROM whatif_hypothetical_sales WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalized) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [scenarioId, row.symbol, row.qty, row.sellPrice, row.feeFlat, row.currency],
+        `INSERT INTO whatif_hypothetical_sales (scenario_id, symbol, qty, sell_price, fee_flat, currency, comment_text)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [scenarioId, row.symbol, row.qty, row.sellPrice, row.feeFlat, row.currency, row.comment],
       );
     }
     await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);

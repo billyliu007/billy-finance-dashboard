@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS whatif_hypothetical_purchases (
   qty NUMERIC(20, 8) NOT NULL,
   buy_price NUMERIC(20, 8) NOT NULL,
   currency TEXT,
+  comment_text TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -145,6 +146,7 @@ CREATE TABLE IF NOT EXISTS whatif_hypothetical_sales (
   sell_price NUMERIC(20, 8) NOT NULL,
   fee_flat NUMERIC(20, 8),
   currency TEXT,
+  comment_text TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

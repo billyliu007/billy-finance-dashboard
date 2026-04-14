@@ -1,6 +1,24 @@
 # External API v1 (consumer guide)
 
-This document describes the **read-only HTTP API** for accessing your own net worth, cash, holdings, and position transactions. All paths are relative to your **backend base URL** (for example `https://api.example.com` or `http://localhost:4000`).
+This document describes the **read-only HTTP API** for accessing your own net worth, cash, holdings, and position transactions. All paths are relative to your **backend base URL** — see [Base URL](#base-url) below.
+
+## Base URL
+
+Send API requests to the **backend** origin. The read API (`/api/v1/...`), token management (`/api/user/api-tokens`), and health check (`/api/health`) all live on that host. **Do not** use the web app URL as `$BASE` for scripts or integrations; the hosted frontend does not serve these API routes.
+
+| Environment | Base URL (`$BASE`, no trailing slash) | Notes |
+|-------------|--------------------------------------|--------|
+| **My Worth Track (production)** | `https://api.myworthtrack.com` | Use for all `curl`, server-side jobs, and mobile backends. |
+| **My Worth Track (web app)** | `https://app.myworthtrack.com` | Browser UI only — sign in and open **Settings** to create PATs. |
+| **Local development** | `http://localhost:4000` | Typical default; match your running backend port. |
+
+**Examples (production):**
+
+- Net worth: `https://api.myworthtrack.com/api/v1/me/net-worth`
+- Cash: `https://api.myworthtrack.com/api/v1/me/cash`
+- Create/list/revoke PATs: `https://api.myworthtrack.com/api/user/api-tokens`
+
+Self-hosted deployments use your own API hostname; see [`DEPLOYMENT.md`](../DEPLOYMENT.md) for environment variables such as `VITE_API_BASE_URL` and `FRONTEND_BASE_URL`.
 
 ## Status
 

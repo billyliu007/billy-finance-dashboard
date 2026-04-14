@@ -66,6 +66,7 @@ function stableInputsHash({ targetPrices = [], hypotheticalPurchases = [], hypot
       qty: numberOrZero(r?.qty),
       buyPrice: numberOrZero(r?.buyPrice),
       currency: toUpper(r?.currency || '') || null,
+      comment: String(r?.comment ?? '').trim(),
     }))
     .filter((r) => r.symbol && r.qty > 0 && r.buyPrice >= 0)
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -78,6 +79,7 @@ function stableInputsHash({ targetPrices = [], hypotheticalPurchases = [], hypot
       sellPrice: numberOrZero(r?.sellPrice),
       feeFlat: r?.feeFlat == null || r?.feeFlat === '' ? null : numberOrZero(r.feeFlat),
       currency: toUpper(r?.currency || '') || null,
+      comment: String(r?.comment ?? '').trim(),
     }))
     .filter((r) => r.symbol && r.qty > 0 && r.sellPrice >= 0);
 

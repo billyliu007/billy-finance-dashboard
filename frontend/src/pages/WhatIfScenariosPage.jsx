@@ -123,11 +123,11 @@ function targetSimulationCurrencyPrefix(currency) {
 }
 
 function emptyStockForm() {
-  return { query: '', selectedSymbol: '', qty: '', buyPrice: '' };
+  return { query: '', selectedSymbol: '', qty: '', buyPrice: '', comment: '' };
 }
 
 function emptyCryptoForm() {
-  return { query: '', selectedProductId: '', qty: '', buyPrice: '' };
+  return { query: '', selectedProductId: '', qty: '', buyPrice: '', comment: '' };
 }
 
 function inferAssetClass(row) {
@@ -369,11 +369,11 @@ function hypotheticalSellRowMetricsSequence(portfolioTableRows, buyRows, sellRow
 }
 
 function emptyStockSellForm() {
-  return { selectedSymbol: '', qty: '', sellPrice: '', sellPct: 0 };
+  return { selectedSymbol: '', qty: '', sellPrice: '', sellPct: 0, comment: '' };
 }
 
 function emptyCryptoSellForm() {
-  return { selectedSymbol: '', qty: '', sellPrice: '', sellPct: 0 };
+  return { selectedSymbol: '', qty: '', sellPrice: '', sellPct: 0, comment: '' };
 }
 
 function mapApiHypotheticalPurchasesToBuyRows(rows) {
@@ -384,6 +384,7 @@ function mapApiHypotheticalPurchasesToBuyRows(rows) {
     qty: row.qty,
     buyPrice: row.buyPrice,
     currency: String(row.currency || '').toUpperCase() || null,
+    comment: String(row.comment ?? '').trim(),
     ...(row.productId ? { productId: String(row.productId) } : {}),
   }));
 }
@@ -396,6 +397,7 @@ function mapApiHypotheticalSalesToSellRows(rows) {
     qty: row.qty,
     sellPrice: row.sellPrice,
     currency: String(row.currency || '').toUpperCase() || null,
+    comment: String(row.comment ?? '').trim(),
   }));
 }
 
@@ -426,6 +428,13 @@ function mapHypoBuyCsvHeaderToKey(normalized) {
     currency: 'currency',
     ccy: 'currency',
     quote: 'currency',
+    note: 'comment',
+    notes: 'comment',
+    memo: 'comment',
+    remark: 'comment',
+    remarks: 'comment',
+    line_comment: 'comment',
+    comment: 'comment',
   };
   return map[normalized] || null;
 }
@@ -488,8 +497,8 @@ function normalizeHypoBuyCsvAssetClass(raw) {
 }
 
 /**
- * Parses simulated-buy bulk CSV/TSV. Header row required: assetClass, symbol, qty, buyPrice; currency optional.
- * @returns {{ ok: true, rows: Array<{ assetClass: string, symbol: string, qty: number, buyPrice: number, currency: string }> } | { ok: false, messageKey: string, vars: Record<string, string|number> }}
+ * Parses simulated-buy bulk CSV/TSV. Header row required: assetClass, symbol, qty, buyPrice; currency and comment optional.
+ * @returns {{ ok: true, rows: Array<{ assetClass: string, symbol: string, qty: number, buyPrice: number, currency: string, comment: string }> } | { ok: false, messageKey: string, vars: Record<string, string|number> }}
  */
 function parseHypotheticalBuyCsv(text) {
   const raw = String(text || '').replace(/^\uFEFF/, '');
@@ -539,7 +548,102 @@ function parseHypotheticalBuyCsv(text) {
     if (assetClass === 'stock') {
       currency = 'USD';
     }
-    rows.push({ assetClass, symbol, qty, buyPrice, currency });
+    let comment = '';
+    if (col.comment != null) {
+      comment = String(cells[col.comment] ?? '').trim();
+    }
+    rows.push({ assetClass, symbol, qty, buyPrice, currency, comment });
+  }
+  if (rows.length === 0) {
+    return { ok: false, messageKey: 'whatif.hypoBuyCsvErrNoValidRows', vars: {} };
+  }
+  return { ok: true, rows };
+}
+
+function mapHypoSellCsvHeaderToKey(normalized) {
+  const map = {
+    assetclass: 'assetClass',
+    type: 'assetClass',
+    asset_type: 'assetClass',
+    class: 'assetClass',
+    symbol: 'symbol',
+    ticker: 'symbol',
+    qty: 'qty',
+    quantity: 'qty',
+    sellprice: 'sellPrice',
+    sell_price: 'sellPrice',
+    price: 'sellPrice',
+    currency: 'currency',
+    ccy: 'currency',
+    quote: 'currency',
+    note: 'comment',
+    notes: 'comment',
+    memo: 'comment',
+    remark: 'comment',
+    remarks: 'comment',
+    line_comment: 'comment',
+    comment: 'comment',
+  };
+  return map[normalized] || null;
+}
+
+/**
+ * Parses simulated-sell bulk CSV/TSV. Header row required: assetClass, symbol, qty, sellPrice; currency and comment optional.
+ * @returns {{ ok: true, rows: Array<{ assetClass: string, symbol: string, qty: number, sellPrice: number, currency: string, comment: string }> } | { ok: false, messageKey: string, vars: Record<string, string|number> }}
+ */
+function parseHypotheticalSellCsv(text) {
+  const raw = String(text || '').replace(/^\uFEFF/, '');
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length < 2) {
+    return { ok: false, messageKey: 'whatif.hypoBuyCsvErrNeedRows', vars: {} };
+  }
+  const delim = detectHypoBuyCsvDelimiter(lines[0]);
+  const headerCells = splitHypoBuyCsvLine(lines[0], delim).map(normalizeHypoBuyCsvHeaderCell);
+  const col = {};
+  for (let i = 0; i < headerCells.length; i++) {
+    const key = mapHypoSellCsvHeaderToKey(headerCells[i]);
+    if (key) col[key] = i;
+  }
+  const required = ['assetClass', 'symbol', 'qty', 'sellPrice'];
+  for (const req of required) {
+    if (col[req] == null) {
+      return { ok: false, messageKey: 'whatif.hypoSellCsvErrMissingHeader', vars: { field: req } };
+    }
+  }
+  const rows = [];
+  for (let li = 1; li < lines.length; li++) {
+    const lineNo = li + 1;
+    const cells = splitHypoBuyCsvLine(lines[li], delim);
+    const assetClass = normalizeHypoBuyCsvAssetClass(cells[col.assetClass] ?? '');
+    const symbol = normalizeText(cells[col.symbol] ?? '').toUpperCase();
+    const qty = num(cells[col.qty]);
+    const sellPrice = num(cells[col.sellPrice]);
+    let currency = col.currency != null ? String(cells[col.currency] ?? '').trim() : '';
+    currency = currency.toUpperCase() || 'USD';
+
+    if (!assetClass) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrBadAssetClass', vars: { line: lineNo } };
+    }
+    if (!symbol) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrBadSymbol', vars: { line: lineNo } };
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return { ok: false, messageKey: 'whatif.hypoBuyCsvErrBadQty', vars: { line: lineNo } };
+    }
+    if (!Number.isFinite(sellPrice) || sellPrice < 0) {
+      return { ok: false, messageKey: 'whatif.hypoSellCsvErrBadPrice', vars: { line: lineNo } };
+    }
+    if (assetClass === 'stock') {
+      currency = 'USD';
+    }
+    let comment = '';
+    if (col.comment != null) {
+      comment = String(cells[col.comment] ?? '').trim();
+    }
+    rows.push({ assetClass, symbol, qty, sellPrice, currency, comment });
   }
   if (rows.length === 0) {
     return { ok: false, messageKey: 'whatif.hypoBuyCsvErrNoValidRows', vars: {} };
@@ -594,6 +698,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [hypoBuyCryptoModalOpen, setHypoBuyCryptoModalOpen] = useState(false);
   const [hypoBuyCsvModalOpen, setHypoBuyCsvModalOpen] = useState(false);
   const hypoBuyMenuWrapRef = useRef(null);
+  const [hypoSellCsvText, setHypoSellCsvText] = useState('');
+  const [hypoSellCsvModalOpen, setHypoSellCsvModalOpen] = useState(false);
   const [hypoSellAddMenuOpen, setHypoSellAddMenuOpen] = useState(false);
   const [hypoSellStockModalOpen, setHypoSellStockModalOpen] = useState(false);
   const [hypoSellCryptoModalOpen, setHypoSellCryptoModalOpen] = useState(false);
@@ -644,6 +750,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setHypoBuyStockModalOpen(false);
     setHypoBuyCryptoModalOpen(false);
     setHypoBuyCsvModalOpen(false);
+    setHypoSellCsvText('');
+    setHypoSellCsvModalOpen(false);
     setHypoSellAddMenuOpen(false);
     setHypoSellStockModalOpen(false);
     setHypoSellCryptoModalOpen(false);
@@ -672,6 +780,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           row?.assetClass === 'stock'
             ? 'USD'
             : String(row?.currency || '').trim().toUpperCase() || 'USD',
+        comment: String(row?.comment ?? '').trim() || null,
       }))
       .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0)
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -686,6 +795,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           row?.assetClass === 'stock'
             ? 'USD'
             : String(row?.currency || '').trim().toUpperCase() || 'USD',
+        comment: String(row?.comment ?? '').trim() || null,
       }))
       .filter((row) => row.symbol && row.qty > 0 && row.sellPrice >= 0);
 
@@ -1261,6 +1371,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           qty: num(row.qty),
           buyPrice: num(row.buyPrice),
           currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
+          comment: String(row.comment ?? '').trim() || null,
         }))
         .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0);
 
@@ -1271,6 +1382,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           sellPrice: num(row.sellPrice),
           feeFlat: null,
           currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
+          comment: String(row.comment ?? '').trim() || null,
         }))
         .filter((row) => row.symbol && row.qty > 0 && row.sellPrice >= 0);
 
@@ -1448,7 +1560,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
       !hypoBuyCryptoModalOpen &&
       !hypoBuyCsvModalOpen &&
       !hypoSellStockModalOpen &&
-      !hypoSellCryptoModalOpen
+      !hypoSellCryptoModalOpen &&
+      !hypoSellCsvModalOpen
     )
       return;
     function onKey(e) {
@@ -1458,6 +1571,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         setHypoBuyCsvModalOpen(false);
         setHypoSellStockModalOpen(false);
         setHypoSellCryptoModalOpen(false);
+        setHypoSellCsvModalOpen(false);
       }
     }
     document.addEventListener('keydown', onKey);
@@ -1468,6 +1582,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
     hypoBuyCsvModalOpen,
     hypoSellStockModalOpen,
     hypoSellCryptoModalOpen,
+    hypoSellCsvModalOpen,
   ]);
 
   async function saveAfterHypotheticalChange(nextBuyRows, nextSellRows) {
@@ -1587,6 +1702,34 @@ export default function WhatIfScenariosPage({ hideValues }) {
     });
   }
 
+  function updateHypotheticalBuyComment(index, comment) {
+    const trimmed = String(comment ?? '').trim();
+    setBuyRows((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const prevRow = prev[index];
+      if (String(prevRow?.comment ?? '').trim() === trimmed) return prev;
+      const next = prev.map((row, i) => (i === index ? { ...row, comment: trimmed } : row));
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(next, sellRowsRef.current);
+      });
+      return next;
+    });
+  }
+
+  function updateHypotheticalSellComment(index, comment) {
+    const trimmed = String(comment ?? '').trim();
+    setSellRows((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const prevRow = prev[index];
+      if (String(prevRow?.comment ?? '').trim() === trimmed) return prev;
+      const next = prev.map((row, i) => (i === index ? { ...row, comment: trimmed } : row));
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(buyRowsRef.current, next);
+      });
+      return next;
+    });
+  }
+
   function addStockHypotheticalBuyToList() {
     const symbol = normalizeText(stockForm.selectedSymbol).toUpperCase();
     const qty = num(stockForm.qty);
@@ -1607,14 +1750,22 @@ export default function WhatIfScenariosPage({ hideValues }) {
     setBuyRows((prev) => {
       const next = [
         ...prev,
-        { id: `stock-${Date.now()}`, assetClass: 'stock', symbol, qty, buyPrice, currency: 'USD' },
+        {
+          id: `stock-${Date.now()}`,
+          assetClass: 'stock',
+          symbol,
+          qty,
+          buyPrice,
+          currency: 'USD',
+          comment: String(stockForm.comment || '').trim(),
+        },
       ];
       queueMicrotask(() => {
         void saveAfterHypotheticalChange(next, sellRowsRef.current);
       });
       return next;
     });
-    setStockForm((prev) => ({ ...prev, qty: '', buyPrice: '' }));
+    setStockForm((prev) => ({ ...prev, qty: '', buyPrice: '', comment: '' }));
     requestAnimationFrame(() => stockHypotheticalQtyRef.current?.focus?.());
     return true;
   }
@@ -1652,6 +1803,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           buyPrice,
           currency: String(selected.quoteCurrency || 'USD').toUpperCase(),
           productId: selected.productId,
+          comment: String(cryptoForm.comment || '').trim(),
         },
       ];
       queueMicrotask(() => {
@@ -1659,7 +1811,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       });
       return next;
     });
-    setCryptoForm((prev) => ({ ...prev, qty: '', buyPrice: '' }));
+    setCryptoForm((prev) => ({ ...prev, qty: '', buyPrice: '', comment: '' }));
     requestAnimationFrame(() => cryptoHypotheticalQtyRef.current?.focus?.());
     return true;
   }
@@ -1686,6 +1838,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         qty: r.qty,
         buyPrice: r.buyPrice,
         currency: r.currency,
+        comment: String(r.comment || '').trim(),
       }));
       const next = [...prev, ...appended];
       queueMicrotask(() => {
@@ -1694,6 +1847,35 @@ export default function WhatIfScenariosPage({ hideValues }) {
       return next;
     });
     setHypoBuyCsvText('');
+    return true;
+  }
+
+  function importHypotheticalSellsFromCsv() {
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return false;
+    const parsed = parseHypotheticalSellCsv(hypoSellCsvText);
+    if (!parsed.ok) {
+      setError(t(parsed.messageKey, parsed.vars));
+      return false;
+    }
+    setError('');
+    const baseTs = Date.now();
+    setSellRows((prev) => {
+      const appended = parsed.rows.map((r, i) => ({
+        id: `sell-csv-${baseTs}-${i}`,
+        assetClass: r.assetClass,
+        symbol: r.symbol,
+        qty: r.qty,
+        sellPrice: r.sellPrice,
+        currency: r.currency,
+        comment: String(r.comment || '').trim(),
+      }));
+      const next = [...prev, ...appended];
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(buyRowsRef.current, next);
+      });
+      return next;
+    });
+    setHypoSellCsvText('');
     return true;
   }
 
@@ -1772,6 +1954,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         selectedSymbol: sym,
         qty: '',
         buyPrice: '',
+        comment: '',
       });
       setHypoBuyStockModalOpen(true);
       return;
@@ -1782,6 +1965,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       selectedProductId: pid,
       qty: '',
       buyPrice: '',
+      comment: '',
     });
     setHypoBuyCryptoModalOpen(true);
   }
@@ -1803,6 +1987,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         sellPct: 0,
         qty: '',
         sellPrice: priceStr,
+        comment: '',
       });
       setHypoSellStockModalOpen(true);
       return;
@@ -1812,6 +1997,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       sellPct: 0,
       qty: '',
       sellPrice: priceStr,
+      comment: '',
     });
     setHypoSellCryptoModalOpen(true);
   }
@@ -1853,6 +2039,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           qty,
           sellPrice,
           currency: 'USD',
+          comment: String(stockSellForm.comment || '').trim(),
         },
       ];
       queueMicrotask(() => {
@@ -1860,7 +2047,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       });
       return next;
     });
-    setStockSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0 }));
+    setStockSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0, comment: '' }));
     requestAnimationFrame(() => stockSellQtyRef.current?.focus?.());
     return true;
   }
@@ -1899,6 +2086,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           qty,
           sellPrice,
           currency,
+          comment: String(cryptoSellForm.comment || '').trim(),
         },
       ];
       queueMicrotask(() => {
@@ -1906,7 +2094,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       });
       return next;
     });
-    setCryptoSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0 }));
+    setCryptoSellForm((prev) => ({ ...prev, qty: '', sellPrice: '', sellPct: 0, comment: '' }));
     requestAnimationFrame(() => cryptoSellQtyRef.current?.focus?.());
     return true;
   }
@@ -2498,6 +2686,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                 <th scope="col">{t('portfolio.quantity')}</th>
                                                 <th scope="col">{t('modals.avgCostPerUnit')}</th>
                                                 <th scope="col">{t('portfolio.totalCostBasis')}</th>
+                                                <th scope="col">{t('whatif.hypoLineCommentLabel')}</th>
                                                 <th
                                                   className="whatIfHypoNestedLinesTableActionsCol"
                                                   scope="col"
@@ -2532,6 +2721,20 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                         {hideValues
                                                           ? '—'
                                                           : formatCurrencyValue(lineCost, quoteCcy)}
+                                                      </td>
+                                                      <td data-label={t('whatif.hypoLineCommentLabel')}>
+                                                        <textarea
+                                                          className="modalInput whatIfHypoLineCommentInput"
+                                                          rows={2}
+                                                          defaultValue={r.comment || ''}
+                                                          key={`${r.id}-${index}-buy-cmt`}
+                                                          placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                                                          aria-label={t('whatif.hypoLineCommentLabel')}
+                                                          onBlur={(e) =>
+                                                            updateHypotheticalBuyComment(index, e.target.value)
+                                                          }
+                                                          disabled={isPersistingInputs}
+                                                        />
                                                       </td>
                                                       <td data-label={t('modals.remove')}>
                                                         <button
@@ -2719,6 +2922,21 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                   </strong>
                                                 </div>
                                               </div>
+                                              <label className="modalLabel whatIfHypoLineCommentMobileLabel">
+                                                {t('whatif.hypoLineCommentLabel')}
+                                                <textarea
+                                                  className="modalInput whatIfHypoLineCommentInput"
+                                                  rows={2}
+                                                  defaultValue={r.comment || ''}
+                                                  key={`${r.id}-${index}-buy-cmt-m`}
+                                                  placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                                                  aria-label={t('whatif.hypoLineCommentLabel')}
+                                                  onBlur={(e) =>
+                                                    updateHypotheticalBuyComment(index, e.target.value)
+                                                  }
+                                                  disabled={isPersistingInputs}
+                                                />
+                                              </label>
                                             </div>
                                           );
                                         })}
@@ -2793,6 +3011,17 @@ export default function WhatIfScenariosPage({ hideValues }) {
                               }}
                             >
                               {t('whatif.hypoSellMenuCrypto')}
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="whatIfHypoAddMenuItem"
+                              onClick={() => {
+                                setHypoSellAddMenuOpen(false);
+                                setHypoSellCsvModalOpen(true);
+                              }}
+                            >
+                              {t('whatif.hypoSellMenuCsv')}
                             </button>
                           </div>
                         )}
@@ -2926,6 +3155,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                 <th scope="col">{t('modals.historyTableSaleAmount')}</th>
                                                 <th scope="col">{t('modals.historyTableRealizedPl')}</th>
                                                 <th scope="col">{t('modals.historyTableRealizedReturn')}</th>
+                                                <th scope="col">{t('whatif.hypoLineCommentLabel')}</th>
                                                 <th
                                                   className="whatIfHypoNestedLinesTableActionsCol"
                                                   scope="col"
@@ -2981,6 +3211,20 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                         className={linePlPos ? 'whatIfHypoAggPlPos' : 'whatIfHypoAggPlNeg'}
                                                       >
                                                         {hideValues ? '—' : formatPercent(realizedPct)}
+                                                      </td>
+                                                      <td data-label={t('whatif.hypoLineCommentLabel')}>
+                                                        <textarea
+                                                          className="modalInput whatIfHypoLineCommentInput"
+                                                          rows={2}
+                                                          defaultValue={r.comment || ''}
+                                                          key={`${r.id}-${index}-sell-cmt`}
+                                                          placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                                                          aria-label={t('whatif.hypoLineCommentLabel')}
+                                                          onBlur={(e) =>
+                                                            updateHypotheticalSellComment(index, e.target.value)
+                                                          }
+                                                          disabled={isPersistingInputs}
+                                                        />
                                                       </td>
                                                       <td data-label={t('modals.remove')}>
                                                         <button
@@ -3200,6 +3444,21 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                   </strong>
                                                 </div>
                                               </div>
+                                              <label className="modalLabel whatIfHypoLineCommentMobileLabel">
+                                                {t('whatif.hypoLineCommentLabel')}
+                                                <textarea
+                                                  className="modalInput whatIfHypoLineCommentInput"
+                                                  rows={2}
+                                                  defaultValue={r.comment || ''}
+                                                  key={`${r.id}-${index}-sell-cmt-m`}
+                                                  placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                                                  aria-label={t('whatif.hypoLineCommentLabel')}
+                                                  onBlur={(e) =>
+                                                    updateHypotheticalSellComment(index, e.target.value)
+                                                  }
+                                                  disabled={isPersistingInputs}
+                                                />
+                                              </label>
                                             </div>
                                           );
                                         })}
@@ -4241,6 +4500,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             />
                           </label>
                         </div>
+                        <label className="modalLabel">
+                          {t('whatif.hypoModalCommentOptional')}
+                          <textarea
+                            className="modalInput whatIfHypoLineCommentInput"
+                            rows={2}
+                            value={stockForm.comment}
+                            onChange={(e) =>
+                              setStockForm((prev) => ({ ...prev, comment: e.target.value }))
+                            }
+                            placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                          />
+                        </label>
                       </div>
                       <footer className="modalFooter whatIfHypoBuyModalFooter">
                         <button
@@ -4377,6 +4648,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             />
                           </label>
                         </div>
+                        <label className="modalLabel">
+                          {t('whatif.hypoModalCommentOptional')}
+                          <textarea
+                            className="modalInput whatIfHypoLineCommentInput"
+                            rows={2}
+                            value={cryptoForm.comment}
+                            onChange={(e) =>
+                              setCryptoForm((prev) => ({ ...prev, comment: e.target.value }))
+                            }
+                            placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                          />
+                        </label>
                       </div>
                       <footer className="modalFooter whatIfHypoBuyModalFooter">
                         <button
@@ -4480,6 +4763,76 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
                 )}
 
+                {hypoSellCsvModalOpen && (
+                  <div
+                    className="modalOverlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="hypo-sell-csv-modal-title"
+                  >
+                    <section className="modalCard modalCard--wide whatIfHypoBuyModalCard whatIfHypoBuyModalCard--csv">
+                      <header className="modalHeader">
+                        <h2 id="hypo-sell-csv-modal-title">{t('whatif.hypoSellCsvTitle')}</h2>
+                        <button
+                          type="button"
+                          className="modalCloseBtn"
+                          aria-label={t('modals.close')}
+                          onClick={() => setHypoSellCsvModalOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </header>
+                      <div className="modalBody">
+                        <p className="whatIfCsvHelp">{t('whatif.hypoSellCsvHelp')}</p>
+                        <label className="modalLabel">
+                          {t('whatif.hypoSellCsvLabel')}
+                          <textarea
+                            className="whatIfCsvTextarea whatIfHypoBuyCsvTextarea"
+                            value={hypoSellCsvText}
+                            onChange={(e) => setHypoSellCsvText(e.target.value)}
+                            placeholder={t('whatif.hypoSellCsvPlaceholder')}
+                            spellCheck={false}
+                            rows={8}
+                            disabled={isBusy || isPersistingInputs}
+                          />
+                        </label>
+                      </div>
+                      <footer className="modalFooter whatIfHypoBuyModalFooter">
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoSellCsvModalOpen(false)}
+                        >
+                          {t('modals.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn secondary"
+                          onClick={() => setHypoSellCsvText('')}
+                          disabled={isBusy || isPersistingInputs || !hypoSellCsvText.trim()}
+                        >
+                          {t('whatif.hypoBuyCsvClear')}
+                        </button>
+                        <button
+                          type="button"
+                          className="modalBtn"
+                          onClick={() => {
+                            if (importHypotheticalSellsFromCsv()) setHypoSellCsvModalOpen(false);
+                          }}
+                          disabled={
+                            isBusy ||
+                            isPersistingInputs ||
+                            !String(hypoSellCsvText || '').trim() ||
+                            !activeScenarioId
+                          }
+                        >
+                          {t('whatif.hypoSellCsvImport')}
+                        </button>
+                      </footer>
+                    </section>
+                  </div>
+                )}
+
                 {hypoSellStockModalOpen && (
                   <div
                     className="modalOverlay"
@@ -4522,6 +4875,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   qty: '',
                                   sellPrice: '',
                                   sellPct: 0,
+                                  comment: '',
                                 }));
                                 return;
                               }
@@ -4533,6 +4887,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 sellPct: 0,
                                 qty: '',
                                 sellPrice: priceStr,
+                                comment: '',
                               }));
                             }}
                           >
@@ -4633,6 +4988,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             />
                           </label>
                         </div>
+                        <label className="modalLabel">
+                          {t('whatif.hypoModalCommentOptional')}
+                          <textarea
+                            className="modalInput whatIfHypoLineCommentInput"
+                            rows={2}
+                            value={stockSellForm.comment}
+                            onChange={(e) =>
+                              setStockSellForm((prev) => ({ ...prev, comment: e.target.value }))
+                            }
+                            placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                          />
+                        </label>
                       </div>
                       <footer className="modalFooter whatIfHypoBuyModalFooter">
                         <button
@@ -4707,6 +5074,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   qty: '',
                                   sellPrice: '',
                                   sellPct: 0,
+                                  comment: '',
                                 }));
                                 return;
                               }
@@ -4718,6 +5086,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 sellPct: 0,
                                 qty: '',
                                 sellPrice: priceStr,
+                                comment: '',
                               }));
                             }}
                           >
@@ -4818,6 +5187,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             />
                           </label>
                         </div>
+                        <label className="modalLabel">
+                          {t('whatif.hypoModalCommentOptional')}
+                          <textarea
+                            className="modalInput whatIfHypoLineCommentInput"
+                            rows={2}
+                            value={cryptoSellForm.comment}
+                            onChange={(e) =>
+                              setCryptoSellForm((prev) => ({ ...prev, comment: e.target.value }))
+                            }
+                            placeholder={t('whatif.hypoLineCommentPlaceholder')}
+                          />
+                        </label>
                       </div>
                       <footer className="modalFooter whatIfHypoBuyModalFooter">
                         <button

@@ -528,6 +528,22 @@
   );
 }
 
+.whatIfHypoLineCommentInput {
+  width: 100%;
+  min-height: 2.75rem;
+  resize: vertical;
+  font: inherit;
+}
+
+.whatIfHypoLineCommentMobileLabel {
+  margin-top: 0.5rem;
+}
+
+.whatIfHypoNestedLinesTable .whatIfHypoLineCommentInput {
+  min-width: 8rem;
+  max-width: 18rem;
+}
+
 .whatIfHypoSellModalCard .modalRange {
   accent-color: rgba(251, 146, 60, 0.95);
 }

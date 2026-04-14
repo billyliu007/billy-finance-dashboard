@@ -335,10 +335,13 @@ export function buildScenarioSnapshotPrompt({
   } else {
     for (const b of hypotheticalPurchases) {
       const cur = b?.currency ? String(b.currency).toUpperCase() : '';
+      const cmt = String(b?.comment ?? '').trim();
+      const cmtSuffix =
+        cmt.length > 0 ? (isZh ? ` | 备注=${cmt}` : ` | comment=${cmt}`) : '';
       lines.push(
         isZh
-          ? `- ${b?.symbol ?? 'N/A'} | 数量=${formatNumber(b?.qty, { maxFrac: 8 })} | 买入价=${formatNumber(b?.buyPrice)} ${cur || 'USD'}`
-          : `- ${b?.symbol ?? 'N/A'} | qty=${formatNumber(b?.qty, { maxFrac: 8 })} | buyPrice=${formatNumber(b?.buyPrice)} ${cur || 'USD'}`
+          ? `- ${b?.symbol ?? 'N/A'} | 数量=${formatNumber(b?.qty, { maxFrac: 8 })} | 买入价=${formatNumber(b?.buyPrice)} ${cur || 'USD'}${cmtSuffix}`
+          : `- ${b?.symbol ?? 'N/A'} | qty=${formatNumber(b?.qty, { maxFrac: 8 })} | buyPrice=${formatNumber(b?.buyPrice)} ${cur || 'USD'}${cmtSuffix}`
       );
     }
   }
@@ -356,10 +359,13 @@ export function buildScenarioSnapshotPrompt({
           : isZh
             ? '—'
             : '—';
+      const cmt = String(s?.comment ?? '').trim();
+      const cmtSuffix =
+        cmt.length > 0 ? (isZh ? ` | 备注=${cmt}` : ` | comment=${cmt}`) : '';
       lines.push(
         isZh
-          ? `- ${s?.symbol ?? 'N/A'} | 数量=${formatNumber(s?.qty, { maxFrac: 8 })} | 卖出价=${formatNumber(s?.sellPrice)} ${cur || 'USD'} | 固定费用=${fee} ${cur || 'USD'}`
-          : `- ${s?.symbol ?? 'N/A'} | qty=${formatNumber(s?.qty, { maxFrac: 8 })} | sellPrice=${formatNumber(s?.sellPrice)} ${cur || 'USD'} | feeFlat=${fee} ${cur || 'USD'}`
+          ? `- ${s?.symbol ?? 'N/A'} | 数量=${formatNumber(s?.qty, { maxFrac: 8 })} | 卖出价=${formatNumber(s?.sellPrice)} ${cur || 'USD'} | 固定费用=${fee} ${cur || 'USD'}${cmtSuffix}`
+          : `- ${s?.symbol ?? 'N/A'} | qty=${formatNumber(s?.qty, { maxFrac: 8 })} | sellPrice=${formatNumber(s?.sellPrice)} ${cur || 'USD'} | feeFlat=${fee} ${cur || 'USD'}${cmtSuffix}`
       );
     }
   }
