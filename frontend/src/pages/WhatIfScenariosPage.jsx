@@ -4,7 +4,6 @@ import {
   BarChart,
   CartesianGrid,
   LabelList,
-  Legend,
   Rectangle,
   ResponsiveContainer,
   Tooltip,
@@ -2115,6 +2114,10 @@ export default function WhatIfScenariosPage({ hideValues }) {
         const scenarioWeight2 = dual ? Number(row.scenarioWeightPct2) || 0 : 0;
         const baselineW = Number(row.baselineWeightPct) || 0;
         const currency = String(row.currency || 'USD').trim() || 'USD';
+        const baselineQty = num(row.baselineQty);
+        const baselineCostBasis = num(row.baselineCostBasis);
+        const baselineAvgCost = baselineQty > 1e-12 ? baselineCostBasis / baselineQty : 0;
+        const scenarioAvgCost = num(row.avgCost);
         return {
           name: String(row.symbol || ''),
           baselineWeight: baselineW,
@@ -2128,6 +2131,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
           scenarioPrice2,
           scenarioValue2,
           currency,
+          baselineQty,
+          baselineAvgCost,
+          scenarioAvgCost,
         };
       });
   }, [results]);
@@ -4184,14 +4190,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <div className="whatIfWeightChartCard">
                         <h3 className="whatIfWeightChartTitle">{t('whatif.weightChartCombinedTitle')}</h3>
                         <div className="whatIfWeightChartArea whatIfWeightChartArea--vertical">
-                          <ResponsiveContainer width="100%" height={340}>
-                            <BarChart
-                              data={weightChartRows}
-                              margin={{ top: 28, right: 8, left: 0, bottom: 4 }}
-                              barCategoryGap="14%"
-                              barGap={4}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                          <div className="whatIfWeightChartPlot">
+                            <ResponsiveContainer width="100%" height={340}>
+                              <BarChart
+                                data={weightChartRows}
+                                margin={{ top: 28, right: 8, left: 0, bottom: 4 }}
+                                barCategoryGap="14%"
+                                barGap={4}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                               <XAxis
                                 dataKey="name"
                                 tick={{ fill: '#cbd5e1', fontSize: 11 }}
@@ -4278,10 +4285,30 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                         </>
                                       ) : null}
                                       <p className="whatIfScenarioWeightTooltipRow whatIfScenarioWeightTooltipRow--divider">
+                                        <span>{t('whatif.weightTooltipBaselineQty')}</span>
+                                        <span>{hideValues ? '—' : formatQty(p.baselineQty)}</span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow">
+                                        <span>{t('whatif.weightTooltipBaselineAvgCost')}</span>
+                                        <span>
+                                          {hideValues || !(p.baselineQty > 1e-12)
+                                            ? '—'
+                                            : formatCurrencyValue(p.baselineAvgCost, p.currency)}
+                                        </span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow">
                                         <span>{t('whatif.weightTooltipScenarioQty')}</span>
                                         <span>{hideValues ? '—' : formatQty(p.scenarioQty)}</span>
                                       </p>
                                       <p className="whatIfScenarioWeightTooltipRow">
+                                        <span>{t('whatif.weightTooltipScenarioAvgCost')}</span>
+                                        <span>
+                                          {hideValues || !(p.scenarioQty > 1e-12)
+                                            ? '—'
+                                            : formatCurrencyValue(p.scenarioAvgCost, p.currency)}
+                                        </span>
+                                      </p>
+                                      <p className="whatIfScenarioWeightTooltipRow whatIfScenarioWeightTooltipRow--divider">
                                         <span>
                                           {t(
                                             hasSecondaryTargetPrices
@@ -4328,12 +4355,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     </div>
                                   );
                                 }}
-                              />
-                              <Legend
-                                wrapperStyle={{ paddingTop: 6, color: 'var(--text-dim)', fontSize: 12 }}
-                                formatter={(value) => value}
-                                iconType="square"
-                                iconSize={10}
                               />
                               <Bar
                                 name={t('whatif.weightLegendBaseline')}
@@ -4390,7 +4411,86 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 </Bar>
                               ) : null}
                             </BarChart>
-                          </ResponsiveContainer>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="whatIfWeightChartLegendFooter">
+                            <div className="whatIfWeightChartSeriesKeys" aria-label={t('whatif.weightSeriesColorKey')}>
+                              <span className="whatIfWeightChartSeriesKeyItem">
+                                <i
+                                  className="whatIfWeightChartSeriesSwatch whatIfWeightChartSeriesSwatch--baseline"
+                                  aria-hidden="true"
+                                />
+                                {t('whatif.weightLegendBaseline')}
+                              </span>
+                              <span className="whatIfWeightChartSeriesKeyItem">
+                                <i
+                                  aria-hidden="true"
+                                  className={`whatIfWeightChartSeriesSwatch ${
+                                    hasSecondaryTargetPrices
+                                      ? 'whatIfWeightChartSeriesSwatch--scenario1'
+                                      : 'whatIfWeightChartSeriesSwatch--scenario'
+                                  }`}
+                                />
+                                {hasSecondaryTargetPrices
+                                  ? t('whatif.weightLegendScenarioTarget1')
+                                  : t('whatif.weightLegendScenario')}
+                              </span>
+                              {hasSecondaryTargetPrices ? (
+                                <span className="whatIfWeightChartSeriesKeyItem">
+                                  <i
+                                    className="whatIfWeightChartSeriesSwatch whatIfWeightChartSeriesSwatch--scenario2"
+                                    aria-hidden="true"
+                                  />
+                                  {t('whatif.weightLegendScenarioTarget2')}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="whatIfWeightChartAssetLegendCaption">{t('whatif.weightAssetLegendCaption')}</p>
+                            <div className="whatIfWeightChartAssetLegendScroll">
+                              <table className="whatIfWeightChartAssetLegendTable">
+                                <thead>
+                                  <tr>
+                                    <th scope="col">{t('portfolio.asset')}</th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableBaselineQty')}
+                                    </th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableBaselineAvg')}
+                                    </th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableScenarioQty')}
+                                    </th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableScenarioAvg')}
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {weightChartRows.map((r) => (
+                                    <tr key={r.name}>
+                                      <th scope="row">{r.name}</th>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues ? '—' : formatQty(r.baselineQty)}
+                                      </td>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues || !(r.baselineQty > 1e-12)
+                                          ? '—'
+                                          : formatCurrencyValue(r.baselineAvgCost, r.currency)}
+                                      </td>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues ? '—' : formatQty(r.scenarioQty)}
+                                      </td>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues || !(r.scenarioQty > 1e-12)
+                                          ? '—'
+                                          : formatCurrencyValue(r.scenarioAvgCost, r.currency)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}

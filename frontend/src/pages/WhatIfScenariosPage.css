@@ -1522,7 +1522,111 @@
 
 .whatIfWeightChartArea--vertical {
   min-height: 300px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.whatIfWeightChartPlot {
+  flex: 0 0 auto;
+  width: 100%;
   height: 340px;
+}
+
+.whatIfWeightChartLegendFooter {
+  flex: 0 0 auto;
+  width: 100%;
+  padding-top: 2px;
+}
+
+.whatIfWeightChartSeriesKeys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.whatIfWeightChartSeriesKeyItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.whatIfWeightChartSeriesSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.whatIfWeightChartSeriesSwatch--baseline {
+  background: rgba(56, 189, 248, 0.35);
+}
+
+.whatIfWeightChartSeriesSwatch--scenario {
+  background: rgba(94, 234, 212, 0.52);
+}
+
+.whatIfWeightChartSeriesSwatch--scenario1 {
+  background: rgba(94, 234, 212, 0.52);
+}
+
+.whatIfWeightChartSeriesSwatch--scenario2 {
+  background: rgba(167, 139, 250, 0.55);
+}
+
+.whatIfWeightChartAssetLegendCaption {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.whatIfWeightChartAssetLegendScroll {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.whatIfWeightChartAssetLegendTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+}
+
+.whatIfWeightChartAssetLegendTable th,
+.whatIfWeightChartAssetLegendTable td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.55);
+}
+
+.whatIfWeightChartAssetLegendTable thead th {
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.65);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.whatIfWeightChartAssetLegendTable tbody tr:last-child th,
+.whatIfWeightChartAssetLegendTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.whatIfWeightChartAssetLegendTableNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .whatIfWeightChartsEmpty {
