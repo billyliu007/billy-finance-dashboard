@@ -4407,12 +4407,40 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 <thead>
                                   <tr>
                                     <th scope="col">{t('portfolio.asset')}</th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableBaselineQty')}
+                                    </th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableBaselineAvg')}
+                                    </th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableScenarioQty')}
+                                    </th>
+                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
+                                      {t('whatif.weightLegendTableScenarioAvg')}
+                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {weightChartRows.map((r) => (
                                     <tr key={r.name}>
                                       <th scope="row">{r.name}</th>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues ? '—' : formatQty(r.baselineQty)}
+                                      </td>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues || !(r.baselineQty > 1e-12)
+                                          ? '—'
+                                          : formatCurrencyValue(r.baselineAvgCost, r.currency)}
+                                      </td>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues ? '—' : formatQty(r.scenarioQty)}
+                                      </td>
+                                      <td className="whatIfWeightChartAssetLegendTableNum">
+                                        {hideValues || !(r.scenarioQty > 1e-12)
+                                          ? '—'
+                                          : formatCurrencyValue(r.scenarioAvgCost, r.currency)}
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
