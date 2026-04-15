@@ -591,8 +591,7 @@ export const translations = {
       weightTooltipBaselineAvgCost: 'Baseline avg cost / unit',
       weightTooltipScenarioAvgCost: 'Scenario avg cost / unit',
       weightSeriesColorKey: 'Chart bar colors',
-      weightAssetLegendCaption:
-        'Per-asset quantity and average cost (baseline = live holdings; scenario = simulated book).',
+      weightAssetLegendCaption: 'Symbols in the same order as the bars above (details are in simulated buy/sell lines).',
       weightLegendTableBaselineQty: 'Base qty',
       weightLegendTableBaselineAvg: 'Base avg',
       weightLegendTableScenarioQty: 'Scenario qty',
@@ -1211,7 +1210,7 @@ export const translations = {
       weightTooltipBaselineAvgCost: '基线单位成本',
       weightTooltipScenarioAvgCost: '方案单位成本',
       weightSeriesColorKey: '柱状图颜色说明',
-      weightAssetLegendCaption: '各标的数量与单位均价（基线为当前持仓；方案为模拟后账面）。',
+      weightAssetLegendCaption: '与上方柱状顺序一致的标的（数量与均价见各笔模拟买卖明细）。',
       weightLegendTableBaselineQty: '基线数量',
       weightLegendTableBaselineAvg: '基线均价',
       weightLegendTableScenarioQty: '方案数量',

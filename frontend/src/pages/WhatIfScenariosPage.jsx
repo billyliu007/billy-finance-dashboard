@@ -2731,7 +2731,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                       <td data-label={t('whatif.hypoLineCommentLabel')}>
                                                         <textarea
                                                           className="modalInput whatIfHypoLineCommentInput"
-                                                          rows={2}
+                                                          rows={1}
                                                           defaultValue={r.comment || ''}
                                                           key={`${r.id}-${index}-buy-cmt`}
                                                           placeholder={t('whatif.hypoLineCommentPlaceholder')}
@@ -2932,7 +2932,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                 {t('whatif.hypoLineCommentLabel')}
                                                 <textarea
                                                   className="modalInput whatIfHypoLineCommentInput"
-                                                  rows={2}
+                                                  rows={1}
                                                   defaultValue={r.comment || ''}
                                                   key={`${r.id}-${index}-buy-cmt-m`}
                                                   placeholder={t('whatif.hypoLineCommentPlaceholder')}
@@ -3221,7 +3221,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                       <td data-label={t('whatif.hypoLineCommentLabel')}>
                                                         <textarea
                                                           className="modalInput whatIfHypoLineCommentInput"
-                                                          rows={2}
+                                                          rows={1}
                                                           defaultValue={r.comment || ''}
                                                           key={`${r.id}-${index}-sell-cmt`}
                                                           placeholder={t('whatif.hypoLineCommentPlaceholder')}
@@ -3454,7 +3454,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                 {t('whatif.hypoLineCommentLabel')}
                                                 <textarea
                                                   className="modalInput whatIfHypoLineCommentInput"
-                                                  rows={2}
+                                                  rows={1}
                                                   defaultValue={r.comment || ''}
                                                   key={`${r.id}-${index}-sell-cmt-m`}
                                                   placeholder={t('whatif.hypoLineCommentPlaceholder')}
@@ -4285,30 +4285,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                         </>
                                       ) : null}
                                       <p className="whatIfScenarioWeightTooltipRow whatIfScenarioWeightTooltipRow--divider">
-                                        <span>{t('whatif.weightTooltipBaselineQty')}</span>
-                                        <span>{hideValues ? '—' : formatQty(p.baselineQty)}</span>
-                                      </p>
-                                      <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>{t('whatif.weightTooltipBaselineAvgCost')}</span>
-                                        <span>
-                                          {hideValues || !(p.baselineQty > 1e-12)
-                                            ? '—'
-                                            : formatCurrencyValue(p.baselineAvgCost, p.currency)}
-                                        </span>
-                                      </p>
-                                      <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>{t('whatif.weightTooltipScenarioQty')}</span>
-                                        <span>{hideValues ? '—' : formatQty(p.scenarioQty)}</span>
-                                      </p>
-                                      <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>{t('whatif.weightTooltipScenarioAvgCost')}</span>
-                                        <span>
-                                          {hideValues || !(p.scenarioQty > 1e-12)
-                                            ? '—'
-                                            : formatCurrencyValue(p.scenarioAvgCost, p.currency)}
-                                        </span>
-                                      </p>
-                                      <p className="whatIfScenarioWeightTooltipRow whatIfScenarioWeightTooltipRow--divider">
                                         <span>
                                           {t(
                                             hasSecondaryTargetPrices
@@ -4322,35 +4298,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                             : `${formatPriceNumber(p.scenarioPrice, p.currency)} ${p.currency}`}
                                         </span>
                                       </p>
-                                      <p className="whatIfScenarioWeightTooltipRow">
-                                        <span>
-                                          {t(
-                                            hasSecondaryTargetPrices
-                                              ? 'whatif.weightTooltipScenarioMarketValue1'
-                                              : 'whatif.weightTooltipScenarioMarketValue',
-                                          )}
-                                        </span>
-                                        <span>
-                                          {hideValues ? '—' : formatCurrencyValue(p.scenarioValue, p.currency)}
-                                        </span>
-                                      </p>
                                       {hasSecondaryTargetPrices ? (
-                                        <>
-                                          <p className="whatIfScenarioWeightTooltipRow">
-                                            <span>{t('whatif.weightTooltipScenarioTargetPrice2')}</span>
-                                            <span>
-                                              {hideValues
-                                                ? '—'
-                                                : `${formatPriceNumber(p.scenarioPrice2, p.currency)} ${p.currency}`}
-                                            </span>
-                                          </p>
-                                          <p className="whatIfScenarioWeightTooltipRow">
-                                            <span>{t('whatif.weightTooltipScenarioMarketValue2')}</span>
-                                            <span>
-                                              {hideValues ? '—' : formatCurrencyValue(p.scenarioValue2, p.currency)}
-                                            </span>
-                                          </p>
-                                        </>
+                                        <p className="whatIfScenarioWeightTooltipRow">
+                                          <span>{t('whatif.weightTooltipScenarioTargetPrice2')}</span>
+                                          <span>
+                                            {hideValues
+                                              ? '—'
+                                              : `${formatPriceNumber(p.scenarioPrice2, p.currency)} ${p.currency}`}
+                                          </span>
+                                        </p>
                                       ) : null}
                                     </div>
                                   );
@@ -4451,40 +4407,12 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                 <thead>
                                   <tr>
                                     <th scope="col">{t('portfolio.asset')}</th>
-                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
-                                      {t('whatif.weightLegendTableBaselineQty')}
-                                    </th>
-                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
-                                      {t('whatif.weightLegendTableBaselineAvg')}
-                                    </th>
-                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
-                                      {t('whatif.weightLegendTableScenarioQty')}
-                                    </th>
-                                    <th scope="col" className="whatIfWeightChartAssetLegendTableNum">
-                                      {t('whatif.weightLegendTableScenarioAvg')}
-                                    </th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {weightChartRows.map((r) => (
                                     <tr key={r.name}>
                                       <th scope="row">{r.name}</th>
-                                      <td className="whatIfWeightChartAssetLegendTableNum">
-                                        {hideValues ? '—' : formatQty(r.baselineQty)}
-                                      </td>
-                                      <td className="whatIfWeightChartAssetLegendTableNum">
-                                        {hideValues || !(r.baselineQty > 1e-12)
-                                          ? '—'
-                                          : formatCurrencyValue(r.baselineAvgCost, r.currency)}
-                                      </td>
-                                      <td className="whatIfWeightChartAssetLegendTableNum">
-                                        {hideValues ? '—' : formatQty(r.scenarioQty)}
-                                      </td>
-                                      <td className="whatIfWeightChartAssetLegendTableNum">
-                                        {hideValues || !(r.scenarioQty > 1e-12)
-                                          ? '—'
-                                          : formatCurrencyValue(r.scenarioAvgCost, r.currency)}
-                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -4604,7 +4532,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           {t('whatif.hypoModalCommentOptional')}
                           <textarea
                             className="modalInput whatIfHypoLineCommentInput"
-                            rows={2}
+                            rows={1}
                             value={stockForm.comment}
                             onChange={(e) =>
                               setStockForm((prev) => ({ ...prev, comment: e.target.value }))
@@ -4752,7 +4680,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           {t('whatif.hypoModalCommentOptional')}
                           <textarea
                             className="modalInput whatIfHypoLineCommentInput"
-                            rows={2}
+                            rows={1}
                             value={cryptoForm.comment}
                             onChange={(e) =>
                               setCryptoForm((prev) => ({ ...prev, comment: e.target.value }))
@@ -5092,7 +5020,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           {t('whatif.hypoModalCommentOptional')}
                           <textarea
                             className="modalInput whatIfHypoLineCommentInput"
-                            rows={2}
+                            rows={1}
                             value={stockSellForm.comment}
                             onChange={(e) =>
                               setStockSellForm((prev) => ({ ...prev, comment: e.target.value }))
@@ -5291,7 +5219,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           {t('whatif.hypoModalCommentOptional')}
                           <textarea
                             className="modalInput whatIfHypoLineCommentInput"
-                            rows={2}
+                            rows={1}
                             value={cryptoSellForm.comment}
                             onChange={(e) =>
                               setCryptoSellForm((prev) => ({ ...prev, comment: e.target.value }))
