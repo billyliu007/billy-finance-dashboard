@@ -1138,7 +1138,29 @@ textarea.modalInput.whatIfHypoLineCommentInput {
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(15, 23, 42, 0.55);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Create / rename / duplicate: one row, input fills space, ✓ and × stay on the right. */
+.whatIfScenarioNameActions:has(input.whatIfScenarioInlineInput) {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.whatIfScenarioNameActions:has(input.whatIfScenarioInlineInput) > input.profitabilityInput {
+  flex: 1 1 0%;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+}
+
+.whatIfScenarioNameActions:has(input.whatIfScenarioInlineInput) > .whatIfScenarioToolBtn {
+  flex-shrink: 0;
 }
 
 .whatIfPageHeader {
@@ -2157,6 +2179,10 @@ textarea.modalInput.whatIfHypoLineCommentInput {
     justify-self: stretch;
     width: 100%;
     gap: 8px;
+  }
+
+  .whatIfScenarioNameActions:has(input.whatIfScenarioInlineInput) {
+    flex-wrap: nowrap;
   }
 
   .whatIfScenarioTextBtn {

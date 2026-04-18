@@ -333,6 +333,55 @@ export async function getWhatIfScenarioById({ userId, scenarioId }) {
   return result.rows[0] || null;
 }
 
+/**
+ * For read APIs: resolve by case-insensitive scenario name, or the user's active scenario when planName is empty.
+ * @returns {{ id: string, name: string, isActive: boolean } | null}
+ */
+export async function resolveWhatIfScenarioForPlanLookup({ userId, planName }) {
+  const resolvedUserId = String(userId || '').trim();
+  if (!resolvedUserId) throw new Error('Missing user id.');
+  const trimmed = planName == null ? '' : String(planName).trim();
+
+  if (trimmed) {
+    const byName = await query(
+      `SELECT id,
+              name,
+              is_active AS "isActive"
+       FROM whatif_scenarios
+       WHERE user_id = $1 AND lower(trim(name)) = lower(trim($2))
+       LIMIT 1`,
+      [resolvedUserId, trimmed],
+    );
+    return byName.rows[0] || null;
+  }
+
+  const active = await query(
+    `SELECT id,
+            name,
+            is_active AS "isActive"
+     FROM whatif_scenarios
+     WHERE user_id = $1 AND is_active = TRUE
+     LIMIT 1`,
+    [resolvedUserId],
+  );
+  return active.rows[0] || null;
+}
+
+/** Map stored target rows to external consumer field names (worst / exit). */
+export function mapTargetPricesToExpectedPrices(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  return list.map((r) => {
+    const worstPrice = Number(r?.targetPrice);
+    const t2 = Number(r?.targetPrice2);
+    return {
+      symbol: r.symbol,
+      currency: r.currency,
+      worstPrice: Number.isFinite(worstPrice) ? worstPrice : 0,
+      exitPrice: Number.isFinite(t2) && t2 > 0 ? t2 : null,
+    };
+  });
+}
+
 export async function listWhatIfTargetPrices({ userId, scenarioId }) {
   const scenario = await getWhatIfScenarioById({ userId, scenarioId });
   if (!scenario) throw new Error('Scenario not found.');

@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { ApiError } from '../lib/ApiError.js';
 import { rethrowAsBadRequest } from '../lib/mapRouteErrors.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   listHistoricalSaleTransactions,
   listPositionTransactions,
+  listWhatIfHypotheticalPurchases,
+  listWhatIfHypotheticalSales,
+  listWhatIfTargetPrices,
+  mapTargetPricesToExpectedPrices,
+  resolveWhatIfScenarioForPlanLookup,
 } from '../repositories/financeRepository.js';
 import { listCashComponents } from '../repositories/cashRepository.js';
 import { resolveDashboardPayload } from '../services/dashboardService.js';
@@ -51,6 +57,36 @@ router.get(
       baseCurrency: 'USD',
       accounts,
       totalUsd,
+    });
+  }),
+);
+
+router.get(
+  '/me/scenario-plan',
+  asyncHandler(async (req, res) => {
+    const userId = req.auth.user.userId;
+    const raw = req.query?.planName ?? req.query?.name;
+    const planName = raw == null || String(raw).trim() === '' ? null : String(raw).trim();
+    const scenario = await resolveWhatIfScenarioForPlanLookup({ userId, planName });
+    if (!scenario) {
+      throw new ApiError(
+        planName ? 'Scenario plan not found for this name.' : 'No active scenario plan.',
+        404,
+      );
+    }
+    const scenarioId = scenario.id;
+    const [hypotheticalPurchases, hypotheticalSales, targetRows] = await Promise.all([
+      listWhatIfHypotheticalPurchases({ userId, scenarioId }),
+      listWhatIfHypotheticalSales({ userId, scenarioId }),
+      listWhatIfTargetPrices({ userId, scenarioId }),
+    ]);
+    return res.json({
+      scenarioId,
+      scenarioName: scenario.name,
+      isActive: Boolean(scenario.isActive),
+      hypotheticalPurchases,
+      hypotheticalSales,
+      expectedPrices: mapTargetPricesToExpectedPrices(targetRows),
     });
   }),
 );

@@ -16,6 +16,7 @@ Send API requests to the **backend** origin. The read API (`/api/v1/...`), token
 
 - Net worth: `https://api.myworthtrack.com/api/v1/me/net-worth`
 - Cash: `https://api.myworthtrack.com/api/v1/me/cash`
+- Scenario plan (active): `https://api.myworthtrack.com/api/v1/me/scenario-plan`
 - Create/list/revoke PATs: `https://api.myworthtrack.com/api/user/api-tokens`
 
 Self-hosted deployments use your own API hostname; see [`DEPLOYMENT.md`](../DEPLOYMENT.md) for environment variables such as `VITE_API_BASE_URL` and `FRONTEND_BASE_URL`.
@@ -175,6 +176,45 @@ Portfolio holdings with live market data where available (aligned with dashboard
 | `totals` | Aggregate totals object from the portfolio builder. |
 | `totalPnlPct` | Overall P&L percentage field from the service. |
 | `tableRows` | Position rows (symbols, weights, prices, P&amp;L, etc.) — same general shape as the in-app portfolio table. |
+
+---
+
+### `GET /api/v1/me/scenario-plan`
+
+Returns a **single scenario plan** (the same data you edit under *Scenario planning* in the app): scenario name, simulated buys, simulated sells, and **expected prices** (worst price and optional exit price per symbol).
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `planName` | string | omitted | Scenario **name** (case-insensitive, trimmed). Must match a scenario you own. If **omitted**, empty, or whitespace-only, the server returns the **active** scenario plan. |
+
+**Response `200` (JSON):**
+
+| Field | Description |
+|-------|-------------|
+| `scenarioId` | UUID of the scenario. |
+| `scenarioName` | Display name of the scenario. |
+| `isActive` | Whether this scenario is currently the active plan. |
+| `hypotheticalPurchases` | Array of simulated buy lines (`symbol`, `qty`, `buyPrice`, `currency`, `comment`, etc.) — same shape as the app’s scenario inputs. |
+| `hypotheticalSales` | Array of simulated sell lines (`symbol`, `qty`, `sellPrice`, `feeFlat`, `currency`, `comment`, etc.). |
+| `expectedPrices` | Array of `{ symbol, currency, worstPrice, exitPrice }`. `worstPrice` is the primary expected price; `exitPrice` is the second price when set, otherwise `null`. |
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| `404` | No **active** scenario when `planName` is omitted/empty, or no scenario matches the given **name**. |
+
+**Example:**
+
+```bash
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/v1/me/scenario-plan"
+
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/v1/me/scenario-plan?planName=My%20Plan"
+```
 
 ---
 
