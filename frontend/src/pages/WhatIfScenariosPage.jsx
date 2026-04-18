@@ -121,6 +121,20 @@ function targetSimulationCurrencyPrefix(currency) {
   }
 }
 
+function relativeTimeToken(timestampMs, nowMs = Date.now()) {
+  if (!Number.isFinite(timestampMs) || timestampMs <= 0) return null;
+  const deltaMs = Math.max(0, nowMs - timestampMs);
+  const deltaSec = Math.round(deltaMs / 1000);
+  if (deltaSec < 10) return 'just_now';
+  if (deltaSec < 60) return `${deltaSec}s`;
+  const deltaMin = Math.round(deltaSec / 60);
+  if (deltaMin < 60) return `${deltaMin}m`;
+  const deltaHr = Math.round(deltaMin / 60);
+  if (deltaHr < 24) return `${deltaHr}h`;
+  const deltaDay = Math.round(deltaHr / 24);
+  return `${deltaDay}d`;
+}
+
 function emptyStockForm() {
   return { query: '', selectedSymbol: '', qty: '', buyPrice: '', comment: '' };
 }
@@ -706,6 +720,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [stockSellForm, setStockSellForm] = useState(emptyStockSellForm());
   const [cryptoSellForm, setCryptoSellForm] = useState(emptyCryptoSellForm());
   const [results, setResults] = useState(null);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('buys');
   const [isLoading, setIsLoading] = useState(true);
   const [isScenarioLoading, setIsScenarioLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -723,6 +738,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const buyRowsRef = useRef([]);
   const sellRowsRef = useRef([]);
   const [lastSavedHash, setLastSavedHash] = useState(EMPTY_WHATIF_INPUTS_HASH);
+  const [lastSavedAtMs, setLastSavedAtMs] = useState(Date.now());
   const stockHypotheticalQtyRef = useRef(null);
   const cryptoHypotheticalQtyRef = useRef(null);
   const stockSellQtyRef = useRef(null);
@@ -1511,7 +1527,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
       computeInputsHash(targetPrices, [], []) !== computeInputsHash(lastSyncedTargetPrices, [], []),
     [activeScenarioId, lastSyncedTargetPrices, targetPrices],
   );
-  const targetSaveUiActive = hasUnsavedTargetPrices && !isPersistingInputs;
+  const isBusy = isLoading || isScenarioLoading || isSaving || isPersistingInputs;
+  const targetSaveUiActive = hasUnsavedTargetPrices && !isBusy;
   const hasTargetPrice2ToClear = useMemo(
     () =>
       Boolean(activeScenarioId) &&
@@ -1519,6 +1536,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
         (targetPrices || []).some((r) => num(r?.targetPrice2) > 0)),
     [activeScenarioId, results?.hasSecondaryTargetPrices, targetPrices],
   );
+
+  useEffect(() => {
+    if (!activeScenarioId) return;
+    setLastSavedAtMs(Date.now());
+  }, [activeScenarioId, lastSavedHash]);
+
+  useEffect(() => {
+    if (activeScenarioId) return;
+    setActiveWorkspaceTab('buys');
+  }, [activeScenarioId]);
 
   useEffect(() => {
     if (!isDirty || isLoading || isScenarioLoading) return;
@@ -1654,7 +1681,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   function cancelTargetPriceEdits() {
-    if (!activeScenarioId || !hasUnsavedTargetPrices || isPersistingInputs) return;
+    if (!activeScenarioId || !hasUnsavedTargetPrices || isBusy) return;
     const synced = cloneSyncedTargetRows(lastSyncedTargetPricesRef.current);
     setTargetPrices(synced);
     const savedTargets = Array.isArray(results?.targetPrices) ? results.targetPrices : [];
@@ -1939,7 +1966,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   function openHypoBuyModalForAggregate(aggKey) {
-    if (!activeScenarioId || isPersistingInputs) return;
+    if (!activeScenarioId || isBusy) return;
     setError('');
     const sample = buyRows.find((r) => hypoBuyAggregateKey(r) === aggKey);
     const sym = sample
@@ -1970,7 +1997,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
   }
 
   function openHypoSellModalForAggregate(aggKey) {
-    if (!activeScenarioId || isPersistingInputs) return;
+    if (!activeScenarioId || isBusy) return;
     setError('');
     const sample = sellRows.find((r) => hypoSellAggregateKey(r) === aggKey);
     const sym = sample
@@ -2198,6 +2225,17 @@ export default function WhatIfScenariosPage({ hideValues }) {
     (adjustScenarioCashForHypotheticals ? hypotheticalProceedsBase - hypotheticalCostBase : 0);
   const netWorthDelta2 = scenarioNetWorth2 - baselineNetWorth;
   const netWorthDeltaPct2 = baselineNetWorth > 0 ? (netWorthDelta2 / baselineNetWorth) * 100 : 0;
+  const autosaveToken = relativeTimeToken(lastSavedAtMs);
+  const autosaveHeaderText =
+    autosaveToken && autosaveToken !== 'just_now'
+      ? t('whatif.autosaveAgo', { time: autosaveToken })
+      : t('whatif.autosaveJustNow');
+  const workspaceTabs = [
+    { id: 'buys', label: t('whatif.tabBuys'), count: buyRows.length },
+    { id: 'sells', label: t('whatif.tabSells'), count: sellRows.length },
+    { id: 'targets', label: t('whatif.tabTargets'), count: null },
+    { id: 'allocation', label: t('whatif.resultsTitle'), count: null },
+  ];
 
   const hypoPurchaseFunding = useMemo(() => {
     const requiredMap = sumHypotheticalBuyCostByQuoteBucket(buyRows);
@@ -2238,30 +2276,25 @@ export default function WhatIfScenariosPage({ hideValues }) {
     return { rows, covered, shortBuckets };
   }, [buyRows, sellRows, netWorth?.overview?.cashRows]);
 
-  const isBusy = isLoading || isScenarioLoading || isSaving;
   const showAutosaveStickyBar = Boolean(activeScenarioId) && !isLoading && !isScenarioLoading;
 
   return (
     <section className="contentWrap">
-      <header className="pageHeader">
+      <header className="pageHeader whatIfPageHeader">
         <h1>{t('whatif.title')}</h1>
+        {activeScenarioId && (
+          <span className="whatIfAutosaveMeta" role="status" aria-live="polite">
+            {isPersistingInputs ? t('whatif.autosaveSaving') : autosaveHeaderText}
+          </span>
+        )}
       </header>
 
-      <div className="dashboardPanel whatIfPanel">
+      <div className="whatIfInteractiveShell">
+        <div className="dashboardPanel whatIfPanel">
         {isLoading && <p>{t('app.loadingDashboard')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
         {!isLoading && (
           <>
-            {isBusy && (
-              <div className="whatIfBusyOverlay" role="status" aria-live="polite">
-                <div className="whatIfBusyOverlayCard">
-                  <div className="whatIfBusySpinner" aria-hidden="true" />
-                  <div className="whatIfBusyText">
-                    {isSaving ? t('modals.saving') : t('app.loadingDashboard')}
-                  </div>
-                </div>
-              </div>
-            )}
             <section className="whatIfSection whatIfSection--scenarios" aria-labelledby="whatif-scenarios-heading">
               <div className="whatIfScenarioShell">
                 <header className="whatIfScenarioShellHead">
@@ -2527,7 +2560,176 @@ export default function WhatIfScenariosPage({ hideValues }) {
 
             {activeScenarioId && (
               <>
-                <section className="whatIfSection whatIfSection--hypoBuy">
+                <section className="whatIfScenarioSummaryStrip" aria-label={t('whatif.resultsTitle')}>
+                  <div
+                    className={`profitabilitySellDownResult rebalanceKpiRow${
+                      hasSecondaryTargetPrices ? ' whatIfKpiRow--five' : ''
+                    }`}
+                  >
+                    <div className="profitabilityCard">
+                      <span className="profitabilityCardLabel">{t('whatif.baselineNetWorth')}</span>
+                      <span className="profitabilityCardValue">
+                        {hideValues ? '—' : formatCurrencyValue(baselineNetWorth, baseCurrency)}
+                      </span>
+                    </div>
+                    {hasSecondaryTargetPrices ? (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorthTarget1')}</span>
+                          <span className="profitabilityCardValue">
+                            {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
+                          </span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.netWorthDeltaTarget1')}</span>
+                          <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
+                          </span>
+                          <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
+                          </small>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorthTarget2')}</span>
+                          <span className="profitabilityCardValue">
+                            {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth2, baseCurrency)}
+                          </span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.netWorthDeltaTarget2')}</span>
+                          <span className={`profitabilityCardValue ${netWorthDelta2 >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatCurrencyValue(netWorthDelta2, baseCurrency)}
+                          </span>
+                          <small className={`profitabilityCardSub ${netWorthDeltaPct2 >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(netWorthDeltaPct2)}
+                          </small>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorth')}</span>
+                          <span className="profitabilityCardValue">
+                            {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
+                          </span>
+                        </div>
+                        <div className="profitabilityCard">
+                          <span className="profitabilityCardLabel">{t('whatif.netWorthDelta')}</span>
+                          <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
+                          </span>
+                          <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
+                            {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
+                          </small>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="whatIfSummaryCashToggle">
+                    <label className="whatIfToggleRow">
+                      <input
+                        type="checkbox"
+                        className="whatIfToggleInput"
+                        checked={adjustScenarioCashForHypotheticals}
+                        onChange={(e) => setAdjustScenarioCashForHypotheticals(e.target.checked)}
+                      />
+                      <span className="whatIfToggleSwitch" aria-hidden="true" />
+                      <span className="whatIfToggleText">{t('whatif.netWorthAdjustHypotheticalCash')}</span>
+                    </label>
+                  </div>
+                </section>
+
+                <div className="whatIfWorkspaceTabs" role="tablist" aria-label={t('whatif.scenarios')}>
+                  {workspaceTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeWorkspaceTab === tab.id}
+                      className={`whatIfWorkspaceTab${activeWorkspaceTab === tab.id ? ' is-active' : ''}`}
+                      onClick={() => setActiveWorkspaceTab(tab.id)}
+                    >
+                      <span>{tab.label}</span>
+                      {Number.isFinite(tab.count) ? <strong>{tab.count}</strong> : null}
+                    </button>
+                  ))}
+                </div>
+
+                {activeWorkspaceTab === 'buys' && <section className="whatIfSection whatIfSection--hypoBuy">
+                  {hypoPurchaseFunding && (
+                    <div
+                      className={`whatIfHypoFundingCallout${hypoPurchaseFunding.covered ? ' whatIfHypoFundingCallout--covered' : ' whatIfHypoFundingCallout--short'}`}
+                    >
+                      <h3 className="whatIfHypoFundingTitle">{t('whatif.hypoFundingTitle')}</h3>
+                      <div className="whatIfHypoFundingTableWrap">
+                        <table className="whatIfHypoFundingTable">
+                          <thead>
+                            <tr>
+                              <th scope="col">{t('whatif.hypoFundingColQuote')}</th>
+                              <th scope="col">{t('whatif.hypoFundingCash')}</th>
+                              <th scope="col">{t('whatif.hypoFundingProceeds')}</th>
+                              <th scope="col">{t('whatif.hypoFundingRequired')}</th>
+                              <th scope="col">{t('whatif.hypoFundingAvailable')}</th>
+                              <th scope="col">{t('whatif.hypoFundingBalance')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {hypoPurchaseFunding.rows.map((r) => (
+                              <tr key={r.bucket}>
+                                <td data-label={t('whatif.hypoFundingColQuote')}>{r.bucket}</td>
+                                <td data-label={t('whatif.hypoFundingCash')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.cash, r.bucket)}
+                                </td>
+                                <td data-label={t('whatif.hypoFundingProceeds')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.proceeds, r.bucket)}
+                                </td>
+                                <td data-label={t('whatif.hypoFundingRequired')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.required, r.bucket)}
+                                </td>
+                                <td data-label={t('whatif.hypoFundingAvailable')}>
+                                  {hideValues ? '—' : formatCurrencyValue(r.available, r.bucket)}
+                                </td>
+                                <td
+                                  data-label={t('whatif.hypoFundingBalance')}
+                                  className={
+                                    r.required > 1e-9
+                                      ? r.balance >= -1e-6
+                                        ? 'whatIfHypoFundingBalance--ok'
+                                        : 'whatIfHypoFundingBalance--short'
+                                      : ''
+                                  }
+                                >
+                                  {hideValues
+                                    ? '—'
+                                    : r.required > 1e-9
+                                      ? formatCurrencyValue(r.balance, r.bucket)
+                                      : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="whatIfHypoFundingVerdict" role="status">
+                        {hypoPurchaseFunding.covered
+                          ? t('whatif.hypoFundingCovered')
+                          : t('whatif.hypoFundingShortLead')}
+                        {!hypoPurchaseFunding.covered && !hideValues && hypoPurchaseFunding.shortBuckets.length > 0 ? (
+                          <span className="whatIfHypoFundingShortList">
+                            {' '}
+                            {hypoPurchaseFunding.shortBuckets.map(({ bucket, shortfall }, i) => (
+                              <span key={bucket}>
+                                {i > 0 ? t('whatif.hypoFundingShortSep') : ''}
+                                {t('whatif.hypoFundingShortPart', {
+                                  amount: formatCurrencyValue(shortfall, bucket),
+                                })}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                  )}
                   <header className="whatIfHypoSectionHead">
                     <div className="whatIfHypoSectionHeadRow">
                       <span className="whatIfHypoBadge whatIfHypoBadge--buy">{t('whatif.hypoSectionBadgeBuy')}</span>
@@ -2672,7 +2874,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                           type="button"
                                           className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                           onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
-                                          disabled={lineCount === 0 || isPersistingInputs}
+                                          disabled={lineCount === 0 || isBusy}
                                           aria-label={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
                                           title={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
                                         >
@@ -2739,7 +2941,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                           onBlur={(e) =>
                                                             updateHypotheticalBuyComment(index, e.target.value)
                                                           }
-                                                          disabled={isPersistingInputs}
+                                                          disabled={isBusy}
                                                         />
                                                       </td>
                                                       <td data-label={t('modals.remove')}>
@@ -2865,7 +3067,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     type="button"
                                     className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                     onClick={() => batchRemoveHypotheticalBuysForAggregate(aggKey, row.symbol)}
-                                    disabled={lineCount === 0 || isPersistingInputs}
+                                    disabled={lineCount === 0 || isBusy}
                                     aria-label={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
                                     title={t('whatif.batchDeleteHypotheticalBuysAria', { symbol: row.symbol })}
                                   >
@@ -2940,7 +3142,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                   onBlur={(e) =>
                                                     updateHypotheticalBuyComment(index, e.target.value)
                                                   }
-                                                  disabled={isPersistingInputs}
+                                                  disabled={isBusy}
                                                 />
                                               </label>
                                             </div>
@@ -2976,9 +3178,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           </div>
                         ))}
                   </div>
-                </section>
+                </section>}
 
-                <section className="whatIfSection whatIfSection--hypoSell">
+                {activeWorkspaceTab === 'sells' && <section className="whatIfSection whatIfSection--hypoSell">
                   <header className="whatIfHypoSectionHead">
                     <div className="whatIfHypoSectionHeadRow">
                       <span className="whatIfHypoBadge whatIfHypoBadge--sell">{t('whatif.hypoSectionBadgeSell')}</span>
@@ -3138,7 +3340,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                           type="button"
                                           className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                           onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
-                                          disabled={lineCount === 0 || isPersistingInputs}
+                                          disabled={lineCount === 0 || isBusy}
                                           aria-label={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
                                           title={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
                                         >
@@ -3229,7 +3431,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                           onBlur={(e) =>
                                                             updateHypotheticalSellComment(index, e.target.value)
                                                           }
-                                                          disabled={isPersistingInputs}
+                                                          disabled={isBusy}
                                                         />
                                                       </td>
                                                       <td data-label={t('modals.remove')}>
@@ -3360,7 +3562,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     type="button"
                                     className="headerIconBtn positionActionBtn positionActionBtnDanger"
                                     onClick={() => batchRemoveHypotheticalSellsForAggregate(aggKey, row.symbol)}
-                                    disabled={lineCount === 0 || isPersistingInputs}
+                                    disabled={lineCount === 0 || isBusy}
                                     aria-label={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
                                     title={t('whatif.batchDeleteHypotheticalSalesAria', { symbol: row.symbol })}
                                   >
@@ -3462,7 +3664,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                   onBlur={(e) =>
                                                     updateHypotheticalSellComment(index, e.target.value)
                                                   }
-                                                  disabled={isPersistingInputs}
+                                                  disabled={isBusy}
                                                 />
                                               </label>
                                             </div>
@@ -3498,9 +3700,9 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           </div>
                         ))}
                   </div>
-                </section>
+                </section>}
 
-                <section className="whatIfSection whatIfSection--targetPrice">
+                {activeWorkspaceTab === 'targets' && <section className="whatIfSection whatIfSection--targetPrice">
                   <header className="whatIfHypoSectionHead">
                     <div className="whatIfHypoSectionHeadRow">
                       <h2 className="whatIfHypoBadge whatIfHypoBadge--target">{t('whatif.featureATitle')}</h2>
@@ -3528,7 +3730,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             const symU = String(row.symbol || '').toUpperCase();
                             const rowTargetDirty = unsavedTargetSymbolSet.has(symU);
                             const targetPriceInputClass = `profitabilityInput${rowTargetDirty ? ' whatIfTargetInput--unsaved' : ''}`;
-                            const rowInlineSaveActive = rowTargetDirty && !isPersistingInputs;
+                            const rowInlineSaveActive = rowTargetDirty && !isBusy;
                             const pricePrefix = targetSimulationCurrencyPrefix(targetCurrency);
                             return (
                               <tr key={row.symbol}>
@@ -3591,7 +3793,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     <button
                                       type="button"
                                       className={`headerIconBtn whatIfIconBtn${rowInlineSaveActive ? ' whatIfTargetPriceSaveBtn--pending' : ''}`}
-                                      disabled={!hasUnsavedTargetPrices || isPersistingInputs}
+                                      disabled={!hasUnsavedTargetPrices || isBusy}
                                       aria-label={t('whatif.saveTargetPricesMobileAria')}
                                       title={t('whatif.saveTargetPricesMobileAria')}
                                       onClick={() => void saveTargetPricesNow()}
@@ -3666,7 +3868,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         const symU = String(row.symbol || '').toUpperCase();
                         const rowTargetDirty = unsavedTargetSymbolSet.has(symU);
                         const targetPriceInputClass = `profitabilityInput${rowTargetDirty ? ' whatIfTargetInput--unsaved' : ''}`;
-                        const rowInlineSaveActive = rowTargetDirty && !isPersistingInputs;
+                        const rowInlineSaveActive = rowTargetDirty && !isBusy;
                         const pricePrefix = targetSimulationCurrencyPrefix(targetCurrency);
                         const targetPriceDisplay =
                           targetRow?.targetPrice !== '' && targetRow?.targetPrice != null
@@ -3821,7 +4023,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                               <button
                                 type="button"
                                 className={`headerIconBtn whatIfIconBtn whatIfTargetPriceMobileSaveBtn${rowInlineSaveActive ? ' whatIfTargetPriceSaveBtn--pending' : ''}`}
-                                disabled={!hasUnsavedTargetPrices || isPersistingInputs}
+                                disabled={!hasUnsavedTargetPrices || isBusy}
                                 aria-label={t('whatif.saveTargetPricesMobileAria')}
                                 title={t('whatif.saveTargetPricesMobileAria')}
                                 onClick={() => void saveTargetPricesNow()}
@@ -3841,7 +4043,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <button
                           type="button"
                           className="whatIfClearTarget2Btn"
-                          disabled={isPersistingInputs}
+                          disabled={isBusy}
                           aria-label={t('whatif.clearTargetPrice2Aria')}
                           title={t('whatif.clearTargetPrice2Aria')}
                           onClick={() => void clearAllTargetPrice2AndSave()}
@@ -3853,7 +4055,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                         <button
                           type="button"
                           className="whatIfTargetCancelBtn"
-                          disabled={isPersistingInputs}
+                          disabled={isBusy}
                           onClick={() => cancelTargetPriceEdits()}
                         >
                           {t('modals.cancel')}
@@ -3862,166 +4064,22 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       <button
                         type="button"
                         className={`whatIfStickySaveBtn${targetSaveUiActive ? ' whatIfStickySaveBtn--unsaved' : ''}`}
-                        disabled={!hasUnsavedTargetPrices || isPersistingInputs}
+                        disabled={!hasUnsavedTargetPrices || isBusy}
                         onClick={() => void saveTargetPricesNow()}
                       >
                         {t('whatif.applyTargetPrices')}
                       </button>
                     </div>
                   </div>
-                </section>
+                </section>}
 
-                <section className="whatIfSection">
-                  <h2>{t('whatif.resultsTitle')}</h2>
-                  {hypoPurchaseFunding && (
-                    <div
-                      className={`whatIfHypoFundingCallout${hypoPurchaseFunding.covered ? ' whatIfHypoFundingCallout--covered' : ' whatIfHypoFundingCallout--short'}`}
-                    >
-                      <h3 className="whatIfHypoFundingTitle">{t('whatif.hypoFundingTitle')}</h3>
-                      <div className="whatIfHypoFundingTableWrap">
-                        <table className="whatIfHypoFundingTable">
-                          <thead>
-                            <tr>
-                              <th scope="col">{t('whatif.hypoFundingColQuote')}</th>
-                              <th scope="col">{t('whatif.hypoFundingCash')}</th>
-                              <th scope="col">{t('whatif.hypoFundingProceeds')}</th>
-                              <th scope="col">{t('whatif.hypoFundingRequired')}</th>
-                              <th scope="col">{t('whatif.hypoFundingAvailable')}</th>
-                              <th scope="col">{t('whatif.hypoFundingBalance')}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {hypoPurchaseFunding.rows.map((r) => (
-                              <tr key={r.bucket}>
-                                <td data-label={t('whatif.hypoFundingColQuote')}>{r.bucket}</td>
-                                <td data-label={t('whatif.hypoFundingCash')}>
-                                  {hideValues ? '—' : formatCurrencyValue(r.cash, r.bucket)}
-                                </td>
-                                <td data-label={t('whatif.hypoFundingProceeds')}>
-                                  {hideValues ? '—' : formatCurrencyValue(r.proceeds, r.bucket)}
-                                </td>
-                                <td data-label={t('whatif.hypoFundingRequired')}>
-                                  {hideValues ? '—' : formatCurrencyValue(r.required, r.bucket)}
-                                </td>
-                                <td data-label={t('whatif.hypoFundingAvailable')}>
-                                  {hideValues ? '—' : formatCurrencyValue(r.available, r.bucket)}
-                                </td>
-                                <td
-                                  data-label={t('whatif.hypoFundingBalance')}
-                                  className={
-                                    r.required > 1e-9
-                                      ? r.balance >= -1e-6
-                                        ? 'whatIfHypoFundingBalance--ok'
-                                        : 'whatIfHypoFundingBalance--short'
-                                      : ''
-                                  }
-                                >
-                                  {hideValues
-                                    ? '—'
-                                    : r.required > 1e-9
-                                      ? formatCurrencyValue(r.balance, r.bucket)
-                                      : '—'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      <p className="whatIfHypoFundingVerdict" role="status">
-                        {hypoPurchaseFunding.covered
-                          ? t('whatif.hypoFundingCovered')
-                          : t('whatif.hypoFundingShortLead')}
-                        {!hypoPurchaseFunding.covered && !hideValues && hypoPurchaseFunding.shortBuckets.length > 0 ? (
-                          <span className="whatIfHypoFundingShortList">
-                            {' '}
-                            {hypoPurchaseFunding.shortBuckets.map(({ bucket, shortfall }, i) => (
-                              <span key={bucket}>
-                                {i > 0 ? t('whatif.hypoFundingShortSep') : ''}
-                                {t('whatif.hypoFundingShortPart', {
-                                  amount: formatCurrencyValue(shortfall, bucket),
-                                })}
-                              </span>
-                            ))}
-                          </span>
-                        ) : null}
-                      </p>
-                    </div>
-                  )}
+                {activeWorkspaceTab === 'allocation' && <section className="whatIfSection">
                   <div className="whatIfResultsKpiStack">
-                  <div className="whatIfResultsNetWorthBlock">
-                    <label className="whatIfToggleRow">
-                      <input
-                        type="checkbox"
-                        className="whatIfToggleInput"
-                        checked={adjustScenarioCashForHypotheticals}
-                        onChange={(e) => setAdjustScenarioCashForHypotheticals(e.target.checked)}
-                      />
-                      <span className="whatIfToggleSwitch" aria-hidden="true" />
-                      <span className="whatIfToggleText">{t('whatif.netWorthAdjustHypotheticalCash')}</span>
-                    </label>
-                    <div className="profitabilitySellDownResult rebalanceKpiRow">
-                      <div className="profitabilityCard">
-                        <span className="profitabilityCardLabel">{t('whatif.baselineNetWorth')}</span>
-                        <span className="profitabilityCardValue">
-                          {hideValues ? '—' : formatCurrencyValue(baselineNetWorth, baseCurrency)}
-                        </span>
-                      </div>
-                      {hasSecondaryTargetPrices ? (
-                        <>
-                          <div className="profitabilityCard">
-                            <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorthTarget1')}</span>
-                            <span className="profitabilityCardValue">
-                              {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
-                            </span>
-                          </div>
-                          <div className="profitabilityCard">
-                            <span className="profitabilityCardLabel">{t('whatif.netWorthDeltaTarget1')}</span>
-                            <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
-                              {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
-                            </span>
-                            <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
-                              {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
-                            </small>
-                          </div>
-                          <div className="profitabilityCard">
-                            <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorthTarget2')}</span>
-                            <span className="profitabilityCardValue">
-                              {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth2, baseCurrency)}
-                            </span>
-                          </div>
-                          <div className="profitabilityCard">
-                            <span className="profitabilityCardLabel">{t('whatif.netWorthDeltaTarget2')}</span>
-                            <span className={`profitabilityCardValue ${netWorthDelta2 >= 0 ? 'pos' : 'neg'}`}>
-                              {hideValues ? '—' : formatCurrencyValue(netWorthDelta2, baseCurrency)}
-                            </span>
-                            <small className={`profitabilityCardSub ${netWorthDeltaPct2 >= 0 ? 'pos' : 'neg'}`}>
-                              {hideValues ? '—' : formatPercent(netWorthDeltaPct2)}
-                            </small>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="profitabilityCard">
-                            <span className="profitabilityCardLabel">{t('whatif.scenarioNetWorth')}</span>
-                            <span className="profitabilityCardValue">
-                              {hideValues ? '—' : formatCurrencyValue(scenarioNetWorth, baseCurrency)}
-                            </span>
-                          </div>
-                          <div className="profitabilityCard">
-                            <span className="profitabilityCardLabel">{t('whatif.netWorthDelta')}</span>
-                            <span className={`profitabilityCardValue ${netWorthDelta >= 0 ? 'pos' : 'neg'}`}>
-                              {hideValues ? '—' : formatCurrencyValue(netWorthDelta, baseCurrency)}
-                            </span>
-                            <small className={`profitabilityCardSub ${netWorthDeltaPct >= 0 ? 'pos' : 'neg'}`}>
-                              {hideValues ? '—' : formatPercent(netWorthDeltaPct)}
-                            </small>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="profitabilitySellDownResult rebalanceKpiRow">
+                  <div
+                    className={`profitabilitySellDownResult rebalanceKpiRow${
+                      hasSecondaryTargetPrices ? ' whatIfKpiRow--five' : ''
+                    }`}
+                  >
                     <div className="profitabilityCard">
                       <span className="profitabilityCardLabel">{t('whatif.baselineUnrealizedPl')}</span>
                       <span className={`profitabilityCardValue ${baselineUnrealized >= 0 ? 'pos' : 'neg'}`}>
@@ -4094,7 +4152,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     )}
                   </div>
 
-                  <div className="profitabilitySellDownResult rebalanceKpiRow">
+                  <div
+                    className={`profitabilitySellDownResult rebalanceKpiRow${
+                      hasSecondaryTargetPrices ? ' whatIfKpiRow--five' : ''
+                    }`}
+                  >
                     <div className="profitabilityCard">
                       <span className="profitabilityCardLabel">{t('whatif.baselineValue')}</span>
                       <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(baselineTotal)}</span>
@@ -4138,7 +4200,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
                     )}
                   </div>
 
-                  <div className="profitabilitySellDownResult rebalanceKpiRow">
+                  <div
+                    className={`profitabilitySellDownResult rebalanceKpiRow${
+                      hasSecondaryTargetPrices ? ' whatIfKpiRow--five' : ''
+                    }`}
+                  >
                     <div className="profitabilityCard">
                       <span className="profitabilityCardLabel">{t('whatif.baselineCostBasis')}</span>
                       <span className="profitabilityCardValue">{hideValues ? '—' : formatMoney(baselineCostBasis)}</span>
@@ -4451,7 +4517,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       </div>
                     )}
                   </div>
-                </section>
+                </section>}
 
                 {hypoBuyStockModalOpen && (
                   <div
@@ -4779,7 +4845,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             placeholder={t('whatif.hypoBuyCsvPlaceholder')}
                             spellCheck={false}
                             rows={8}
-                            disabled={isBusy || isPersistingInputs}
+                            disabled={isBusy}
                           />
                         </label>
                       </div>
@@ -4795,7 +4861,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           type="button"
                           className="modalBtn secondary"
                           onClick={() => setHypoBuyCsvText('')}
-                          disabled={isBusy || isPersistingInputs || !hypoBuyCsvText.trim()}
+                          disabled={isBusy || !hypoBuyCsvText.trim()}
                         >
                           {t('whatif.hypoBuyCsvClear')}
                         </button>
@@ -4807,7 +4873,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           }}
                           disabled={
                             isBusy ||
-                            isPersistingInputs ||
                             !String(hypoBuyCsvText || '').trim() ||
                             !activeScenarioId
                           }
@@ -4849,7 +4914,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             placeholder={t('whatif.hypoSellCsvPlaceholder')}
                             spellCheck={false}
                             rows={8}
-                            disabled={isBusy || isPersistingInputs}
+                            disabled={isBusy}
                           />
                         </label>
                       </div>
@@ -4865,7 +4930,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           type="button"
                           className="modalBtn secondary"
                           onClick={() => setHypoSellCsvText('')}
-                          disabled={isBusy || isPersistingInputs || !hypoSellCsvText.trim()}
+                          disabled={isBusy || !hypoSellCsvText.trim()}
                         >
                           {t('whatif.hypoBuyCsvClear')}
                         </button>
@@ -4877,7 +4942,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                           }}
                           disabled={
                             isBusy ||
-                            isPersistingInputs ||
                             !String(hypoSellCsvText || '').trim() ||
                             !activeScenarioId
                           }
@@ -5291,32 +5355,47 @@ export default function WhatIfScenariosPage({ hideValues }) {
             )}
           </>
         )}
-      </div>
-      {showAutosaveStickyBar && (
-        <div className="whatIfStickySaveBar" aria-live="polite">
-          <div className="whatIfStickySaveBarInner">
-            <div className="whatIfStickySaveLeft">
-              {isPersistingInputs ? (
-                <>
-                  <span className="whatIfStickySavedText">{t('whatif.autosaveSaving')}</span>
-                  <div
-                    className="whatIfStickyProgressTrack"
-                    role="progressbar"
-                    aria-busy="true"
-                    aria-valuetext={t('whatif.autosaveSaving')}
-                  >
-                    <div className="whatIfStickyProgressIndeterminate" aria-hidden="true" />
-                  </div>
-                </>
-              ) : isDirty ? (
-                <span className="whatIfUnsavedPill">{t('whatif.autosaveUnsaved')}</span>
-              ) : (
-                <span className="whatIfStickySavedText">{t('whatif.autosaveSaved')}</span>
-              )}
+        </div>
+        {showAutosaveStickyBar && (
+          <div className="whatIfStickySaveBar" aria-live="polite">
+            <div className="whatIfStickySaveBarInner">
+              <div className="whatIfStickySaveLeft">
+                {isPersistingInputs ? (
+                  <>
+                    <span className="whatIfStickySavedText">{t('whatif.autosaveSaving')}</span>
+                    <div
+                      className="whatIfStickyProgressTrack"
+                      role="progressbar"
+                      aria-busy="true"
+                      aria-valuetext={t('whatif.autosaveSaving')}
+                    >
+                      <div className="whatIfStickyProgressIndeterminate" aria-hidden="true" />
+                    </div>
+                  </>
+                ) : isDirty ? (
+                  <span className="whatIfUnsavedPill">{t('whatif.autosaveUnsaved')}</span>
+                ) : (
+                  <span className="whatIfStickySavedText">{t('whatif.autosaveSaved')}</span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+        {isBusy && !isLoading && (
+          <div className="whatIfBusyOverlay" role="status" aria-live="polite">
+            <div className="whatIfBusyOverlayCard">
+              <div className="whatIfBusySpinner" aria-hidden="true" />
+              <div className="whatIfBusyText">
+                {isPersistingInputs
+                  ? t('whatif.autosaveSaving')
+                  : isSaving
+                    ? t('modals.saving')
+                    : t('app.loadingDashboard')}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
