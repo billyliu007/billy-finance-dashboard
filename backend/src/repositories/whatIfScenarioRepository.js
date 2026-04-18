@@ -367,6 +367,41 @@ export async function resolveWhatIfScenarioForPlanLookup({ userId, planName }) {
   };
 }
 
+/**
+ * Keep target-price rows only for symbols with a non-zero live holding (portfolio qty)
+ * or total simulated buy qty greater than zero for that symbol. Omits orphan expected prices.
+ * @param {object[]} targetRows
+ * @param {object[]} hypotheticalPurchases
+ * @param {object[]} portfolioTableRows
+ * @returns {object[]}
+ */
+export function filterExpectedPriceTargetsForExternalApi(
+  targetRows,
+  hypotheticalPurchases,
+  portfolioTableRows,
+) {
+  const norm = (s) => String(s || '').trim().toUpperCase();
+  const holdingQtyBySymbol = new Map();
+  for (const row of portfolioTableRows || []) {
+    const sym = norm(row?.symbol);
+    if (!sym) continue;
+    holdingQtyBySymbol.set(sym, (holdingQtyBySymbol.get(sym) || 0) + (Number(row?.qty) || 0));
+  }
+  const hypoQtyBySymbol = new Map();
+  for (const p of hypotheticalPurchases || []) {
+    const sym = norm(p?.symbol);
+    if (!sym) continue;
+    hypoQtyBySymbol.set(sym, (hypoQtyBySymbol.get(sym) || 0) + (Number(p?.qty) || 0));
+  }
+  const list = Array.isArray(targetRows) ? targetRows : [];
+  return list.filter((r) => {
+    const sym = norm(r?.symbol);
+    const hold = holdingQtyBySymbol.get(sym) ?? 0;
+    const hypo = hypoQtyBySymbol.get(sym) ?? 0;
+    return hold > 0 || hypo > 0;
+  });
+}
+
 /** Map stored target rows to external consumer field names (worst / exit). */
 export function mapTargetPricesToExpectedPrices(rows) {
   const list = Array.isArray(rows) ? rows : [];

@@ -198,7 +198,7 @@ Returns a **single scenario plan** (the same data you edit under *Scenario plann
 | `isActive` | Whether this scenario is currently the active plan. |
 | `hypotheticalPurchases` | Array of simulated buy lines (`symbol`, `qty`, `buyPrice`, `currency`, `comment`, etc.) — same shape as the app’s scenario inputs. |
 | `hypotheticalSales` | Array of simulated sell lines (`symbol`, `qty`, `sellPrice`, `feeFlat`, `currency`, `comment`, etc.). |
-| `expectedPrices` | Array of `{ symbol, currency, worstPrice, exitPrice }`. `worstPrice` is the primary expected price; `exitPrice` is the second price when set, otherwise `null`. |
+| `expectedPrices` | Array of `{ symbol, currency, worstPrice, exitPrice }`. `worstPrice` is the primary expected price; `exitPrice` is the second price when set, otherwise `null`. Symbols with **no live holding** (zero or missing portfolio qty in USD dashboard terms) and **no simulated buys** (total hypothetical purchase qty for that symbol is zero) are **omitted** even if a target row exists in the database. |
 
 **Errors:**
 

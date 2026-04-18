@@ -9,6 +9,7 @@ import {
   listWhatIfHypotheticalPurchases,
   listWhatIfHypotheticalSales,
   listWhatIfTargetPrices,
+  filterExpectedPriceTargetsForExternalApi,
   mapTargetPricesToExpectedPrices,
   resolveWhatIfScenarioForPlanLookup,
 } from '../repositories/financeRepository.js';
@@ -75,18 +76,24 @@ router.get(
       );
     }
     const scenarioId = scenario.id;
-    const [hypotheticalPurchases, hypotheticalSales, targetRows] = await Promise.all([
+    const [hypotheticalPurchases, hypotheticalSales, targetRows, dashboard] = await Promise.all([
       listWhatIfHypotheticalPurchases({ userId, scenarioId }),
       listWhatIfHypotheticalSales({ userId, scenarioId }),
       listWhatIfTargetPrices({ userId, scenarioId }),
+      resolveDashboardPayload(userId, 'USD'),
     ]);
+    const filteredTargets = filterExpectedPriceTargetsForExternalApi(
+      targetRows,
+      hypotheticalPurchases,
+      dashboard.portfolio.tableRows,
+    );
     return res.json({
       scenarioId,
       scenarioName: scenario.name,
       isActive: Boolean(scenario.isActive),
       hypotheticalPurchases,
       hypotheticalSales,
-      expectedPrices: mapTargetPricesToExpectedPrices(targetRows),
+      expectedPrices: mapTargetPricesToExpectedPrices(filteredTargets),
     });
   }),
 );
