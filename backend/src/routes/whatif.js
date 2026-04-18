@@ -29,7 +29,7 @@ router.get(
     const rows = await listWhatIfScenarios(userId);
     return res.json({
       scenarios: rows,
-      activeScenarioId: rows.find((item) => item.isActive)?.id ?? null,
+      activeScenarioId: rows.find((item) => item.isActive)?.id ?? rows[0]?.id ?? null,
     });
   }),
 );

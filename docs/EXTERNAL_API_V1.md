@@ -187,7 +187,7 @@ Returns a **single scenario plan** (the same data you edit under *Scenario plann
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `planName` | string | omitted | Scenario **name** (case-insensitive, trimmed). Must match a scenario you own. If **omitted**, empty, or whitespace-only, the server returns the **active** scenario plan. |
+| `planName` | string | omitted | Scenario **name** (case-insensitive, trimmed). Must match a scenario you own. If **omitted**, empty, or whitespace-only, the server returns the **active** scenario when `is_active` is set in the database; if none is active, it returns the **same default plan the web app uses** (first row in the scenario list: active first, then most recently updated). |
 
 **Response `200` (JSON):**
 
@@ -204,7 +204,7 @@ Returns a **single scenario plan** (the same data you edit under *Scenario plann
 
 | Status | When |
 |--------|------|
-| `404` | No **active** scenario when `planName` is omitted/empty, or no scenario matches the given **name**. |
+| `404` | No scenarios exist when `planName` is omitted/empty, or no scenario matches the given **name**. |
 
 **Example:**
 

@@ -355,16 +355,16 @@ export async function resolveWhatIfScenarioForPlanLookup({ userId, planName }) {
     return byName.rows[0] || null;
   }
 
-  const active = await query(
-    `SELECT id,
-            name,
-            is_active AS "isActive"
-     FROM whatif_scenarios
-     WHERE user_id = $1 AND is_active = TRUE
-     LIMIT 1`,
-    [resolvedUserId],
-  );
-  return active.rows[0] || null;
+  // Match web app: GET /api/whatif/scenarios exposes activeScenarioId only when a row has is_active;
+  // the UI still picks rows[0] when none are active. Use the same default here.
+  const rows = await listWhatIfScenarios(resolvedUserId);
+  const chosen = rows.find((r) => r.isActive) || rows[0] || null;
+  if (!chosen) return null;
+  return {
+    id: chosen.id,
+    name: chosen.name,
+    isActive: Boolean(chosen.isActive),
+  };
 }
 
 /** Map stored target rows to external consumer field names (worst / exit). */

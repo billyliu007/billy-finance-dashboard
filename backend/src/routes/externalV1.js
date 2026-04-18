@@ -70,7 +70,7 @@ router.get(
     const scenario = await resolveWhatIfScenarioForPlanLookup({ userId, planName });
     if (!scenario) {
       throw new ApiError(
-        planName ? 'Scenario plan not found for this name.' : 'No active scenario plan.',
+        planName ? 'Scenario plan not found for this name.' : 'No scenario plans found.',
         404,
       );
     }
