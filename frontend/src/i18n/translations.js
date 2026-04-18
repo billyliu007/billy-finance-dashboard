@@ -458,9 +458,11 @@ export const translations = {
       featureATitle: 'Expected price simulation',
       featureADesc: 'Set worst and exit prices for existing holdings and revalue the portfolio.',
       applyTargetPrices: 'Apply expected prices',
-      clearTargetPrice2: 'Remove exit price',
-      clearTargetPrice2Aria:
-        'Clear every exit price, save, and use only the worst price for this scenario',
+      targetColumnWorstAria:
+        'When unchecked, all worst prices are cleared and saved; turn on again to edit worst prices.',
+      targetColumnExitAria:
+        'When unchecked, all exit prices are cleared and saved; turn on again to edit exit prices.',
+      targetColumnTogglesGroupAria: 'Enable or disable worst and exit price columns',
       saveTargetPricesMobileAria: 'Save expected prices (applies all rows)',
       targetChangePct: 'Worst price change %',
       targetDeltaVsCurrentPct: 'Delta vs current (worst) %',
@@ -1100,8 +1102,9 @@ export const translations = {
       featureATitle: '预期价格模拟',
       featureADesc: '为现有持仓设置最差价与出场价，并按该价格重算组合市值。',
       applyTargetPrices: '应用预期价格',
-      clearTargetPrice2: '移除出场价',
-      clearTargetPrice2Aria: '清除全部出场价并保存，本方案仅使用最差价',
+      targetColumnWorstAria: '取消勾选将清除并保存全部最差价；再次勾选后可重新编辑最差价。',
+      targetColumnExitAria: '取消勾选将清除并保存全部出场价；再次勾选后可重新编辑出场价。',
+      targetColumnTogglesGroupAria: '开启或关闭最差价与出场价列',
       saveTargetPricesMobileAria: '保存预期价格（应用于全部行）',
       targetChangePct: '最差价变动 %',
       targetDeltaVsCurrentPct: '相对当前（最差价）%',

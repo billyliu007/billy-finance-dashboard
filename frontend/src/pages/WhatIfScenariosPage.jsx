@@ -27,6 +27,16 @@ function cloneSyncedTargetRows(rows) {
   }));
 }
 
+/** Strip worst and/or exit fields before persist when that column is turned off in the UI. */
+function applyTargetColumnMaskToRows(rows, worstEnabled, exitEnabled) {
+  return (rows || []).map((r) => ({
+    symbol: String(r?.symbol || '').trim().toUpperCase(),
+    targetPrice: worstEnabled ? r.targetPrice : '',
+    targetPrice2: exitEnabled ? r.targetPrice2 : '',
+    currency: r.currency ?? '',
+  }));
+}
+
 function num(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -95,6 +105,22 @@ function buildTargetPrice2PctMap(targetRows, baselineRows) {
     pct2[sym] = baseline > 0 && t2 > 0 ? (((t2 - baseline) / baseline) * 100).toFixed(2) : '';
   }
   return pct2;
+}
+
+function buildTargetPricePctMap(targetRows, baselineRows) {
+  const pct = {};
+  for (const row of baselineRows || []) {
+    const sym = String(row.symbol || '').toUpperCase();
+    if (!sym) continue;
+    const tr = (targetRows || []).find((x) => String(x.symbol).toUpperCase() === sym);
+    const baseline = num(row.baselinePrice);
+    const targetNum = num(tr?.targetPrice);
+    pct[sym] =
+      baseline > 0 && tr?.targetPrice !== '' && tr?.targetPrice != null
+        ? (((targetNum - baseline) / baseline) * 100).toFixed(2)
+        : '';
+  }
+  return pct;
 }
 
 function formatPriceNumber(value, currency = 'USD') {
@@ -700,6 +726,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const [lastSyncedTargetPrices, setLastSyncedTargetPrices] = useState([]);
   const [targetPricePctBySymbol, setTargetPricePctBySymbol] = useState({});
   const [targetPrice2PctBySymbol, setTargetPrice2PctBySymbol] = useState({});
+  /** Table header toggles: when off, that price column is disabled and values are omitted on save. */
+  const [targetWorstColumnEnabled, setTargetWorstColumnEnabled] = useState(true);
+  const [targetExitColumnEnabled, setTargetExitColumnEnabled] = useState(true);
+  const targetWorstColumnEnabledRef = useRef(true);
+  const targetExitColumnEnabledRef = useRef(true);
   const [buyRows, setBuyRows] = useState([]);
   const [sellRows, setSellRows] = useState([]);
   const [adjustScenarioCashForHypotheticals, setAdjustScenarioCashForHypotheticals] = useState(true);
@@ -749,11 +780,15 @@ export default function WhatIfScenariosPage({ hideValues }) {
   lastSyncedTargetPricesRef.current = lastSyncedTargetPrices;
   buyRowsRef.current = buyRows;
   sellRowsRef.current = sellRows;
+  targetWorstColumnEnabledRef.current = targetWorstColumnEnabled;
+  targetExitColumnEnabledRef.current = targetExitColumnEnabled;
 
   function resetScenarioEditorState() {
     setTargetPrices([]);
     setTargetPricePctBySymbol({});
     setTargetPrice2PctBySymbol({});
+    setTargetWorstColumnEnabled(true);
+    setTargetExitColumnEnabled(true);
     setBuyRows([]);
     setSellRows([]);
     setLastSyncedTargetPrices([]);
@@ -1033,6 +1068,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setLastSyncedTargetPrices([]);
       setTargetPricePctBySymbol({});
       setTargetPrice2PctBySymbol({});
+      setTargetWorstColumnEnabled(true);
+      setTargetExitColumnEnabled(true);
       setBuyRows([]);
       setSellRows([]);
       setStockForm(emptyStockForm());
@@ -1096,6 +1133,11 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setLastSyncedTargetPrices(cloneSyncedTargetRows(prefilledTargets));
       setTargetPricePctBySymbol(pctBySymbol);
       setTargetPrice2PctBySymbol(pct2BySymbol);
+      const anyWorst = prefilledTargets.some((r) => num(r.targetPrice) > 0);
+      const anyExit =
+        prefilledTargets.some((r) => num(r.targetPrice2) > 0) || Boolean(resultRes?.hasSecondaryTargetPrices);
+      setTargetWorstColumnEnabled(anyWorst);
+      setTargetExitColumnEnabled(anyExit);
       const mappedBuys = mapApiHypotheticalPurchasesToBuyRows(resultRes?.hypotheticalPurchases);
       setBuyRows(mappedBuys);
       const mappedSales = mapApiHypotheticalSalesToSellRows(resultRes?.hypotheticalSales);
@@ -1367,8 +1409,13 @@ export default function WhatIfScenariosPage({ hideValues }) {
   const persistScenarioInputs = useCallback(async (scenarioId, nextTargetPrices, nextBuyRows, nextSellRows = []) => {
     const execute = async () => {
       if (!scenarioId) return false;
+      const maskedTargets = applyTargetColumnMaskToRows(
+        nextTargetPrices,
+        targetWorstColumnEnabledRef.current,
+        targetExitColumnEnabledRef.current,
+      );
       const dedupedTargetRows = new Map();
-      for (const row of nextTargetPrices || []) {
+      for (const row of maskedTargets || []) {
         const symbol = String(row?.symbol || '').trim().toUpperCase();
         const targetPrice = num(row?.targetPrice);
         const targetPrice2 = num(row?.targetPrice2);
@@ -1421,7 +1468,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
         const syncedSales = mapApiHypotheticalSalesToSellRows(nextResults?.hypotheticalSales);
         setBuyRows(syncedBuys);
         setSellRows(syncedSales);
-        return computeInputsHash(nextTargetPrices, syncedBuys, syncedSales);
+        return computeInputsHash(maskedTargets, syncedBuys, syncedSales);
       } catch (err) {
         if (seq === persistSeqRef.current && scenarioId === activeScenarioIdRef.current) {
           throw err;
@@ -1532,13 +1579,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
   );
   const isBusy = isLoading || isScenarioLoading || isSaving || isPersistingInputs;
   const targetSaveUiActive = hasUnsavedTargetPrices && !isBusy;
-  const hasTargetPrice2ToClear = useMemo(
-    () =>
-      Boolean(activeScenarioId) &&
-      (Boolean(results?.hasSecondaryTargetPrices) ||
-        (targetPrices || []).some((r) => num(r?.targetPrice2) > 0)),
-    [activeScenarioId, results?.hasSecondaryTargetPrices, targetPrices],
-  );
 
   useEffect(() => {
     if (!activeScenarioId) return;
@@ -1633,17 +1673,25 @@ export default function WhatIfScenariosPage({ hideValues }) {
 
   async function saveTargetPricesNow() {
     if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
-    const tp = cloneSyncedTargetRows(targetPricesRef.current);
-    const synced = lastSyncedTargetPricesRef.current;
+    const worst = targetWorstColumnEnabledRef.current;
+    const exit = targetExitColumnEnabledRef.current;
+    const tp = applyTargetColumnMaskToRows(cloneSyncedTargetRows(targetPricesRef.current), worst, exit);
+    const synced = applyTargetColumnMaskToRows(cloneSyncedTargetRows(lastSyncedTargetPricesRef.current), worst, exit);
     if (computeInputsHash(tp, [], []) === computeInputsHash(synced, [], [])) return;
     const sid = activeScenarioIdRef.current;
     const br = buyRowsRef.current;
     const sr = sellRowsRef.current;
     try {
-      const savedHash = await persistScenarioInputs(sid, tp, br, sr);
+      const savedHash = await persistScenarioInputs(sid, targetPricesRef.current, br, sr);
       if (savedHash === false || activeScenarioIdRef.current !== sid) return;
       setLastSavedHash(savedHash);
-      setLastSyncedTargetPrices(tp);
+      const normalized = applyTargetColumnMaskToRows(
+        cloneSyncedTargetRows(targetPricesRef.current),
+        targetWorstColumnEnabledRef.current,
+        targetExitColumnEnabledRef.current,
+      );
+      setLastSyncedTargetPrices(normalized);
+      setTargetPrices(normalized);
       setError('');
     } catch (err) {
       if (activeScenarioIdRef.current === sid) {
@@ -1652,20 +1700,50 @@ export default function WhatIfScenariosPage({ hideValues }) {
     }
   }
 
-  async function clearAllTargetPrice2AndSave() {
-    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
-    if (
-      !results?.hasSecondaryTargetPrices &&
-      !(targetPricesRef.current || []).some((r) => num(r?.targetPrice2) > 0)
-    ) {
+  async function handleWorstColumnToggle(checked) {
+    if (checked) {
+      setTargetWorstColumnEnabled(true);
       return;
     }
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
+    const sid = activeScenarioIdRef.current;
+    const br = buyRowsRef.current;
+    const sr = sellRowsRef.current;
+    const beforeRows = cloneSyncedTargetRows(targetPricesRef.current);
+    const baselineRows = Array.isArray(results?.rows) ? results.rows : [];
+    const clearedRows = beforeRows.map((r) => ({ ...r, targetPrice: '' }));
+    setTargetWorstColumnEnabled(false);
+    setTargetPrices(clearedRows);
+    setTargetPricePctBySymbol({});
+    try {
+      const savedHash = await persistScenarioInputs(sid, clearedRows, br, sr);
+      if (savedHash === false || activeScenarioIdRef.current !== sid) return;
+      setLastSavedHash(savedHash);
+      setLastSyncedTargetPrices(cloneSyncedTargetRows(clearedRows));
+      setError('');
+    } catch (err) {
+      if (activeScenarioIdRef.current === sid) {
+        setTargetWorstColumnEnabled(true);
+        setTargetPrices(beforeRows);
+        setTargetPricePctBySymbol(buildTargetPricePctMap(beforeRows, baselineRows));
+        setError(err?.message || t('errors.failedUpdate'));
+      }
+    }
+  }
+
+  async function handleExitColumnToggle(checked) {
+    if (checked) {
+      setTargetExitColumnEnabled(true);
+      return;
+    }
+    if (!activeScenarioIdRef.current || blockInputPersistRef.current) return;
     const sid = activeScenarioIdRef.current;
     const br = buyRowsRef.current;
     const sr = sellRowsRef.current;
     const beforeRows = cloneSyncedTargetRows(targetPricesRef.current);
     const baselineRows = Array.isArray(results?.rows) ? results.rows : [];
     const clearedRows = beforeRows.map((r) => ({ ...r, targetPrice2: '' }));
+    setTargetExitColumnEnabled(false);
     setTargetPrices(clearedRows);
     setTargetPrice2PctBySymbol({});
     try {
@@ -1676,6 +1754,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
       setError('');
     } catch (err) {
       if (activeScenarioIdRef.current === sid) {
+        setTargetExitColumnEnabled(true);
         setTargetPrices(beforeRows);
         setTargetPrice2PctBySymbol(buildTargetPrice2PctMap(beforeRows, baselineRows));
         setError(err?.message || t('errors.failedUpdate'));
@@ -1712,6 +1791,8 @@ export default function WhatIfScenariosPage({ hideValues }) {
     }
     setTargetPricePctBySymbol(pctBySymbol);
     setTargetPrice2PctBySymbol(pct2BySymbol);
+    setTargetWorstColumnEnabled(synced.some((r) => num(r?.targetPrice) > 0));
+    setTargetExitColumnEnabled(synced.some((r) => num(r?.targetPrice2) > 0));
     setError('');
   }
 
@@ -3721,9 +3802,33 @@ export default function WhatIfScenariosPage({ hideValues }) {
                             <th>{t('portfolio.asset')}</th>
                             <th>{t('whatif.currentPrice')}</th>
                             <th>{t('whatif.targetDeltaVsCurrentPct')}</th>
-                            <th>{t('whatif.targetPrice')}</th>
+                            <th className="whatIfTargetThToggle">
+                              <label className="whatIfTargetThToggleLabel">
+                                <input
+                                  type="checkbox"
+                                  className="whatIfTargetColumnToggle"
+                                  checked={targetWorstColumnEnabled}
+                                  onChange={(e) => void handleWorstColumnToggle(e.target.checked)}
+                                  disabled={isBusy || !activeScenarioId}
+                                  aria-label={t('whatif.targetColumnWorstAria')}
+                                />
+                                <span>{t('whatif.targetPrice')}</span>
+                              </label>
+                            </th>
                             <th>{t('whatif.targetDeltaVsCurrentPct2')}</th>
-                            <th>{t('whatif.targetPrice2')}</th>
+                            <th className="whatIfTargetThToggle">
+                              <label className="whatIfTargetThToggleLabel">
+                                <input
+                                  type="checkbox"
+                                  className="whatIfTargetColumnToggle"
+                                  checked={targetExitColumnEnabled}
+                                  onChange={(e) => void handleExitColumnToggle(e.target.checked)}
+                                  disabled={isBusy || !activeScenarioId}
+                                  aria-label={t('whatif.targetColumnExitAria')}
+                                />
+                                <span>{t('whatif.targetPrice2')}</span>
+                              </label>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3761,7 +3866,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     }
                                     onKeyDown={handleTargetPriceFieldKeyDown}
                                     placeholder="0.0"
-                                    disabled={num(row.baselinePrice) <= 0}
+                                    disabled={!targetWorstColumnEnabled || num(row.baselinePrice) <= 0}
                                   />
                                 </td>
                                 <td data-label={t('whatif.targetPrice')}>
@@ -3794,6 +3899,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                         }));
                                       }}
                                       onKeyDown={handleTargetPriceFieldKeyDown}
+                                      disabled={!targetWorstColumnEnabled}
                                     />
                                     <button
                                       type="button"
@@ -3823,7 +3929,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                     }
                                     onKeyDown={handleTargetPriceFieldKeyDown}
                                     placeholder="0.0"
-                                    disabled={num(row.baselinePrice) <= 0}
+                                    disabled={!targetExitColumnEnabled || num(row.baselinePrice) <= 0}
                                   />
                                 </td>
                                 <td data-label={t('whatif.targetPrice2')}>
@@ -3856,6 +3962,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                         }));
                                       }}
                                       onKeyDown={handleTargetPriceFieldKeyDown}
+                                      disabled={!targetExitColumnEnabled}
                                     />
                                   </span>
                                 </td>
@@ -3866,6 +3973,32 @@ export default function WhatIfScenariosPage({ hideValues }) {
                       </table>
                     </div>
                     <div className="whatIfTargetPriceMobileCards">
+                    <div
+                      className="whatIfTargetColumnTogglesMobile"
+                      role="group"
+                      aria-label={t('whatif.targetColumnTogglesGroupAria')}
+                    >
+                      <label className="whatIfTargetColumnToggleMobileLabel">
+                        <input
+                          type="checkbox"
+                          className="whatIfTargetColumnToggle"
+                          checked={targetWorstColumnEnabled}
+                          onChange={(e) => void handleWorstColumnToggle(e.target.checked)}
+                          disabled={isBusy || !activeScenarioId}
+                        />
+                        <span>{t('whatif.targetPrice')}</span>
+                      </label>
+                      <label className="whatIfTargetColumnToggleMobileLabel">
+                        <input
+                          type="checkbox"
+                          className="whatIfTargetColumnToggle"
+                          checked={targetExitColumnEnabled}
+                          onChange={(e) => void handleExitColumnToggle(e.target.checked)}
+                          disabled={isBusy || !activeScenarioId}
+                        />
+                        <span>{t('whatif.targetPrice2')}</span>
+                      </label>
+                    </div>
                     <div className="positionClassCards whatIfTargetPriceCards">
                       {resultRows.map((row) => {
                         const targetRow = targetPrices.find((x) => String(x.symbol).toUpperCase() === String(row.symbol).toUpperCase());
@@ -3932,7 +4065,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   }
                                   onKeyDown={handleTargetPriceFieldKeyDown}
                                   placeholder="0.0"
-                                  disabled={num(row.baselinePrice) <= 0}
+                                  disabled={!targetWorstColumnEnabled || num(row.baselinePrice) <= 0}
                                 />
                               </div>
                               <div className="positionQuickItem whatIfTargetPriceTargetBlock">
@@ -3966,6 +4099,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                       }));
                                     }}
                                     onKeyDown={handleTargetPriceFieldKeyDown}
+                                    disabled={!targetWorstColumnEnabled}
                                   />
                                 </span>
                               </div>
@@ -3986,7 +4120,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                   }
                                   onKeyDown={handleTargetPriceFieldKeyDown}
                                   placeholder="0.0"
-                                  disabled={num(row.baselinePrice) <= 0}
+                                  disabled={!targetExitColumnEnabled || num(row.baselinePrice) <= 0}
                                 />
                               </div>
                               <div className="positionQuickItem whatIfTargetPriceTargetBlock">
@@ -4020,6 +4154,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                       }));
                                     }}
                                     onKeyDown={handleTargetPriceFieldKeyDown}
+                                    disabled={!targetExitColumnEnabled}
                                   />
                                 </span>
                               </div>
@@ -4044,18 +4179,6 @@ export default function WhatIfScenariosPage({ hideValues }) {
                   </div>
                   <div className={`whatIfTargetToolbar${targetSaveUiActive ? ' whatIfTargetToolbar--unsaved' : ''}`}>
                     <div className="whatIfTargetToolbarActions">
-                      {hasTargetPrice2ToClear && (
-                        <button
-                          type="button"
-                          className="whatIfClearTarget2Btn"
-                          disabled={isBusy}
-                          aria-label={t('whatif.clearTargetPrice2Aria')}
-                          title={t('whatif.clearTargetPrice2Aria')}
-                          onClick={() => void clearAllTargetPrice2AndSave()}
-                        >
-                          {t('whatif.clearTargetPrice2')}
-                        </button>
-                      )}
                       {targetSaveUiActive && (
                         <button
                           type="button"

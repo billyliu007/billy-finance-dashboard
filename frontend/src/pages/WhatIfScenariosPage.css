@@ -128,32 +128,55 @@
   cursor: not-allowed;
 }
 
-.whatIfClearTarget2Btn {
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(251, 113, 133, 0.42);
-  background: rgba(127, 29, 29, 0.22);
-  color: #fecdd3;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+.whatIfTargetThToggle {
+  vertical-align: middle;
+}
+
+.whatIfTargetThToggleLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease,
-    opacity 0.2s ease;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: #e2e8f0;
+  user-select: none;
 }
 
-.whatIfClearTarget2Btn:hover:not(:disabled) {
-  border-color: rgba(253, 164, 175, 0.55);
-  background: rgba(153, 27, 27, 0.32);
-  color: #fff1f2;
+.whatIfTargetColumnToggle {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #38bdf8;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
-.whatIfClearTarget2Btn:disabled {
-  opacity: 0.5;
+.whatIfTargetColumnToggle:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+.whatIfTargetColumnTogglesMobile {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.whatIfTargetColumnToggleMobileLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  cursor: pointer;
+  user-select: none;
 }
 
 /* Per-row save (same action as “Apply target prices”): all breakpoints; larger tap target ≤900px. */
@@ -374,6 +397,10 @@
   .whatIfTargetPriceMobileCards,
   .whatIfHypoAggregateMobileCards {
     display: block;
+  }
+
+  .whatIfTargetColumnTogglesMobile {
+    display: flex;
   }
 }
 
@@ -2239,8 +2266,7 @@ textarea.modalInput.whatIfHypoLineCommentInput {
   }
 
   .whatIfTargetToolbarActions .whatIfStickySaveBtn,
-  .whatIfTargetToolbarActions .whatIfTargetCancelBtn,
-  .whatIfTargetToolbarActions .whatIfClearTarget2Btn {
+  .whatIfTargetToolbarActions .whatIfTargetCancelBtn {
     flex: 1 1 0;
     min-width: 0;
     min-height: 44px;
