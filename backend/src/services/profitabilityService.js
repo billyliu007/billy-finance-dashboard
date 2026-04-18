@@ -193,18 +193,73 @@ function computeRealizedAttribution({ trades, portfolioRows }) {
   };
 }
 
+export function normalizeTradingSymbolParam(symbol) {
+  const s = String(symbol ?? '').trim().toUpperCase();
+  return s || null;
+}
+
+/**
+ * Distinct symbols with at least one SELL in the transaction list (date range already applied by caller).
+ * @param {object[]} transactions
+ * @returns {string[]}
+ */
+export function collectAvailableSymbolsFromTransactions(transactions) {
+  const set = new Set();
+  for (const tx of transactions || []) {
+    if (String(tx.type).toUpperCase() !== 'SELL') continue;
+    const sym = String(tx.symbol || '').trim().toUpperCase();
+    if (sym) set.add(sym);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Per-asset realized metrics from trade rows (listing currency for per-unit averages; USD for totals / avg per trade).
+ * @param {object[]} trades
+ */
+export function computeAssetSummaryMetrics(trades) {
+  const list = Array.isArray(trades) ? trades : [];
+  const n = list.length;
+  const totalQty = list.reduce((a, t) => a + safeNum(t.qty), 0);
+  const sumCost = list.reduce((a, t) => a + safeNum(t.cost), 0);
+  const sumProceeds = list.reduce((a, t) => a + safeNum(t.proceeds), 0);
+  const sumPnlUsd = list.reduce((a, t) => a + safeNum(t.pnlUsd), 0);
+  const currency = n > 0 ? String(list[0].currency || 'USD').toUpperCase() : 'USD';
+  return {
+    tradeCount: n,
+    totalRealizedPnlUsd: sumPnlUsd,
+    avgCostBasisPerUnit: totalQty > 0 ? sumCost / totalQty : null,
+    avgSoldPricePerUnit: totalQty > 0 ? sumProceeds / totalQty : null,
+    avgPnlUsdPerTrade: n > 0 ? sumPnlUsd / n : null,
+    currency,
+  };
+}
+
+function compareTradeDetailRows(a, b) {
+  const ad = String(a.txDate || '');
+  const bd = String(b.txDate || '');
+  if (ad !== bd) return ad < bd ? -1 : 1;
+  return String(a.id).localeCompare(String(b.id));
+}
+
 /**
  * Trading-performance JSON for the page + AI prompt. Aggregates are USD-normalized (`pnlUsd`).
  * @param {string} userId
- * @param {{ from?: string|null, to?: string|null }} [range]
+ * @param {{ from?: string|null, to?: string|null, symbol?: string|null }} [range]
  */
 export async function resolveProfitabilityPayload(userId, range = {}) {
   const { from, to } = clampDateRange(range);
+  const requestedSymbol = normalizeTradingSymbolParam(range.symbol);
 
   const [holdings, transactions] = await Promise.all([
     loadTradingPerformanceHoldingsSlice(userId),
     listAllPositionTransactions(userId, { from, to }),
   ]);
+
+  const availableSymbols = collectAvailableSymbolsFromTransactions(transactions);
+  const txsForAnalytics = requestedSymbol
+    ? (transactions || []).filter((tx) => String(tx.symbol || '').trim().toUpperCase() === requestedSymbol)
+    : transactions;
 
   const portfolioRows = holdings?.tableRows || [];
   const currencyBySymbol = new Map(
@@ -213,7 +268,7 @@ export async function resolveProfitabilityPayload(userId, range = {}) {
       String(r.currency || 'USD').toUpperCase(),
     ]),
   );
-  const tradeAnalytics = computeTradeAnalytics(transactions, { currencyBySymbol, fxRates: {} });
+  const tradeAnalytics = computeTradeAnalytics(txsForAnalytics, { currencyBySymbol, fxRates: {} });
   const realizedPnl = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.pnlUsd), 0);
   const realizedCost = tradeAnalytics.trades.reduce((acc, t) => acc + safeNum(t.costUsd), 0);
 
@@ -248,20 +303,35 @@ export async function resolveProfitabilityPayload(userId, range = {}) {
     pnlUsd: t.pnlUsd,
   });
 
+  const detailsRows = requestedSymbol
+    ? [...tradeAnalytics.trades].sort(compareTradeDetailRows).map(tradeWire)
+    : undefined;
+
   return {
     portfolioIsEmpty: Boolean(holdings?.isEmpty),
     range: { from, to },
+    scope: { symbol: requestedSymbol },
+    availableSymbols,
     summary: {
       realized: { pnl: realizedPnl, pct: realizedCost === 0 ? 0 : (realizedPnl / realizedCost) * 100 },
       winStats: tradeAnalytics.stats,
+      ...(requestedSymbol
+        ? {
+            asset: {
+              symbol: requestedSymbol,
+              ...computeAssetSummaryMetrics(tradeAnalytics.trades),
+            },
+          }
+        : {}),
     },
     timeSeries: {
       monthlyStacked,
     },
     realizedAttribution,
     trades: {
-      best: tradeAnalytics.bestTrades.map(tradeWire),
-      worst: tradeAnalytics.worstTrades.map(tradeWire),
+      best: requestedSymbol ? [] : tradeAnalytics.bestTrades.map(tradeWire),
+      worst: requestedSymbol ? [] : tradeAnalytics.worstTrades.map(tradeWire),
+      ...(detailsRows ? { details: detailsRows } : {}),
       distributions: {
         tradeReturnHistogram,
       },

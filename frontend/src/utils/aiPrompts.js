@@ -462,6 +462,9 @@ export function buildTradingPerformancePrompt({ analytics, language = 'en' }) {
   }));
   const bestTrades = analytics?.trades?.best ?? [];
   const worstTrades = analytics?.trades?.worst ?? [];
+  const detailTrades = analytics?.trades?.details ?? [];
+  const scopedSymbol = analytics?.scope?.symbol ?? null;
+  const assetSummary = analytics?.summary?.asset ?? null;
   const tradeHistogram = analytics?.trades?.distributions?.tradeReturnHistogram ?? [];
   const selectedRange = analytics?.range ?? {};
   const lines = [];
@@ -487,6 +490,13 @@ export function buildTradingPerformancePrompt({ analytics, language = 'en' }) {
       ? `分析区间：from=${selectedRange?.from || 'N/A'} | to=${selectedRange?.to || 'N/A'}`
       : `Analysis range: from=${selectedRange?.from || 'N/A'} | to=${selectedRange?.to || 'N/A'}`
   );
+  if (scopedSymbol) {
+    lines.push(
+      isZh
+        ? `标的范围：仅 ${scopedSymbol}（已实现卖出）`
+        : `Symbol scope: ${scopedSymbol} only (realized sells)`
+    );
+  }
   lines.push('');
 
   lines.push(isZh ? '## 核心绩效指标（已实现）' : '## Core realized performance metrics');
@@ -501,26 +511,43 @@ export function buildTradingPerformancePrompt({ analytics, language = 'en' }) {
   lines.push(`- avgLoss(amount)=${formatNumber(winStats?.avgLoss)}`);
   lines.push('');
 
-  lines.push(isZh ? '## 收益归因（已实现）' : '## Realized attribution');
-  lines.push(isZh ? '### 按资产类别' : '### By asset class');
-  for (const row of attribution?.byAssetClass ?? []) {
-    lines.push(`- ${row?.key ?? 'N/A'}: ${formatNumber(row?.realizedPnl)}`);
-  }
-  lines.push('');
-  lines.push(isZh ? '### 主要贡献者（Top）' : '### Top contributors');
-  for (const row of attribution?.contributors ?? []) {
+  if (assetSummary && scopedSymbol) {
+    lines.push(isZh ? '## 单标的汇总（当前筛选）' : '## Scoped symbol summary');
+    lines.push(`- symbol=${assetSummary?.symbol ?? scopedSymbol}`);
+    lines.push(`- tradeCount=${formatNumber(assetSummary?.tradeCount, { maxFrac: 0 })}`);
+    lines.push(`- totalRealizedPnlUsd=${formatAmountWithCode(assetSummary?.totalRealizedPnlUsd, 'USD')}`);
     lines.push(
-      `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): usdNormalized=${formatAmountWithCode(row?.realizedPnl, 'USD')}`,
+      `- avgCostBasisPerUnit(listing)=${assetSummary?.avgCostBasisPerUnit == null ? 'N/A' : formatAmountWithCode(assetSummary.avgCostBasisPerUnit, assetSummary?.currency)}`
     );
-  }
-  lines.push('');
-  lines.push(isZh ? '### 主要拖累者（Top）' : '### Top detractors');
-  for (const row of attribution?.detractors ?? []) {
     lines.push(
-      `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): usdNormalized=${formatAmountWithCode(row?.realizedPnl, 'USD')}`,
+      `- avgSoldPricePerUnit(listing)=${assetSummary?.avgSoldPricePerUnit == null ? 'N/A' : formatAmountWithCode(assetSummary.avgSoldPricePerUnit, assetSummary?.currency)}`
     );
+    lines.push(`- avgPnlUsdPerTrade=${formatAmountWithCode(assetSummary?.avgPnlUsdPerTrade, 'USD')}`);
+    lines.push('');
   }
-  lines.push('');
+
+  if (!scopedSymbol) {
+    lines.push(isZh ? '## 收益归因（已实现）' : '## Realized attribution');
+    lines.push(isZh ? '### 按资产类别' : '### By asset class');
+    for (const row of attribution?.byAssetClass ?? []) {
+      lines.push(`- ${row?.key ?? 'N/A'}: ${formatNumber(row?.realizedPnl)}`);
+    }
+    lines.push('');
+    lines.push(isZh ? '### 主要贡献者（Top）' : '### Top contributors');
+    for (const row of attribution?.contributors ?? []) {
+      lines.push(
+        `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): usdNormalized=${formatAmountWithCode(row?.realizedPnl, 'USD')}`,
+      );
+    }
+    lines.push('');
+    lines.push(isZh ? '### 主要拖累者（Top）' : '### Top detractors');
+    for (const row of attribution?.detractors ?? []) {
+      lines.push(
+        `- ${row?.symbol ?? 'N/A'} (${row?.category ?? 'N/A'}): usdNormalized=${formatAmountWithCode(row?.realizedPnl, 'USD')}`,
+      );
+    }
+    lines.push('');
+  }
 
   lines.push(isZh ? '## 月度已实现盈亏' : '## Monthly realized P/L');
   for (const row of monthly) {
@@ -534,21 +561,31 @@ export function buildTradingPerformancePrompt({ analytics, language = 'en' }) {
   }
   lines.push('');
 
-  lines.push(isZh ? '## 最佳交易（Top）' : '## Best trades');
-  for (const tr of bestTrades) {
-    lines.push(
-      `- ${tr?.txDate ?? 'N/A'} | ${tr?.symbol ?? 'N/A'} | qty=${formatNumber(tr?.qty, { maxFrac: 8 })} | proceeds=${formatAmountWithCode(tr?.proceeds, tr?.currency)} | cost=${formatAmountWithCode(tr?.cost, tr?.currency)} | pnl=${formatAmountWithCode(tr?.pnl, tr?.currency)} | return=${formatPct(tr?.returnPct)} | pnlUsd=${formatAmountWithCode(tr?.pnlUsd, 'USD')}`
-    );
-  }
-  lines.push('');
+  if (detailTrades.length > 0) {
+    lines.push(isZh ? '## 成交明细（当前筛选）' : '## Trade details (current scope)');
+    for (const tr of detailTrades) {
+      lines.push(
+        `- ${tr?.txDate ?? 'N/A'} | ${tr?.symbol ?? 'N/A'} | qty=${formatNumber(tr?.qty, { maxFrac: 8 })} | proceeds=${formatAmountWithCode(tr?.proceeds, tr?.currency)} | cost=${formatAmountWithCode(tr?.cost, tr?.currency)} | pnl=${formatAmountWithCode(tr?.pnl, tr?.currency)} | return=${formatPct(tr?.returnPct)} | pnlUsd=${formatAmountWithCode(tr?.pnlUsd, 'USD')}`
+      );
+    }
+    lines.push('');
+  } else if (!scopedSymbol) {
+    lines.push(isZh ? '## 最佳交易（Top）' : '## Best trades');
+    for (const tr of bestTrades) {
+      lines.push(
+        `- ${tr?.txDate ?? 'N/A'} | ${tr?.symbol ?? 'N/A'} | qty=${formatNumber(tr?.qty, { maxFrac: 8 })} | proceeds=${formatAmountWithCode(tr?.proceeds, tr?.currency)} | cost=${formatAmountWithCode(tr?.cost, tr?.currency)} | pnl=${formatAmountWithCode(tr?.pnl, tr?.currency)} | return=${formatPct(tr?.returnPct)} | pnlUsd=${formatAmountWithCode(tr?.pnlUsd, 'USD')}`
+      );
+    }
+    lines.push('');
 
-  lines.push(isZh ? '## 最差交易（Top）' : '## Worst trades');
-  for (const tr of worstTrades) {
-    lines.push(
-      `- ${tr?.txDate ?? 'N/A'} | ${tr?.symbol ?? 'N/A'} | qty=${formatNumber(tr?.qty, { maxFrac: 8 })} | proceeds=${formatAmountWithCode(tr?.proceeds, tr?.currency)} | cost=${formatAmountWithCode(tr?.cost, tr?.currency)} | pnl=${formatAmountWithCode(tr?.pnl, tr?.currency)} | return=${formatPct(tr?.returnPct)} | pnlUsd=${formatAmountWithCode(tr?.pnlUsd, 'USD')}`
-    );
+    lines.push(isZh ? '## 最差交易（Top）' : '## Worst trades');
+    for (const tr of worstTrades) {
+      lines.push(
+        `- ${tr?.txDate ?? 'N/A'} | ${tr?.symbol ?? 'N/A'} | qty=${formatNumber(tr?.qty, { maxFrac: 8 })} | proceeds=${formatAmountWithCode(tr?.proceeds, tr?.currency)} | cost=${formatAmountWithCode(tr?.cost, tr?.currency)} | pnl=${formatAmountWithCode(tr?.pnl, tr?.currency)} | return=${formatPct(tr?.returnPct)} | pnlUsd=${formatAmountWithCode(tr?.pnlUsd, 'USD')}`
+      );
+    }
+    lines.push('');
   }
-  lines.push('');
 
   lines.push(isZh ? '## 你需要输出的内容' : '## Required output');
   lines.push(

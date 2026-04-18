@@ -11,7 +11,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const from = req.query?.from != null ? String(req.query.from) : null;
     const to = req.query?.to != null ? String(req.query.to) : null;
-    const payload = await resolveProfitabilityPayload(req.auth.user.userId, { from, to });
+    const symbol = req.query?.symbol != null ? String(req.query.symbol) : null;
+    const payload = await resolveProfitabilityPayload(req.auth.user.userId, { from, to, symbol });
     return res.json(payload);
   }),
 );
