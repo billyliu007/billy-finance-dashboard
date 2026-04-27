@@ -108,6 +108,8 @@ export async function listAllPositionTransactions(userId, { from = null, to = nu
             qty::float8 AS qty,
             avg_cost_per_unit::float8 AS "avgCostPerUnit",
             COALESCE(fee_flat_total::float8, (COALESCE(fee_per_unit, 0)::float8 * qty::float8)) AS "feeFlat",
+            deduct_cash_id AS "deductCashId",
+            credit_cash_id AS "creditCashId",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "createdAtUtc"

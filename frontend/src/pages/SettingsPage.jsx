@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
 import { deleteJson, fetchJson, postJson } from '../utils/api.js';
@@ -40,6 +40,10 @@ export default function SettingsPage() {
   const [revealedToken, setRevealedToken] = useState(null);
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [revoking, setRevoking] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [pendingImport, setPendingImport] = useState(null);
+  const fileInputRef = useRef(null);
 
   const loadTokens = useCallback(async () => {
     setLoading(true);
@@ -104,6 +108,80 @@ export default function SettingsPage() {
       showToast(t('settings.apiKeyCopied'), { variant: 'success' });
     } catch {
       showToast(t('settings.copyFailed'), { variant: 'error' });
+    }
+  }
+
+  function clearSelectedImportFile() {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  function triggerImportPicker() {
+    if (!importing) fileInputRef.current?.click();
+  }
+
+  function countImportRows(data, key) {
+    const list = data?.[key];
+    return Array.isArray(list) ? list.length : 0;
+  }
+
+  async function handleExportData() {
+    setExporting(true);
+    try {
+      const backup = await fetchJson('/api/user/data-transfer/export');
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `my-worth-track-backup-${now}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      showToast(t('settings.exportOk'), { variant: 'success' });
+    } catch (err) {
+      showToast(err?.message || t('settings.exportFailed'), { variant: 'error' });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleImportFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      setPendingImport({ filename: file.name, backup });
+    } catch {
+      showToast(t('settings.importFileReadFailed'), { variant: 'error' });
+      clearSelectedImportFile();
+    }
+  }
+
+  async function handleImportConfirm() {
+    if (!pendingImport?.backup) return;
+    setImporting(true);
+    try {
+      const result = await postJson('/api/user/data-transfer/import', { backup: pendingImport.backup });
+      const imported = result?.imported || {};
+      showToast(
+        t('settings.importOk', {
+          cash: imported.cash ?? 0,
+          netWorth: imported.netWorthHistory ?? 0,
+          holdings: imported.holdings ?? 0,
+          transactions: imported.transactions ?? 0,
+        }),
+        { variant: 'success' },
+      );
+      setPendingImport(null);
+      clearSelectedImportFile();
+    } catch (err) {
+      showToast(err?.message || t('settings.importFailed'), { variant: 'error' });
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -183,6 +261,41 @@ export default function SettingsPage() {
               </table>
             </div>
           )}
+        </article>
+
+        <article className="tableCard settingsCard">
+          <div className="settingsCardHeader">
+            <div>
+              <h2>{t('settings.dataTransferTitle')}</h2>
+              <p className="settingsCardDesc">{t('settings.dataTransferDesc')}</p>
+            </div>
+            <div className="settingsActionRow">
+              <button
+                type="button"
+                className="settingsPrimaryBtn"
+                onClick={handleExportData}
+                disabled={exporting || importing}
+              >
+                {exporting ? t('settings.exporting') : t('settings.exportData')}
+              </button>
+              <button
+                type="button"
+                className="settingsPrimaryBtn secondary"
+                onClick={triggerImportPicker}
+                disabled={importing || exporting}
+              >
+                {importing ? t('settings.importing') : t('settings.importData')}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="settingsFileInput"
+                onChange={handleImportFileChange}
+              />
+            </div>
+          </div>
+          <p className="settingsMuted">{t('settings.dataTransferHint')}</p>
         </article>
       </div>
 
@@ -307,6 +420,63 @@ export default function SettingsPage() {
               </button>
               <button type="button" className="modalBtn danger" onClick={handleRevokeConfirm} disabled={revoking}>
                 {revoking ? t('settings.revoking') : t('settings.revokeConfirm')}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {pendingImport && (
+        <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="settings-import-title">
+          <section className="modalCard">
+            <header className="modalHeader">
+              <h2 id="settings-import-title">{t('settings.importConfirmTitle')}</h2>
+              <button
+                type="button"
+                className="modalCloseBtn"
+                onClick={() => {
+                  if (!importing) {
+                    setPendingImport(null);
+                    clearSelectedImportFile();
+                  }
+                }}
+                aria-label={t('modals.close')}
+              >
+                ✕
+              </button>
+            </header>
+            <div className="modalBody">
+              <p>{t('settings.importConfirmBody', { filename: pendingImport.filename || 'backup.json' })}</p>
+              <ul className="settingsImportList">
+                <li>{t('settings.importCountCash', { count: countImportRows(pendingImport.backup, 'cash') })}</li>
+                <li>
+                  {t('settings.importCountNetWorth', {
+                    count: countImportRows(pendingImport.backup, 'netWorthHistory'),
+                  })}
+                </li>
+                <li>{t('settings.importCountHoldings', { count: countImportRows(pendingImport.backup, 'holdings') })}</li>
+                <li>
+                  {t('settings.importCountTransactions', {
+                    count: countImportRows(pendingImport.backup, 'transactions'),
+                  })}
+                </li>
+              </ul>
+              <p className="settingsImportWarning">{t('settings.importConfirmWarning')}</p>
+            </div>
+            <footer className="modalFooter">
+              <button
+                type="button"
+                className="modalBtn secondary"
+                onClick={() => {
+                  setPendingImport(null);
+                  clearSelectedImportFile();
+                }}
+                disabled={importing}
+              >
+                {t('modals.cancel')}
+              </button>
+              <button type="button" className="modalBtn danger" onClick={handleImportConfirm} disabled={importing}>
+                {importing ? t('settings.importing') : t('settings.importConfirmAction')}
               </button>
             </footer>
           </section>
