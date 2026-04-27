@@ -215,15 +215,29 @@ export async function importSettingsDataReplaceAll({ userId, backup }) {
       );
     }
 
+    const cashIdMap = new Map();
     for (const row of normalized.cash) {
-      await client.query(
-        `INSERT INTO cash (id, user_id, currency, name, balance)
-         VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5)`,
-        [row.id, uid, row.currency, row.name, row.balance],
+      const inserted = await client.query(
+        `INSERT INTO cash (user_id, currency, name, balance)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id`,
+        [uid, row.currency, row.name, row.balance],
       );
+      const newCashId = inserted.rows?.[0]?.id ? String(inserted.rows[0].id) : null;
+      if (row.id && newCashId) {
+        cashIdMap.set(row.id, newCashId);
+      }
     }
 
-    for (const row of normalized.transactions) {
+    for (const [index, row] of normalized.transactions.entries()) {
+      const mappedDeductCashId = row.deductCashId ? cashIdMap.get(row.deductCashId) : null;
+      const mappedCreditCashId = row.creditCashId ? cashIdMap.get(row.creditCashId) : null;
+      if (row.deductCashId && !mappedDeductCashId) {
+        throw new Error(`transactions[${index}].deductCashId does not match any cash.id in this backup.`);
+      }
+      if (row.creditCashId && !mappedCreditCashId) {
+        throw new Error(`transactions[${index}].creditCashId does not match any cash.id in this backup.`);
+      }
       await client.query(
         `INSERT INTO portfolio_position_transactions (
           user_id,
@@ -248,8 +262,8 @@ export async function importSettingsDataReplaceAll({ userId, backup }) {
           row.qty,
           row.avgCostPerUnit,
           row.feeFlat,
-          row.deductCashId,
-          row.creditCashId,
+          mappedDeductCashId,
+          mappedCreditCashId,
           row.costBasisPerUnit,
           row.notes,
         ],
