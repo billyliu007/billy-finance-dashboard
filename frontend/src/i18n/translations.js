@@ -77,7 +77,7 @@ export const translations = {
       dataTransferDesc:
         'Export a JSON backup of your finance data, or import a backup to replace your current finance data.',
       dataTransferHint:
-        'Includes cash, net worth history, holdings, purchases/sells, and historical sells. Scenario planning data is excluded.',
+        'Includes cash, net worth history, holdings, purchases/sells, historical sells, and scenario planning data.',
       exportData: 'Export data',
       exporting: 'Exporting…',
       exportOk: 'Backup exported.',
@@ -91,10 +91,12 @@ export const translations = {
       importCountNetWorth: 'Net worth history rows: {count}',
       importCountHoldings: 'Holdings rows: {count}',
       importCountTransactions: 'Transaction rows: {count}',
+      importCountScenarios: 'Scenarios: {count}',
       importConfirmWarning:
-        'This will replace your current finance data with this backup. Scenario planning data will remain unchanged.',
+        'This will replace your current finance and scenario planning data with this backup.',
       importConfirmAction: 'Import and replace',
-      importOk: 'Imported. Cash: {cash}, Net worth: {netWorth}, Holdings: {holdings}, Transactions: {transactions}.',
+      importOk:
+        'Imported. Cash: {cash}, Net worth: {netWorth}, Holdings: {holdings}, Transactions: {transactions}, Scenarios: {scenarios}.',
       importFailed: 'Could not import backup.',
     },
     login: {
@@ -746,7 +748,7 @@ export const translations = {
       dataTransferTitle: '数据导入与导出',
       dataTransferDesc: '导出你的财务数据 JSON 备份，或导入备份并替换当前财务数据。',
       dataTransferHint:
-        '包含现金、净资产历史、持仓、买入/卖出和历史卖出。情景规划数据不会被导入或导出。',
+        '包含现金、净资产历史、持仓、买入/卖出、历史卖出，以及情景规划数据。',
       exportData: '导出数据',
       exporting: '导出中…',
       exportOk: '备份已导出。',
@@ -760,9 +762,11 @@ export const translations = {
       importCountNetWorth: '净资产历史记录：{count}',
       importCountHoldings: '持仓记录：{count}',
       importCountTransactions: '交易记录：{count}',
-      importConfirmWarning: '此操作会用该备份替换你当前的财务数据。情景规划数据不会改变。',
+      importCountScenarios: '情景方案：{count}',
+      importConfirmWarning: '此操作会用该备份替换你当前的财务与情景规划数据。',
       importConfirmAction: '导入并替换',
-      importOk: '导入完成。现金：{cash}，净资产：{netWorth}，持仓：{holdings}，交易：{transactions}。',
+      importOk:
+        '导入完成。现金：{cash}，净资产：{netWorth}，持仓：{holdings}，交易：{transactions}，情景：{scenarios}。',
       importFailed: '导入备份失败。',
     },
     login: {

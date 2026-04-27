@@ -126,6 +126,11 @@ export default function SettingsPage() {
     return Array.isArray(list) ? list.length : 0;
   }
 
+  function countImportScenarios(data) {
+    const list = data?.scenarioPlanning?.scenarios;
+    return Array.isArray(list) ? list.length : 0;
+  }
+
   async function handleExportData() {
     setExporting(true);
     try {
@@ -173,6 +178,7 @@ export default function SettingsPage() {
           netWorth: imported.netWorthHistory ?? 0,
           holdings: imported.holdings ?? 0,
           transactions: imported.transactions ?? 0,
+          scenarios: imported.scenarios ?? 0,
         }),
         { variant: 'success' },
       );
@@ -460,6 +466,7 @@ export default function SettingsPage() {
                     count: countImportRows(pendingImport.backup, 'transactions'),
                   })}
                 </li>
+                <li>{t('settings.importCountScenarios', { count: countImportScenarios(pendingImport.backup) })}</li>
               </ul>
               <p className="settingsImportWarning">{t('settings.importConfirmWarning')}</p>
             </div>

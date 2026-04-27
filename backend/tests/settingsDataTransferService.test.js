@@ -34,11 +34,22 @@ function sampleBackup() {
         deductCashId: '11111111-1111-4111-8111-111111111111',
       },
     ],
-    scenarios: [{ id: 's-1', name: 'ignored' }],
+    scenarioPlanning: {
+      scenarios: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          name: 'Base case',
+          isActive: true,
+          targetPrices: [{ symbol: 'QQQ', targetPrice: 400, targetPrice2: 500, currency: 'USD' }],
+          hypotheticalPurchases: [{ symbol: 'QQQ', qty: 1, buyPrice: 420, currency: 'USD', comment: 'DCA' }],
+          hypotheticalSales: [{ symbol: 'QQQ', qty: 1, sellPrice: 510, feeFlat: 1.2, currency: 'USD', comment: null }],
+        },
+      ],
+    },
   };
 }
 
-test('buildSettingsExportPayload returns expected finance-only shape', () => {
+test('buildSettingsExportPayload returns expected shape with scenarios', () => {
   const payload = buildSettingsExportPayload({
     cashRows: [{ id: '22222222-2222-4222-8222-222222222222', currency: 'usd', name: 'Wallet', balance: 200 }],
     netWorthRows: [{ date: '2026-04-27', recordedAtUtc: '2026-04-27T00:00:00Z', netWorthCny: 1, netWorthUsd: 2 }],
@@ -56,6 +67,16 @@ test('buildSettingsExportPayload returns expected finance-only shape', () => {
         creditCashId: '22222222-2222-4222-8222-222222222222',
       },
     ],
+    scenarios: [
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        name: 'Base case',
+        isActive: true,
+        targetPrices: [],
+        hypotheticalPurchases: [],
+        hypotheticalSales: [],
+      },
+    ],
   });
 
   assert.strictEqual(payload.version, SETTINGS_BACKUP_VERSION);
@@ -65,6 +86,7 @@ test('buildSettingsExportPayload returns expected finance-only shape', () => {
     'exportedAt',
     'holdings',
     'netWorthHistory',
+    'scenarioPlanning',
     'transactions',
     'version',
   ]);
@@ -77,9 +99,10 @@ test('buildSettingsExportPayload returns expected finance-only shape', () => {
   assert.deepStrictEqual(payload.holdings[0].symbol, 'BTC');
   assert.deepStrictEqual(payload.transactions[0].affectsHoldings, false);
   assert.deepStrictEqual(payload.transactions[0].creditCashId, '22222222-2222-4222-8222-222222222222');
+  assert.strictEqual(payload.scenarioPlanning.scenarios.length, 1);
 });
 
-test('normalizeSettingsImportPayload accepts valid backup and ignores scenarios data', () => {
+test('normalizeSettingsImportPayload accepts valid backup with scenarios', () => {
   const normalized = normalizeSettingsImportPayload(sampleBackup());
   assert.strictEqual(normalized.version, SETTINGS_BACKUP_VERSION);
   assert.strictEqual(normalized.cash.length, 1);
@@ -88,7 +111,7 @@ test('normalizeSettingsImportPayload accepts valid backup and ignores scenarios 
   assert.strictEqual(normalized.transactions.length, 1);
   assert.strictEqual(normalized.cash[0].currency, 'USD');
   assert.strictEqual(normalized.holdings[0].symbol, 'QQQ');
-  assert.ok(!('scenarios' in normalized));
+  assert.strictEqual(normalized.scenarioPlanning.scenarios.length, 1);
 });
 
 test('normalizeSettingsImportPayload rejects unsupported version', () => {
@@ -110,5 +133,11 @@ test('normalizeSettingsImportPayload rejects invalid transaction rows', () => {
 });
 
 test('replace-all mode and dataset order are stable', () => {
-  assert.deepStrictEqual(REPLACE_ALL_DATASET_ORDER, ['holdings', 'cash', 'transactions', 'netWorthHistory']);
+  assert.deepStrictEqual(REPLACE_ALL_DATASET_ORDER, [
+    'holdings',
+    'cash',
+    'transactions',
+    'netWorthHistory',
+    'scenarioPlanning',
+  ]);
 });

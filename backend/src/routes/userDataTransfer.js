@@ -7,6 +7,7 @@ import { listAllPositionTransactions, listPortfolioPositions } from '../reposito
 import {
   buildSettingsExportPayload,
   importSettingsDataReplaceAll,
+  listScenarioPlanningExportRows,
 } from '../services/settingsDataTransferService.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
@@ -17,13 +18,14 @@ router.get(
   '/export',
   asyncHandler(async (req, res) => {
     const userId = req.auth.user.userId;
-    const [cashRows, netWorthRows, holdingsRows, transactionRows] = await Promise.all([
+    const [cashRows, netWorthRows, holdingsRows, transactionRows, scenarios] = await Promise.all([
       listCashComponents(userId),
       listNetWorthHistory(userId),
       listPortfolioPositions(userId),
       listAllPositionTransactions(userId),
+      listScenarioPlanningExportRows(userId),
     ]);
-    const backup = buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRows, transactionRows });
+    const backup = buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRows, transactionRows, scenarios });
     return res.status(200).json(backup);
   }),
 );
