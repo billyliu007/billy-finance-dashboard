@@ -163,6 +163,7 @@ export const translations = {
       edit: 'Edit',
       delete: 'Delete',
       rateMissing: 'Rate missing',
+      cashSubtotal: 'Subtotal (cash)',
       noHistory: 'No net worth history is available yet.',
     },
     portfolio: {
@@ -833,6 +834,7 @@ export const translations = {
       edit: '编辑',
       delete: '删除',
       rateMissing: '缺少汇率',
+      cashSubtotal: '现金小计',
       noHistory: '暂无净资产历史记录。',
     },
     portfolio: {

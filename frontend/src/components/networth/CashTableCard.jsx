@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatBaseCurrency, formatCurrencyValue, formatFxRate, formatMaybeHidden } from '../../utils/formatters.js';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 
@@ -25,6 +25,18 @@ export default function CashTableCard({
   }, [showAddMenu]);
 
   const hasActions = Boolean(onAdd || onEdit || onDelete);
+
+  /** Sum of cash & debt in base currency (`amountCny` is legacy field name). */
+  const cashSubtotalBase = useMemo(() => {
+    if (!rows?.length) return null;
+    let sum = 0;
+    for (const r of rows) {
+      const v = r.amountCny;
+      if (v == null || Number.isNaN(Number(v))) return null;
+      sum += Number(v);
+    }
+    return sum;
+  }, [rows]);
 
   if (!rows.length && !onAdd) {
     return null;
@@ -131,6 +143,26 @@ export default function CashTableCard({
                 )}
               </tr>
             ))}
+            {rows.length > 0 && (
+              <tr className="cashSubtotalRow">
+                <td data-label={t('netWorth.type')}>—</td>
+                <td data-label={t('netWorth.name')}>{t('netWorth.cashSubtotal')}</td>
+                <td data-label={t('netWorth.currency')}>—</td>
+                <td data-label={t('netWorth.balanceLocal')}>—</td>
+                <td data-label={t('netWorth.fxRateToCny')}>—</td>
+                <td
+                  data-label={`${t('netWorth.balanceBase')} (${baseCurrency})`}
+                  className={cashSubtotalBase == null ? '' : cashSubtotalBase >= 0 ? 'pos' : 'neg'}
+                >
+                  {cashSubtotalBase == null
+                    ? t('netWorth.rateMissing')
+                    : formatMaybeHidden(hideValues, (v) => formatBaseCurrency(v, baseCurrency), cashSubtotalBase)}
+                </td>
+                {hasActions && (
+                  <td data-label={t('netWorth.actions')} className="positionActionsCell" aria-hidden />
+                )}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

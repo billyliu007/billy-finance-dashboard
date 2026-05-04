@@ -2757,6 +2757,16 @@ tbody tr:hover td {
   color: var(--bad);
 }
 
+.cashSubtotalRow td {
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  font-weight: 650;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+tbody tr.cashSubtotalRow:hover td {
+  background: rgba(15, 23, 42, 0.85);
+}
+
 .error {
   color: #ffb4c4;
   margin: 0;
@@ -3051,6 +3061,11 @@ tbody tr:hover td {
 
   .cashMobileCompact .positionActionsCell .headerIconBtn:last-child {
     margin-right: 0;
+  }
+
+  /* Subtotal row: base column is hidden for detail rows on narrow layouts; show it for the total. */
+  .cashMobileCompact tr.cashSubtotalRow td:nth-child(6) {
+    display: table-cell;
   }
 
   /* 11 cols: asset, currency, qty, avgCost, costBasis, marketPrice, marketValue, weight, unrealizedGain, unrealizedReturn, actions */
