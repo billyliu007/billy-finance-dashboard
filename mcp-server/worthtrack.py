@@ -4,12 +4,13 @@ WorthTrack MCP Server (stdio)
 Wraps the WorthTrack REST API directly — no relay, no rate limits.
 """
 
+import os
 import urllib.request
 import json
 from mcp.server.fastmcp import FastMCP
 
-BASE_URL = "https://api.myworthtrack.com"
-API_TOKEN = "bfpat_Dpc5wyID2xN2YWjl3AibmuEcHPj60sh4"
+BASE_URL = os.environ.get("WORTHTRACK_API_BASE_URL", "https://api.myworthtrack.com")
+API_TOKEN = os.environ["WORTHTRACK_API_TOKEN"]
 
 mcp = FastMCP("worthtrack")
 

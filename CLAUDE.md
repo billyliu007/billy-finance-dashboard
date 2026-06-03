@@ -77,6 +77,12 @@ Deep-dive docs live in `docs/` — consult before non-trivial changes:
 - `OPTIMIZATION_AND_REFACTOR.md` — perf/DRY backlog and what's already implemented.
 - Deployment: `DEPLOYMENT.md` + `render.yaml` (Render blueprint: web backend, static frontend, cron). Treat the Render env group as the source of truth for secrets.
 
+## MCP server
+
+The WorthTrack MCP server lives in `mcp-server/worthtrack.py`. It wraps the `/api/v1/` external API for use with Claude Desktop (stdio transport). Configure via env vars:
+- `WORTHTRACK_API_TOKEN` — a `bfpat_` personal access token (create via Settings page)
+- `WORTHTRACK_API_BASE_URL` — defaults to `https://api.myworthtrack.com`
+
 ## CI
 
 `.github/workflows/ci.yml` runs on push/PR to `main`: backend unit tests (`npm test --prefix backend`) and a frontend build. CI does not run DB-backed tests, so keep backend tests pure-unit / mocked.
