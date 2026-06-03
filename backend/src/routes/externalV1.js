@@ -14,9 +14,11 @@ import {
   resolveWhatIfScenarioForPlanLookup,
 } from '../repositories/financeRepository.js';
 import { listCashComponents } from '../repositories/cashRepository.js';
+import { listNetWorthHistory } from '../repositories/netWorthHistoryRepository.js';
 import { resolveDashboardPayload } from '../services/dashboardService.js';
 import { buildCashUsdDetailForApi } from '../services/netWorthService.js';
 import { getLiveFxRates } from '../services/marketDataService.js';
+import { resolveProfitabilityPayload, normalizeTradingSymbolParam } from '../services/profitabilityService.js';
 import { parseIncludeHistoricalSellsQuery } from '../lib/externalV1Query.js';
 
 const router = Router();
@@ -128,6 +130,38 @@ router.get(
     } catch (error) {
       rethrowAsBadRequest(error);
     }
+  }),
+);
+
+router.get(
+  '/me/trading-performance',
+  asyncHandler(async (req, res) => {
+    const from = req.query?.from != null ? String(req.query.from) : null;
+    const to = req.query?.to != null ? String(req.query.to) : null;
+    const symbol = req.query?.symbol != null ? normalizeTradingSymbolParam(req.query.symbol) : null;
+    const payload = await resolveProfitabilityPayload(req.auth.user.userId, { from, to, symbol });
+    return res.json(payload);
+  }),
+);
+
+router.get(
+  '/me/net-worth/history',
+  asyncHandler(async (req, res) => {
+    const from = req.query?.from != null ? String(req.query.from).trim() : null;
+    const to = req.query?.to != null ? String(req.query.to).trim() : null;
+    const rows = await listNetWorthHistory(req.auth.user.userId);
+    const history = rows
+      .filter((r) => {
+        if (from && r.date < from) return false;
+        if (to && r.date > to) return false;
+        return true;
+      })
+      .map((r) => ({
+        date: r.date,
+        totalUsd: r.netWorthUsd,
+        totalCny: r.netWorthCny ?? null,
+      }));
+    return res.json({ baseCurrency: 'USD', history });
   }),
 );
 
