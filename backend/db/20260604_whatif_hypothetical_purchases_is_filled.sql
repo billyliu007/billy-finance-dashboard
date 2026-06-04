@@ -1,0 +1,2 @@
+ALTER TABLE whatif_hypothetical_purchases
+  ADD COLUMN IF NOT EXISTS is_filled BOOLEAN NOT NULL DEFAULT FALSE;

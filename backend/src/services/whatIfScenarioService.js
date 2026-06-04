@@ -67,6 +67,7 @@ function stableInputsHash({ targetPrices = [], hypotheticalPurchases = [], hypot
       buyPrice: numberOrZero(r?.buyPrice),
       currency: toUpper(r?.currency || '') || null,
       comment: String(r?.comment ?? '').trim(),
+      isFilled: Boolean(r?.isFilled),
     }))
     .filter((r) => r.symbol && r.qty > 0 && r.buyPrice >= 0)
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -207,7 +208,7 @@ export function computeWhatIfFromData({
     ]),
   );
 
-  for (const buy of hypotheticalPurchases) {
+  for (const buy of (hypotheticalPurchases || []).filter((b) => !b.isFilled)) {
     const symbol = toUpper(buy.symbol);
     const qty = numberOrZero(buy.qty);
     const buyPrice = numberOrZero(buy.buyPrice);
@@ -389,7 +390,7 @@ export function computeWhatIfFromData({
     portfolioBaseTotals.scenarioValue2 = scenarioValue2BaseSum;
     portfolioBaseTotals.deltaValue2 = scenarioValue2BaseSum - portfolioBaseTotals.baselineValue;
   }
-  portfolioBaseTotals.hypotheticalCostBase = (hypotheticalPurchases || []).reduce((sum, item) => {
+  portfolioBaseTotals.hypotheticalCostBase = (hypotheticalPurchases || []).filter((b) => !b.isFilled).reduce((sum, item) => {
     const qty = numberOrZero(item?.qty);
     const buyPrice = numberOrZero(item?.buyPrice);
     const currency = toUpper(item?.currency || 'USD');

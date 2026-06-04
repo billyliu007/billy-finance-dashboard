@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS whatif_hypothetical_purchases (
   buy_price NUMERIC(20, 8) NOT NULL,
   currency TEXT,
   comment_text TEXT,
+  is_filled BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

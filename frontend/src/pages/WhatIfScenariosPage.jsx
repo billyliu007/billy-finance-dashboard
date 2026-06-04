@@ -424,6 +424,7 @@ function mapApiHypotheticalPurchasesToBuyRows(rows) {
     buyPrice: row.buyPrice,
     currency: String(row.currency || '').toUpperCase() || null,
     comment: String(row.comment ?? '').trim(),
+    filled: Boolean(row.isFilled),
     ...(row.productId ? { productId: String(row.productId) } : {}),
   }));
 }
@@ -831,6 +832,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
             ? 'USD'
             : String(row?.currency || '').trim().toUpperCase() || 'USD',
         comment: String(row?.comment ?? '').trim() || null,
+        filled: Boolean(row?.filled),
       }))
       .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0)
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -1437,6 +1439,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
           buyPrice: num(row.buyPrice),
           currency: row.assetClass === 'stock' ? 'USD' : String(row.currency || '').trim().toUpperCase() || 'USD',
           comment: String(row.comment ?? '').trim() || null,
+          isFilled: Boolean(row.filled),
         }))
         .filter((row) => row.symbol && row.qty > 0 && row.buyPrice >= 0);
 
@@ -1805,6 +1808,17 @@ export default function WhatIfScenariosPage({ hideValues }) {
   function removeBuyRow(index) {
     setBuyRows((prev) => {
       const next = prev.filter((_, i) => i !== index);
+      queueMicrotask(() => {
+        void saveAfterHypotheticalChange(next, sellRowsRef.current);
+      });
+      return next;
+    });
+  }
+
+  function toggleBuyRowFilled(index) {
+    setBuyRows((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const next = prev.map((row, i) => (i === index ? { ...row, filled: !row.filled } : row));
       queueMicrotask(() => {
         void saveAfterHypotheticalChange(next, sellRowsRef.current);
       });
@@ -2981,6 +2995,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                 <th scope="col">{t('modals.avgCostPerUnit')}</th>
                                                 <th scope="col">{t('portfolio.totalCostBasis')}</th>
                                                 <th scope="col">{t('whatif.hypoLineCommentLabel')}</th>
+                                                <th scope="col">Filled</th>
                                                 <th
                                                   className="whatIfHypoNestedLinesTableActionsCol"
                                                   scope="col"
@@ -2999,7 +3014,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                   const lineCost = num(r.qty) * num(r.buyPrice);
                                                   const lineNo = i + 1;
                                                   return (
-                                                    <tr key={r.id || `hypo-buy-${aggKey}-${index}`}>
+                                                    <tr key={r.id || `hypo-buy-${aggKey}-${index}`} style={r.filled ? { opacity: 0.45 } : undefined}>
                                                       <td data-label={t('whatif.simulatedBuyLinesSection')}>
                                                         {t('whatif.simulatedBuyLineLabel', { n: lineNo })}
                                                       </td>
@@ -3028,6 +3043,16 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                             updateHypotheticalBuyComment(index, e.target.value)
                                                           }
                                                           disabled={isBusy}
+                                                        />
+                                                      </td>
+                                                      <td data-label="Filled" style={{ textAlign: 'center' }}>
+                                                        <input
+                                                          type="checkbox"
+                                                          checked={Boolean(r.filled)}
+                                                          onChange={() => toggleBuyRowFilled(index)}
+                                                          disabled={isBusy}
+                                                          aria-label="Mark as filled"
+                                                          title="Filled — exclude from scenario calculation"
                                                         />
                                                       </td>
                                                       <td data-label={t('modals.remove')}>
@@ -3181,6 +3206,7 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                             <div
                                               key={r.id || `hypo-buy-${aggKey}-${index}`}
                                               className="positionTxCard"
+                                              style={r.filled ? { opacity: 0.45 } : undefined}
                                             >
                                               <div className="positionTxCardTitleRow">
                                                 <strong>{t('whatif.simulatedBuyLineLabel', { n: lineNo })}</strong>
@@ -3231,6 +3257,18 @@ export default function WhatIfScenariosPage({ hideValues }) {
                                                   disabled={isBusy}
                                                 />
                                               </label>
+                                              <div className="privacyToggle" style={{ marginTop: 6 }}>
+                                                <input
+                                                  type="checkbox"
+                                                  id={`filled-m-${r.id}-${index}`}
+                                                  checked={Boolean(r.filled)}
+                                                  onChange={() => toggleBuyRowFilled(index)}
+                                                  disabled={isBusy}
+                                                />
+                                                <label htmlFor={`filled-m-${r.id}-${index}`}>
+                                                  Filled (exclude from scenario)
+                                                </label>
+                                              </div>
                                             </div>
                                           );
                                         })}

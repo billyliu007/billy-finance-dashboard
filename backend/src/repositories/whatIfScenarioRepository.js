@@ -55,7 +55,8 @@ function normalizeHypotheticalPurchaseInputRows(resolvedRows) {
       throw new Error(`Hypothetical buy row ${index + 1}: buyPrice must be 0 or greater.`);
     }
     const comment = normalizeHypotheticalComment(item?.comment);
-    return { symbol, qty, buyPrice, currency, comment };
+    const isFilled = Boolean(item?.isFilled ?? item?.is_filled ?? false);
+    return { symbol, qty, buyPrice, currency, comment, isFilled };
   });
 }
 
@@ -220,8 +221,8 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
     }
     for (const row of purchases.rows) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text, is_filled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           newId,
           normalizeSymbol(row.symbol),
@@ -229,6 +230,7 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
           Number(row.buy_price),
           normalizeCurrency(row.currency),
           row.comment_text == null || String(row.comment_text).trim() === '' ? null : String(row.comment_text).trim(),
+          Boolean(row.is_filled),
         ],
       );
     }
@@ -467,7 +469,8 @@ export async function listWhatIfHypotheticalPurchases({ userId, scenarioId }) {
             qty::float8 AS qty,
             buy_price::float8 AS "buyPrice",
             COALESCE(NULLIF(TRIM(currency), ''), NULL) AS currency,
-            NULLIF(TRIM(comment_text), '') AS comment
+            NULLIF(TRIM(comment_text), '') AS comment,
+            is_filled AS "isFilled"
      FROM whatif_hypothetical_purchases
      WHERE scenario_id = $1
      ORDER BY created_at ASC`,
@@ -480,6 +483,7 @@ export async function listWhatIfHypotheticalPurchases({ userId, scenarioId }) {
     buyPrice: Number(row.buyPrice) || 0,
     currency: normalizeCurrency(row.currency),
     comment: row.comment == null ? null : String(row.comment),
+    isFilled: Boolean(row.isFilled),
   }));
 }
 
@@ -493,9 +497,9 @@ export async function replaceWhatIfHypotheticalPurchases({ userId, scenarioId, r
     await client.query(`DELETE FROM whatif_hypothetical_purchases WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalized) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency, row.comment],
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text, is_filled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency, row.comment, row.isFilled],
       );
     }
     await client.query(`UPDATE whatif_scenarios SET updated_at = NOW() WHERE id = $1`, [scenarioId]);
@@ -526,9 +530,9 @@ export async function replaceWhatIfScenarioInputs({ userId, scenarioId, targetRo
     await client.query(`DELETE FROM whatif_hypothetical_purchases WHERE scenario_id = $1`, [scenarioId]);
     for (const row of normalizedPurchases) {
       await client.query(
-        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency, row.comment],
+        `INSERT INTO whatif_hypothetical_purchases (scenario_id, symbol, qty, buy_price, currency, comment_text, is_filled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [scenarioId, row.symbol, row.qty, row.buyPrice, row.currency, row.comment, row.isFilled],
       );
     }
     await client.query(`DELETE FROM whatif_hypothetical_sales WHERE scenario_id = $1`, [scenarioId]);
