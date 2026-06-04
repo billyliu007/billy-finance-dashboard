@@ -24,6 +24,11 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // "Total amount" input mode: user provides total spend + crypto fee instead of avg cost per unit
+  const [totalAmountMode, setTotalAmountMode] = useState(false);
+  const [totalAmount, setTotalAmount] = useState('');
+  const [feeCrypto, setFeeCrypto] = useState('');
+
   useEffect(() => {
     if (!open) return;
     setError('');
@@ -33,7 +38,28 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
     setFeeFlatTotal('');
     setDeductEnabled(false);
     setDeductCashId('');
+    setTotalAmountMode(false);
+    setTotalAmount('');
+    setFeeCrypto('');
   }, [open]);
+
+  // Derived values for total-amount mode:
+  // net qty = gross qty - fee in crypto; avg cost = total amount / net qty
+  const totalModeNetQty = useMemo(() => {
+    const q = Number(qty);
+    const f = Number(feeCrypto);
+    if (!Number.isFinite(q) || q <= 0) return null;
+    const fee = Number.isFinite(f) && f >= 0 ? f : 0;
+    const net = q - fee;
+    return net > 0 ? net : null;
+  }, [qty, feeCrypto]);
+
+  const totalModeAvgCost = useMemo(() => {
+    const total = Number(totalAmount);
+    if (!Number.isFinite(total) || total <= 0) return null;
+    if (!totalModeNetQty) return null;
+    return total / totalModeNetQty;
+  }, [totalAmount, totalModeNetQty]);
 
   const symbol = String(position?.symbol || '').toUpperCase();
   const displayName = position?.name || symbol;
@@ -90,26 +116,55 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
       setError(t('errors.missingPosition'));
       return;
     }
-    const qtyNum = Number(qty);
-    const avgCostNum = Number(avgCost);
-    const feeNumRaw = feeFlatTotal.trim() === '' ? null : Number(feeFlatTotal);
-    const feeNum = feeNumRaw == null ? null : feeNumRaw;
     if (!txDate) {
       setError(t('errors.dateRequired'));
       return;
     }
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      setError(t('errors.quantityGreaterZero'));
-      return;
+
+    let qtyNum, avgCostNum, feeNum;
+
+    if (totalAmountMode) {
+      const grossQty = Number(qty);
+      if (!Number.isFinite(grossQty) || grossQty <= 0) {
+        setError(t('errors.quantityGreaterZero'));
+        return;
+      }
+      const totalAmountNum = Number(totalAmount);
+      if (!Number.isFinite(totalAmountNum) || totalAmountNum <= 0) {
+        setError('Total amount must be greater than zero.');
+        return;
+      }
+      if (!totalModeNetQty) {
+        setError('Fee in crypto cannot exceed quantity.');
+        return;
+      }
+      if (!totalModeAvgCost) {
+        setError('Could not calculate avg cost — check your inputs.');
+        return;
+      }
+      // Submit net qty (after crypto fee deduction) and the derived avg cost
+      qtyNum = totalModeNetQty;
+      avgCostNum = totalModeAvgCost;
+      feeNum = null; // fee already absorbed into qty; no flat fee to record
+    } else {
+      qtyNum = Number(qty);
+      avgCostNum = Number(avgCost);
+      const feeNumRaw = feeFlatTotal.trim() === '' ? null : Number(feeFlatTotal);
+      feeNum = feeNumRaw;
+      if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+        setError(t('errors.quantityGreaterZero'));
+        return;
+      }
+      if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
+        setError(t('errors.avgCostNonNegative'));
+        return;
+      }
+      if (feeNum != null && (!Number.isFinite(feeNum) || feeNum < 0)) {
+        setError(t('errors.feePerUnitNonNegative'));
+        return;
+      }
     }
-    if (!Number.isFinite(avgCostNum) || avgCostNum < 0) {
-      setError(t('errors.avgCostNonNegative'));
-      return;
-    }
-    if (feeNum != null && (!Number.isFinite(feeNum) || feeNum < 0)) {
-      setError(t('errors.feePerUnitNonNegative'));
-      return;
-    }
+
     if (deductEnabled && eligibleCash.length === 0) {
       setError(t('errors.noMatchingCashForDeduction'));
       return;
@@ -150,13 +205,31 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
             <input type="text" value={displayName} readOnly className="modalInput" />
           </label>
 
+          {isCrypto && (
+            <div className="privacyToggle" style={{ marginBottom: 10 }}>
+              <input
+                type="checkbox"
+                id="totalAmountModeToggle"
+                checked={totalAmountMode}
+                onChange={(e) => {
+                  setTotalAmountMode(e.target.checked);
+                  setAvgCost('');
+                  setFeeFlatTotal('');
+                  setTotalAmount('');
+                  setFeeCrypto('');
+                }}
+              />
+              <label htmlFor="totalAmountModeToggle">Enter total amount paid (fee in {symbol})</label>
+            </div>
+          )}
+
           <div className="modalGrid">
             <label className="modalLabel">
               Date
               <input type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="modalInput" />
             </label>
             <label className="modalLabel">
-              Quantity
+              {totalAmountMode ? `Gross quantity (before fee)` : 'Quantity'}
               <input
                 type="text"
                 inputMode="decimal"
@@ -166,29 +239,70 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
                 className="modalInput"
               />
             </label>
-            <label className="modalLabel">
-              Avg cost per unit ({positionCurrency || 'USD'})
-              <input
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                value={avgCost}
-                onChange={handleAvgCostChange}
-                className="modalInput"
-              />
-            </label>
-            <label className="modalLabel">
-              Fee (flat, optional)
-              <input
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                value={feeFlatTotal}
-                onChange={handleFeeFlatTotalChange}
-                className="modalInput"
-              />
-            </label>
+
+            {totalAmountMode ? (
+              <>
+                <label className="modalLabel">
+                  Total amount paid ({positionCurrency || 'USD'})
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={totalAmount}
+                    onChange={(e) => setTotalAmount(sanitizeDecimalInput(e.target.value, { allowNegative: false }))}
+                    className="modalInput"
+                  />
+                </label>
+                <label className="modalLabel">
+                  Fee in {symbol} (optional)
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={feeCrypto}
+                    onChange={(e) => setFeeCrypto(sanitizeDecimalInput(e.target.value, { allowNegative: false }))}
+                    className="modalInput"
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="modalLabel">
+                  Avg cost per unit ({positionCurrency || 'USD'})
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={avgCost}
+                    onChange={handleAvgCostChange}
+                    className="modalInput"
+                  />
+                </label>
+                <label className="modalLabel">
+                  Fee (flat, optional)
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={feeFlatTotal}
+                    onChange={handleFeeFlatTotalChange}
+                    className="modalInput"
+                  />
+                </label>
+              </>
+            )}
           </div>
+
+          {totalAmountMode && (totalModeNetQty || totalModeAvgCost) && (
+            <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(255,255,255,0.05)', borderRadius: 8, fontSize: 13, color: 'var(--color-text-secondary, #aaa)' }}>
+              {totalModeNetQty != null && (
+                <div>Net qty: <strong style={{ color: 'var(--color-text, #fff)' }}>{totalModeNetQty.toFixed(8).replace(/\.?0+$/, '')} {symbol}</strong></div>
+              )}
+              {totalModeAvgCost != null && (
+                <div>Avg cost: <strong style={{ color: 'var(--color-text, #fff)' }}>{totalModeAvgCost.toFixed(2)} {positionCurrency}</strong></div>
+              )}
+            </div>
+          )}
 
           <div className="privacyToggle" style={{ marginTop: 10 }}>
             <input
