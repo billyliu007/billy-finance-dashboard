@@ -353,4 +353,3 @@ export default function RecordPurchaseModal({ open, position, cashComponents, on
     </div>
   );
 }
-

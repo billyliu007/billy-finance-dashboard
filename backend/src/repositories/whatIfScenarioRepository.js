@@ -165,7 +165,7 @@ export async function duplicateWhatIfScenario({ userId, sourceScenarioId, name, 
       [resolvedSourceId],
     );
     const purchases = await client.query(
-      `SELECT symbol, qty, buy_price, currency, comment_text
+      `SELECT symbol, qty, buy_price, currency, comment_text, is_filled
        FROM whatif_hypothetical_purchases
        WHERE scenario_id = $1
        ORDER BY created_at ASC`,
