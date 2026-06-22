@@ -302,6 +302,7 @@ function sumCashByQuoteBucket(cashRows) {
 function sumHypotheticalBuyCostByQuoteBucket(buyRows) {
   const m = new Map();
   for (const row of buyRows || []) {
+    if (row.filled) continue;
     const q = num(row.qty);
     if (!(q > 0)) continue;
     const quoteCcy = hypotheticalBuyQuoteCurrency(row);
