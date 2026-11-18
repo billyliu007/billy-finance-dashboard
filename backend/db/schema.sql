@@ -41,6 +41,21 @@ CREATE TABLE IF NOT EXISTS user_api_tokens (
   revoked_at TIMESTAMPTZ
 );
 
+-- Passkeys (see migrations/20261118_user_passkeys.sql).
+CREATE TABLE IF NOT EXISTS user_passkeys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  credential_id TEXT NOT NULL UNIQUE,
+  public_key TEXT NOT NULL,
+  counter BIGINT NOT NULL DEFAULT 0,
+  transports TEXT[] NOT NULL DEFAULT '{}',
+  device_type TEXT,
+  backed_up BOOLEAN NOT NULL DEFAULT FALSE,
+  name TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS cash (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,

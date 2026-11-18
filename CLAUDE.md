@@ -74,6 +74,7 @@ Deep-dive docs live in `docs/` — consult before non-trivial changes:
 - `CRON_DAILY_SNAPSHOT.md` — snapshot job behavior and storage contract.
 - `EXTERNAL_API_V1.md` — the `/api/v1/*` token-authenticated external API.
 - `GOOGLE_OAUTH.md` / `MICROSOFT_LOGIN.md` / `APPLE_LOGIN.md` — OAuth provider setup.
+- `PASSKEYS.md` — passkey (WebAuthn) sign-in: config, routes, data model.
 - `OPTIMIZATION_AND_REFACTOR.md` — perf/DRY backlog and what's already implemented.
 - Deployment: `DEPLOYMENT.md` + `render.yaml` (Render blueprint: web backend, static frontend, cron). Treat the Render env group as the source of truth for secrets.
 

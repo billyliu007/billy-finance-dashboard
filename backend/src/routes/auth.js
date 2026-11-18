@@ -19,6 +19,8 @@ import {
   resolveOrCreateDemoUser,
   createUserSession,
 } from '../services/authService.js';
+import passkeyRouter from './passkeys.js';
+import { getPasskeyConfig } from '../lib/passkeyConfig.js';
 import {
   buildOAuthStateCookie,
   clearOAuthStateCookie,
@@ -54,6 +56,7 @@ router.get('/providers', (_req, res) => {
       { key: 'google', enabled: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID) },
       { key: 'apple', enabled: Boolean(process.env.APPLE_CLIENT_ID) },
       { key: 'microsoft', enabled: isMicrosoftLoginConfigured() },
+      { key: 'passkey', enabled: Boolean(getPasskeyConfig()) },
     ],
   });
 });
@@ -147,6 +150,8 @@ router.get('/microsoft/callback', async (req, res) => {
     return redirectToFrontend(res, '/login', getErrorMessage(error), req);
   }
 });
+
+router.use('/passkey', passkeyRouter);
 
 router.get('/session', (req, res) => {
   if (!req.auth?.user) {

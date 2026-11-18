@@ -15,6 +15,7 @@
     "admin:delete-incomplete-onboarding": "node src/scripts/deleteIncompleteOnboardingUsers.js"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.3",
     "cookie": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",

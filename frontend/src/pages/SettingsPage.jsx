@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
 import { deleteJson, fetchJson, postJson } from '../utils/api.js';
+import PasskeysCard from '../components/settings/PasskeysCard.jsx';
 
 function formatTs(value, locale) {
   if (value == null || value === '') return '—';
@@ -198,6 +199,8 @@ export default function SettingsPage() {
       </header>
 
       <div className="dashboardPanel">
+        <PasskeysCard />
+
         <article className="tableCard settingsCard">
           <div className="settingsCardHeader">
             <div>

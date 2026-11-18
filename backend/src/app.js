@@ -37,7 +37,14 @@ export default function createApp() {
 
   app.use((err, _req, res, _next) => {
     const status = err.statusCode ?? 500;
-    res.status(status).json({ message: getErrorMessage(err) });
+    const body = { message: getErrorMessage(err) };
+    if (err.name === 'ApiError' && err.code) {
+      body.code = err.code;
+      if (err.details) {
+        body.details = err.details;
+      }
+    }
+    res.status(status).json(body);
   });
 
   return app;

@@ -18,15 +18,20 @@ async function requestJson(path, { signal, params, method = 'GET', body } = {}) 
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
+    let code = null;
     try {
       const body = await response.json();
       if (body?.message && typeof body.message === 'string') {
         message = body.message;
       }
+      if (typeof body?.code === 'string') code = body.code;
     } catch {
       // ignore
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    if (code) error.code = code;
+    throw error;
   }
 
   if (response.status === 204) {

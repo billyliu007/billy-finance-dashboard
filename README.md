@@ -8,6 +8,7 @@ A personal finance dashboard with multi-user support (net worth, portfolio holdi
 - OAuth login providers:
   - Google
   - Microsoft (personal accounts)
+- Passkeys (Face ID / Touch ID / Windows Hello) as an extra sign-in method, added from Settings — [`docs/PASSKEYS.md`](docs/PASSKEYS.md)
   - Apple
 - First-login onboarding (initial cash/debt/assets)
 - Live market data:

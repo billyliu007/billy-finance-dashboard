@@ -64,6 +64,8 @@ Configure the following.
 | `MICROSOFT_OAUTH_CLIENT_ID` | If using Microsoft | Application (client) ID; see `docs/MICROSOFT_LOGIN.md`. |
 | `MICROSOFT_OAUTH_CLIENT_SECRET` | If using Microsoft | Client secret value (expires; max 24 months). |
 | `MICROSOFT_OAUTH_CALLBACK_URL` | If using Microsoft | `https://api.myworthtrack.com/api/auth/microsoft/callback` |
+| `WEBAUTHN_RP_ID` | Passkeys | `myworthtrack.com` (set in `render.yaml`). Never change it once passkeys exist. |
+| `WEBAUTHN_ORIGINS` | No | Frontend origin(s) allowed to use passkeys; defaults to `FRONTEND_BASE_URL`. |
 | **OAuth – Apple** | | |
 | `APPLE_CLIENT_ID` | If using Apple | From Apple Developer. |
 | `APPLE_CLIENT_SECRET` | If using Apple | From Apple Developer. |

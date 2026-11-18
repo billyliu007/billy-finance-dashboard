@@ -81,6 +81,11 @@ services:
       - key: MICROSOFT_OAUTH_CALLBACK_URL
         value: https://api.myworthtrack.com/api/auth/microsoft/callback
 
+      # Passkeys: bound to the parent domain so they work for app.myworthtrack.com (the origin
+      # defaults to FRONTEND_BASE_URL). Never change this later: existing passkeys would stop working.
+      - key: WEBAUTHN_RP_ID
+        value: myworthtrack.com
+
       # OAuth – Apple (optional; button hidden while APPLE_CLIENT_ID is empty)
       - key: APPLE_CLIENT_ID
         sync: false
