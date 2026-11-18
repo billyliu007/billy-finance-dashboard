@@ -7,6 +7,7 @@ A personal finance dashboard with multi-user support (net worth, portfolio holdi
 - User-scoped finance data in Postgres
 - OAuth login providers:
   - Google
+  - Microsoft (personal accounts)
   - Apple
 - First-login onboarding (initial cash/debt/assets)
 - Live market data:
@@ -43,6 +44,7 @@ Set required backend values in `backend/.env`:
 - `FRONTEND_BASE_URL`
 - OAuth credentials:
   - `GOOGLE_OAUTH_*` — step-by-step: [`docs/GOOGLE_OAUTH.md`](docs/GOOGLE_OAUTH.md)
+  - `MICROSOFT_OAUTH_*` (optional, personal accounts) — [`docs/MICROSOFT_LOGIN.md`](docs/MICROSOFT_LOGIN.md)
   - `APPLE_*`
 - market data keys/settings:
   - `FINNHUB_API_KEY`
@@ -79,7 +81,7 @@ npm run dev
 
 - `GET /api/health`
 - `GET /api/auth/session`, `POST /api/auth/logout`
-- `GET /api/auth/providers`, `GET /api/auth/{google,apple}/start`, `GET /api/auth/{google,apple}/callback`
+- `GET /api/auth/providers`, `GET /api/auth/{google,microsoft,apple}/start`, `GET /api/auth/{google,microsoft,apple}/callback`
 - `GET /api/dashboard` (net worth + portfolio + benchmarks in one payload)
 - `GET /api/trading-performance` (optional `?from=&to=&symbol=`) — JSON for the Trading Performance page: **DB only** (minimal holdings metadata for `portfolioIsEmpty` / attribution + filtered position transactions). **No** live quotes or FX. Query `symbol` (uppercased ticker) scopes all aggregates and series to **SELL** rows for that symbol only; response includes `scope: { symbol }`, `availableSymbols` (sorted tickers with at least one SELL in the date range), and when scoped: `summary.asset` (totals and volume-weighted per-unit averages), `trades.details` (all sells for the symbol, chronological), and empty `trades.best` / `trades.worst`. Unscoped fields: `portfolioIsEmpty`, `range`, `summary`, `timeSeries.monthlyStacked`, `realizedAttribution`, `trades`. Aggregates are **USD-normalized** (`pnlUsd`); UI uses USD formatting. Per-trade rows use listing currency + `pnlUsd`.
 - `GET /api/market/coinbase-products`, `GET /api/market/us-stock-symbols`

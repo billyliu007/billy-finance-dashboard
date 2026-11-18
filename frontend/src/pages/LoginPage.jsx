@@ -12,7 +12,7 @@ function resolveMessage(search) {
 function parseProviders(data) {
   const list = Array.isArray(data?.providers) ? data.providers : [];
   const map = Object.fromEntries(list.map((p) => [p.key, Boolean(p.enabled)]));
-  return { google: map.google === true, apple: map.apple === true };
+  return { google: map.google === true, apple: map.apple === true, microsoft: map.microsoft === true };
 }
 
 export default function LoginPage() {
@@ -31,7 +31,7 @@ export default function LoginPage() {
         const data = await fetchJson('/api/auth/providers');
         if (!cancelled) setProviders(parseProviders(data));
       } catch {
-        if (!cancelled) setProviders({ google: false, apple: false });
+        if (!cancelled) setProviders({ google: false, apple: false, microsoft: false });
       }
     })();
     return () => {
@@ -78,7 +78,7 @@ export default function LoginPage() {
         <p className="authIntro">{t('login.signInDesc')}</p>
 
         <div className="authSections">
-          {providers && (providers.google || providers.apple) ? (
+          {providers && (providers.google || providers.microsoft || providers.apple) ? (
             <section className="authSection">
               <p className="authSectionTitle">
                 {language === 'zh' ? '使用账号登录' : 'Sign in with your account'}
@@ -95,6 +95,19 @@ export default function LoginPage() {
                     <span className="authBtnLabel">{t('login.continueGoogle')}</span>
                   </a>
                 ) : null}
+                {providers.microsoft ? (
+                  <a href={authHref('microsoft')} className="authBtn authBtnProvider authBtnMicrosoft">
+                    <span className="authBtnIcon" aria-hidden="true">
+                      <svg viewBox="0 0 21 21" width="18" height="18" focusable="false">
+                        <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                        <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                        <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                        <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                      </svg>
+                    </span>
+                    <span className="authBtnLabel">{t('login.continueMicrosoft')}</span>
+                  </a>
+                ) : null}
                 {providers.apple ? (
                   <a href={authHref('apple')} className="authBtn authBtnProvider authBtnApple">
                     <span className="authBtnIcon authBtnAppleIcon" aria-hidden="true">
@@ -106,7 +119,7 @@ export default function LoginPage() {
               </div>
             </section>
           ) : null}
-          {providers && !providers.google && !providers.apple ? (
+          {providers && !providers.google && !providers.microsoft && !providers.apple ? (
             <p className="authHint authOauthHint">{t('login.oauthNoneHint')}</p>
           ) : null}
 

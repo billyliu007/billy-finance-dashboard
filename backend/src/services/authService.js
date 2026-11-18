@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { serialize } from 'cookie';
 import {
   clearExpiredSessions,
@@ -39,7 +39,7 @@ function isHostedHttpsFrontend() {
   }
 }
 
-function buildCookieSecurityOptions() {
+export function buildCookieSecurityOptions() {
   if (isProduction() || isHostedHttpsFrontend()) {
     // Frontend and backend run on different Render domains in production.
     // Cross-site XHR/fetch with credentials requires SameSite=None + Secure.
@@ -167,18 +167,12 @@ export async function resolveSessionFromRequest(req) {
   return { token: null, user: rest, apiTokenId };
 }
 
-function makeStateToken(provider) {
-  const raw = `${provider}:${Date.now()}:${randomBytes(16).toString('hex')}`;
-  return createHash('sha256').update(raw).digest('hex');
-}
-
-export function buildGoogleAuthUrl(req) {
+export function buildGoogleAuthUrl(req, state) {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   if (!clientId) {
     throw new Error('Google OAuth is not configured.');
   }
   const redirectUri = getGoogleOAuthRedirectUri(req || null);
-  const state = makeStateToken('google');
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -190,13 +184,12 @@ export function buildGoogleAuthUrl(req) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
-export function buildAppleAuthUrl() {
+export function buildAppleAuthUrl(state) {
   const clientId = process.env.APPLE_CLIENT_ID;
   const callbackUrl = process.env.APPLE_CALLBACK_URL;
   if (!clientId || !callbackUrl) {
     throw new Error('Apple OAuth is not configured.');
   }
-  const state = makeStateToken('apple');
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: callbackUrl,
@@ -343,6 +336,120 @@ export async function completeAppleLogin(code) {
     providerUserId,
     providerEmail: email,
     profile: claims || {},
+  });
+  const sessionToken = await createUserSession(user.id);
+  return { userId: user.id, sessionToken };
+}
+
+// --- Microsoft (personal accounts only: Outlook, Hotmail, Live) ---------------------------
+
+// Personal Microsoft accounts all live in this fixed "consumers" tenant.
+export const MICROSOFT_CONSUMER_TENANT_ID = '9188040d-6c67-4c5b-b112-36a304b66dad';
+const MICROSOFT_AUTHORITY = 'https://login.microsoftonline.com/consumers/oauth2/v2.0';
+const MICROSOFT_ISSUER = `https://login.microsoftonline.com/${MICROSOFT_CONSUMER_TENANT_ID}/v2.0`;
+
+function getMicrosoftConfig() {
+  const clientId = String(process.env.MICROSOFT_OAUTH_CLIENT_ID || '').trim();
+  const clientSecret = String(process.env.MICROSOFT_OAUTH_CLIENT_SECRET || '').trim();
+  const callbackUrl = String(process.env.MICROSOFT_OAUTH_CALLBACK_URL || '').trim();
+  return { clientId, clientSecret, callbackUrl };
+}
+
+export function isMicrosoftLoginConfigured() {
+  const { clientId, clientSecret, callbackUrl } = getMicrosoftConfig();
+  return Boolean(clientId && clientSecret && callbackUrl);
+}
+
+export function buildMicrosoftAuthUrl(state) {
+  const { clientId, callbackUrl } = getMicrosoftConfig();
+  if (!clientId || !callbackUrl) {
+    throw new Error('Microsoft sign-in is not configured.');
+  }
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: callbackUrl,
+    response_type: 'code',
+    response_mode: 'query',
+    scope: 'openid email profile',
+    prompt: 'select_account',
+    state,
+  });
+  return `${MICROSOFT_AUTHORITY}/authorize?${params.toString()}`;
+}
+
+/**
+ * Validate the ID token claims we rely on. The token comes straight from Microsoft's token
+ * endpoint over TLS (code flow), so we check claims rather than re-verifying the signature.
+ * Only personal Microsoft accounts are accepted: their sign-in email is verified by Microsoft,
+ * which makes it safe to link to an existing account with the same email.
+ * @returns {{ providerUserId: string, email: string, displayName: string|null }}
+ */
+export function parseMicrosoftIdTokenClaims(claims, { clientId, nowMs = Date.now() }) {
+  if (!claims || typeof claims !== 'object') {
+    throw new Error('Microsoft sign-in returned an unreadable ID token.');
+  }
+  if (claims.aud !== clientId) {
+    throw new Error('Microsoft ID token audience mismatch.');
+  }
+  if (claims.iss !== MICROSOFT_ISSUER || claims.tid !== MICROSOFT_CONSUMER_TENANT_ID) {
+    throw new Error('Only personal Microsoft accounts (Outlook, Hotmail, Live) are supported.');
+  }
+  if (!Number.isFinite(claims.exp) || claims.exp * 1000 <= nowMs) {
+    throw new Error('Microsoft ID token has expired.');
+  }
+  const providerUserId = String(claims.sub || '').trim();
+  if (!providerUserId) {
+    throw new Error('Microsoft profile is missing a subject identifier.');
+  }
+  const candidates = [claims.email, claims.preferred_username];
+  const email = candidates
+    .map((v) => String(v || '').trim().toLowerCase())
+    .find((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
+  if (!email) {
+    throw new Error('Your Microsoft account has no email address. Use Google sign-in instead.');
+  }
+  const displayName = String(claims.name || '').trim() || null;
+  return { providerUserId, email, displayName };
+}
+
+export async function completeMicrosoftLogin(code) {
+  const { clientId, clientSecret, callbackUrl } = getMicrosoftConfig();
+  if (!clientId || !clientSecret || !callbackUrl) {
+    throw new Error('Microsoft sign-in is not configured.');
+  }
+  const tokenResponse = await fetch(`${MICROSOFT_AUTHORITY}/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: callbackUrl,
+      grant_type: 'authorization_code',
+      scope: 'openid email profile',
+    }),
+  });
+  if (!tokenResponse.ok) {
+    let detail = '';
+    try {
+      const body = await tokenResponse.json();
+      detail = body.error_description || body.error || '';
+    } catch {
+      // ignore
+    }
+    throw new Error(detail ? `Microsoft token exchange failed: ${detail}` : 'Microsoft token exchange failed.');
+  }
+  const tokenBody = await tokenResponse.json();
+  const claims = decodeJwtPayload(tokenBody?.id_token);
+  const { providerUserId, email, displayName } = parseMicrosoftIdTokenClaims(claims, { clientId });
+
+  const user = await findOrCreateUserByGoogleEmail({ email, displayName });
+  await upsertIdentity({
+    userId: user.id,
+    provider: 'microsoft',
+    providerUserId,
+    providerEmail: email,
+    profile: { name: displayName, email, tid: claims.tid },
   });
   const sessionToken = await createUserSession(user.id);
   return { userId: user.id, sessionToken };

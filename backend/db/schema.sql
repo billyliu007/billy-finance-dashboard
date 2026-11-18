@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS user_identities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  provider TEXT NOT NULL CHECK (provider IN ('google', 'apple', 'wechat')),
+  provider TEXT NOT NULL CHECK (provider IN ('google', 'apple', 'wechat', 'microsoft')),
   provider_user_id TEXT NOT NULL,
   provider_email TEXT,
   profile JSONB NOT NULL DEFAULT '{}'::jsonb,

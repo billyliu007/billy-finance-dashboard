@@ -58,6 +58,15 @@ services:
       - key: GOOGLE_OAUTH_CALLBACK_URL
         sync: false
 
+      # OAuth – Microsoft (personal accounts)
+      - key: MICROSOFT_OAUTH_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_OAUTH_CLIENT_SECRET
+        sync: false
+      # Not a secret, so the Blueprint sets it; must match the Entra app's redirect URI.
+      - key: MICROSOFT_OAUTH_CALLBACK_URL
+        value: https://api.myworthtrack.com/api/auth/microsoft/callback
+
       # OAuth – Apple
       - key: APPLE_CLIENT_ID
         sync: false

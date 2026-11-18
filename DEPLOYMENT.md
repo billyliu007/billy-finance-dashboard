@@ -52,6 +52,9 @@ Set secrets in a **Render Environment Group** (e.g. `netpulse-secrets`) and atta
 | `GOOGLE_OAUTH_CLIENT_ID` | If using Google | From Google Cloud Console. |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | If using Google | From Google Cloud Console. |
 | `GOOGLE_OAUTH_CALLBACK_URL` | If using Google | `https://api.myworthtrack.com/api/auth/google/callback` (or your backend URL). |
+| `MICROSOFT_OAUTH_CLIENT_ID` | If using Microsoft | Application (client) ID; see `docs/MICROSOFT_LOGIN.md`. |
+| `MICROSOFT_OAUTH_CLIENT_SECRET` | If using Microsoft | Client secret value (expires; max 24 months). |
+| `MICROSOFT_OAUTH_CALLBACK_URL` | If using Microsoft | `https://api.myworthtrack.com/api/auth/microsoft/callback` |
 | **OAuth – Apple** | | |
 | `APPLE_CLIENT_ID` | If using Apple | From Apple Developer. |
 | `APPLE_CLIENT_SECRET` | If using Apple | From Apple Developer. |
