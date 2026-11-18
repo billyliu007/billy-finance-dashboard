@@ -41,7 +41,20 @@ export default function PortfolioPage({ hideValues }) {
       <div className="dashboardPanel">
         {isLoading && <p>{t('app.loadingDashboard')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
-        {!isLoading && !error && data?.isEmpty && <p>{t('portfolio.noPositionsFound')}</p>}
+        {!isLoading && !error && data?.isEmpty && (
+          <div className="portfolioEmptyState">
+            <p>{t('portfolio.noPositionsFound')}</p>
+            <p className="portfolioEmptyHint">{t('portfolio.emptyHint')}</p>
+            <div className="portfolioEmptyActions">
+              <button type="button" className="modalBtn" onClick={() => setIsAddStockOpen(true)}>
+                + {t('portfolio.addStockHolding')}
+              </button>
+              <button type="button" className="modalBtn" onClick={() => setIsAddCryptoOpen(true)}>
+                + {t('portfolio.addCryptoHolding')}
+              </button>
+            </div>
+          </div>
+        )}
 
         {!isLoading && !error && data && !data.isEmpty && (
           <>

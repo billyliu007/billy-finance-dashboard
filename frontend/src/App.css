@@ -3515,3 +3515,25 @@ tbody tr.cashSubtotalRow:hover td {
   font-size: 0.85rem;
   line-height: 1.45;
 }
+
+.portfolioEmptyState {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.portfolioEmptyState p {
+  margin: 0;
+}
+
+.portfolioEmptyHint {
+  color: #9fb8d8;
+  font-size: 0.9rem;
+}
+
+.portfolioEmptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
