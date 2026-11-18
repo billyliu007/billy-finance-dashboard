@@ -114,6 +114,21 @@ export async function loadTradingPerformanceHoldingsSlice(userId) {
  * @param {string} [baseCurrency='USD'] - User's preferred base currency for net worth display
  * @returns {Promise<{ netWorth: object, portfolio: object, fxRates: object, positions: object[] }>}
  */
+/**
+ * Currencies whose live FX rate the dashboard needs: every cash currency, the display base
+ * currency (to convert USD totals into it), and CNY (the stored history/snapshot pivot).
+ * The FX lookup only returns currencies it is asked for, so none of these can be assumed.
+ * @param {object[]} cashComponents
+ * @param {string} base uppercase display base currency
+ * @returns {string[]}
+ */
+export function buildDashboardFxCurrencies(cashComponents, base) {
+  const codes = (cashComponents || [])
+    .map((c) => String(c?.currency || '').trim().toUpperCase())
+    .filter(Boolean);
+  return [...new Set([...codes, base, 'CNY'].filter(Boolean))];
+}
+
 export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
   const base = String(baseCurrency || 'USD').trim().toUpperCase() || 'USD';
 
@@ -126,12 +141,7 @@ export async function resolveDashboardPayload(userId, baseCurrency = 'USD') {
 
   const effectivePositions = applyTransactionAggregatesToPositions(positions, txAggRows);
 
-  const currenciesFromCash = [
-    ...new Set((cashComponents || []).map((c) => String(c?.currency || '').toUpperCase()).filter(Boolean)),
-  ];
-  if (base !== 'CNY') {
-    currenciesFromCash.push(base);
-  }
+  const currenciesFromCash = buildDashboardFxCurrencies(cashComponents, base);
 
   const [stockQuotes, cryptoQuotes, fxRates] = await Promise.all([
     getStockQuoteMapForPositions(effectivePositions),
