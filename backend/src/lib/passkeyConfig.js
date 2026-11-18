@@ -5,12 +5,13 @@ import { serialize } from 'cookie';
  *
  * - Origins: the frontend URL(s) where the browser runs the passkey prompt
  *   (WEBAUTHN_ORIGINS, comma-separated; defaults to FRONTEND_BASE_URL, then local Vite).
- * - RP ID: the domain passkeys are bound to (WEBAUTHN_RP_ID; defaults to the first origin's
- *   hostname). Must equal, or be a parent domain of, every origin's hostname. Changing it
+ * - RP ID: the domain passkeys are bound to (WEBAUTHN_RP_ID; required outside localhost,
+ *   where it defaults to `localhost`). Must equal, or be a parent domain of, every origin's hostname. Changing it
  *   later makes existing passkeys unusable, so production pins it to `myworthtrack.com`.
  */
 export const PASSKEY_RP_NAME = 'My Worth Track';
 const DEFAULT_LOCAL_ORIGIN = 'http://localhost:5173';
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 function parseOrigin(value) {
   try {
@@ -38,7 +39,15 @@ export function getPasskeyConfig(env = process.env) {
   const fallback = parseOrigin(env.FRONTEND_BASE_URL || '') || DEFAULT_LOCAL_ORIGIN;
   const origins = configured.length > 0 ? [...new Set(configured)] : [fallback];
 
-  const rpID = String(env.WEBAUTHN_RP_ID || '').trim().toLowerCase() || new URL(origins[0]).hostname;
+  const explicitRpId = String(env.WEBAUTHN_RP_ID || '').trim().toLowerCase();
+  // Outside local dev, require an explicit RP ID: guessing it from the origin would bind
+  // passkeys to e.g. app.myworthtrack.com, and they'd break once the intended parent
+  // domain is configured. Passkeys stay off until WEBAUTHN_RP_ID is set.
+  const isLocalOnly = origins.every((origin) => LOCAL_HOSTNAMES.has(new URL(origin).hostname));
+  if (!explicitRpId && !isLocalOnly) {
+    return null;
+  }
+  const rpID = explicitRpId || new URL(origins[0]).hostname;
   const allMatch = origins.every((origin) => hostnameMatchesRpId(new URL(origin).hostname, rpID));
   if (!rpID || !allMatch) {
     return null;

@@ -38,6 +38,12 @@ test('explicit WEBAUTHN_ORIGINS wins and is de-duplicated', () => {
   assert.deepEqual(config.origins, ['https://app.myworthtrack.com']);
 });
 
+test('non-local origin without an explicit WEBAUTHN_RP_ID keeps passkeys off', () => {
+  assert.equal(getPasskeyConfig({ FRONTEND_BASE_URL: 'https://app.myworthtrack.com' }), null);
+  assert.equal(getPasskeyConfig({ WEBAUTHN_ORIGINS: 'http://localhost:5173,https://app.myworthtrack.com' }), null);
+  assert.equal(getPasskeyConfig({ FRONTEND_BASE_URL: 'http://127.0.0.1:5173' }).rpID, '127.0.0.1');
+});
+
 test('mismatched RP ID and origin disables passkeys', () => {
   assert.equal(getPasskeyConfig({ FRONTEND_BASE_URL: 'https://app.example.org', WEBAUTHN_RP_ID: 'myworthtrack.com' }), null);
   // a lookalike suffix must not match

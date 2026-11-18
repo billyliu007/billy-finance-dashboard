@@ -8,7 +8,7 @@ No third-party service is involved. The backend uses [`@simplewebauthn/server`](
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `WEBAUTHN_RP_ID` | hostname of the first origin (`localhost` locally) | The domain passkeys are bound to. Production: `myworthtrack.com` (set in `render.yaml`), which covers `app.myworthtrack.com`. **Never change it once passkeys exist**: they would stop working. |
+| `WEBAUTHN_RP_ID` | `localhost` for local origins; **required** otherwise (passkeys stay off without it) | The domain passkeys are bound to. Production: `myworthtrack.com` (set in `render.yaml`), which covers `app.myworthtrack.com`. **Never change it once passkeys exist**: they would stop working. |
 | `WEBAUTHN_ORIGINS` | `FRONTEND_BASE_URL`, else `http://localhost:5173` | Comma-separated frontend origins where the passkey prompt runs. Each hostname must equal or end with `.<WEBAUTHN_RP_ID>`; otherwise passkeys are disabled (`/api/auth/providers` reports `passkey: false`). |
 
 Local development needs no extra settings. Browsers allow passkeys on `http://localhost`; everywhere else HTTPS is required. Open the app at `http://localhost:5173` (not a LAN IP) when testing locally.
