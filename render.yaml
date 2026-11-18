@@ -7,6 +7,33 @@
 # Postgres / Neon: use a pooled connection string when available; optional PGPOOL_MAX in
 # the env group caps concurrent clients (see docs/ARCHITECTURE.md). Repositories use
 # withTransaction() / query() from backend/src/db/client.js for DRY connection handling.
+#
+# Where each variable lives (each secret is declared in exactly ONE place):
+#   - envVarGroups.netpulse-secrets: secrets shared by the backend and the daily cron.
+#   - service envVars: secrets only that service needs, plus non-secret fixed values.
+# `sync: false` means "secret, never stored in this file": Render asks for the value
+# when the Blueprint is first created; afterwards edit it in the Render dashboard.
+# `generateValue: true` makes Render create a random value once, at creation.
+
+envVarGroups:
+  - name: netpulse-secrets
+    envVars:
+      # Database (same DB as localhost). Prefer `sslmode=verify-full` in the URL.
+      - key: DATABASE_URL
+        sync: false
+      # Market data (stock quotes) – used by the API and the daily snapshot.
+      - key: FINNHUB_API_KEY
+        sync: false
+      # Public URL of the SPA, e.g. https://www.myworthtrack.com (CORS cookies + redirects).
+      - key: FRONTEND_BASE_URL
+        sync: false
+      # OAuth – Google
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_CALLBACK_URL
+        sync: false
 
 services:
   # Backend API (Node)
@@ -20,11 +47,7 @@ services:
     envVars:
       - fromGroup: netpulse-secrets
 
-      # Database (same DB as localhost; set in group or here)
-      - key: DATABASE_URL
-        sync: false
-      # If your DATABASE_URL includes sslmode, prefer `sslmode=verify-full` to keep current
-      # pg behavior and avoid future semantic changes (see pg-connection-string warning).
+      # Database tuning (DATABASE_URL comes from the group)
       - key: DATABASE_SSL
         value: "true"
       # Optional: cap pg pool size per instance (Neon / small max_connections)
@@ -40,25 +63,16 @@ services:
       - key: PG_IDLE_TIMEOUT_MS
         value: "30000"
 
-      # App & auth
+      # App & auth (FRONTEND_BASE_URL comes from the group)
       - key: TRUST_PROXY
         value: "true"
-      - key: FRONTEND_BASE_URL
-        sync: false
       - key: AUTH_SESSION_TTL_MS
         value: "1209600000"
+      # Token for POST /api/internal/snapshot/daily; random value generated at creation.
       - key: SNAPSHOT_CRON_TOKEN
-        sync: false
+        generateValue: true
 
-      # OAuth – Google
-      - key: GOOGLE_OAUTH_CLIENT_ID
-        sync: false
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_OAUTH_CALLBACK_URL
-        sync: false
-
-      # OAuth – Microsoft (personal accounts)
+      # OAuth – Microsoft (personal accounts); see docs/MICROSOFT_LOGIN.md
       - key: MICROSOFT_OAUTH_CLIENT_ID
         sync: false
       - key: MICROSOFT_OAUTH_CLIENT_SECRET
@@ -67,7 +81,7 @@ services:
       - key: MICROSOFT_OAUTH_CALLBACK_URL
         value: https://api.myworthtrack.com/api/auth/microsoft/callback
 
-      # OAuth – Apple
+      # OAuth – Apple (optional; button hidden while APPLE_CLIENT_ID is empty)
       - key: APPLE_CLIENT_ID
         sync: false
       - key: APPLE_CLIENT_SECRET
@@ -75,9 +89,7 @@ services:
       - key: APPLE_CALLBACK_URL
         sync: false
 
-      # Market data
-      - key: FINNHUB_API_KEY
-        sync: false
+      # Market data providers (FINNHUB_API_KEY comes from the group)
       - key: FX_PROVIDER
         value: frankfurter
       - key: CRYPTO_PROVIDER
@@ -110,11 +122,8 @@ services:
     buildCommand: npm ci --prefix backend
     startCommand: npm run cron:daily-snapshot --prefix backend
     envVars:
+      # DATABASE_URL and FINNHUB_API_KEY come from the group
       - fromGroup: netpulse-secrets
-      - key: DATABASE_URL
-        sync: false
-      # If your DATABASE_URL includes sslmode, prefer `sslmode=verify-full` to keep current
-      # pg behavior and avoid future semantic changes (see pg-connection-string warning).
       - key: DATABASE_SSL
         value: "true"
       # Optional: cap pg pool size per instance (Neon / small max_connections)
@@ -129,8 +138,6 @@ services:
         value: "30000"
       - key: PG_IDLE_TIMEOUT_MS
         value: "30000"
-      - key: FINNHUB_API_KEY
-        sync: false
       - key: FX_PROVIDER
         value: frankfurter
       - key: CRYPTO_PROVIDER

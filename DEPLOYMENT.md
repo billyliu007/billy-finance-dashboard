@@ -32,7 +32,16 @@ When you add or change schema (e.g. new migration in the repo):
 
 ## 3. Environment variables
 
-Set secrets in a **Render Environment Group** (e.g. `netpulse-secrets`) and attach it to the backend (and cron). Configure the following.
+`render.yaml` declares every variable; each secret lives in exactly one place:
+
+- **`netpulse-secrets` env group** (defined under `envVarGroups` in `render.yaml`, attached to the backend and cron): `DATABASE_URL`, `FINNHUB_API_KEY`, `FRONTEND_BASE_URL`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_CALLBACK_URL`.
+- **`netpulse-backend` service**: secrets only the API needs (`MICROSOFT_OAUTH_CLIENT_ID`, `MICROSOFT_OAUTH_CLIENT_SECRET`, `APPLE_*`), the generated `SNAPSHOT_CRON_TOKEN`, and non-secret fixed values.
+
+Secrets are `sync: false`: they are never stored in git. On a **new** Render account, creating the Blueprint creates the group and asks you for each `sync: false` value once; afterwards you change values in the Render dashboard (a Blueprint sync does not prompt again). Values written in `render.yaml` (`value:`) are re-applied on every Blueprint sync, so change those in the file, not the dashboard.
+
+Not covered by the Blueprint: the custom domains (e.g. `api.myworthtrack.com`, added under each service's **Settings → Custom Domains**) and the Neon database (create it, set `DATABASE_URL`, run `npm run db:migrate`).
+
+Configure the following.
 
 ### Backend (`netpulse-backend`)
 
