@@ -88,6 +88,7 @@ npm run dev
 - `GET /api/market/coinbase-products`, `GET /api/market/us-stock-symbols`
 - `POST /api/portfolio/positions/crypto`, `POST /api/portfolio/positions/stock`
 - `GET /api/onboarding/status`, `POST /api/onboarding/initialize`
+- `POST /api/v1/me/trades` — record a stock/crypto buy or sell via API token (see [`docs/EXTERNAL_API_V1.md`](docs/EXTERNAL_API_V1.md))
 - `GET /api/dev/status`
 
 Cron/internal:

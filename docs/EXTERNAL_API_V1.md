@@ -1,6 +1,6 @@
 # External API v1 (consumer guide)
 
-This document describes the **read-only HTTP API** for accessing your own net worth, cash, holdings, and position transactions. All paths are relative to your **backend base URL** — see [Base URL](#base-url) below.
+This document describes the HTTP API for accessing your own net worth, cash, holdings, and position transactions. It is read-only except for [`POST /api/v1/me/trades`](#post-apiv1metrades), which records stock and crypto buys and sells. All paths are relative to your **backend base URL** — see [Base URL](#base-url) below.
 
 ## Base URL
 
@@ -237,6 +237,65 @@ Trades for a single position symbol (normalized to **uppercase** in the path).
 | `historicalSells` | Present only if `includeHistoricalSells` is true: past sells recorded for analytics that **do not** change the live position quantity. |
 
 ---
+
+### `POST /api/v1/me/trades`
+
+Record a **buy** or **sell** of a stock or crypto asset. Uses the same rules as the web app's *Add purchase* / *Record sale* (holdings math, optional cash account adjustment).
+
+- **Buying an asset you don't hold yet:** the asset is created first with a **0** initial holding, then the purchase is recorded. Stocks must be a known US symbol; crypto must have a Coinbase market quoted in USDT or USDC. If recording the purchase fails, the new asset is removed again.
+- **Selling more than you hold** (or an asset you don't hold) is rejected with `insufficient_holding`; nothing is recorded.
+
+**Request body (JSON)**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `assetType` | yes | `"stock"` or `"crypto"` |
+| `side` | yes | `"buy"` or `"sell"` |
+| `symbol` | yes | Ticker, e.g. `"AAPL"`, `"BTC"` |
+| `qty` | yes | Quantity (> 0). In total-amount mode: the **gross** quantity received. |
+| `pricePerUnit` | unit-price mode | Price per unit in the asset's currency (USD for stocks, USDT/USDC for crypto). For sells: the sale price. |
+| `fee` | no | Flat fee in the same currency (unit-price mode). |
+| `totalAmount` | total-amount mode | Crypto **buys** only: total spent in USDT/USDC (fee included). |
+| `feeInCrypto` | no | Total-amount mode only: fee taken in the coin. Net qty = `qty - feeInCrypto`; price per unit = `totalAmount / net qty`. |
+| `date` | no | `YYYY-MM-DD`; defaults to today (UTC). Not in the future. |
+| `quoteCurrency` | no | Crypto only, used when a new asset is created: `"USDT"` or `"USDC"` (default: USDT market, else USDC). |
+| `cashAccountId` | no | Cash account id (from `GET /api/v1/me/cash`): **deducted** on buy, **credited** on sell. Currency must match the asset (USD for stocks; USDT/USDC for crypto). |
+| `notes` | no | Free text (max 500 chars). |
+
+**Crypto: the two input styles**
+
+1. Unit price: `{ "assetType": "crypto", "side": "buy", "symbol": "BTC", "qty": 0.01, "pricePerUnit": 98000, "fee": 1.2 }`
+2. Total amount: `{ "assetType": "crypto", "side": "buy", "symbol": "BTC", "qty": 0.0101, "totalAmount": 1000, "feeInCrypto": 0.0001 }` (records 0.01 BTC at 100,000)
+
+**Example: sell a stock and credit cash**
+
+```bash
+curl -s -X POST "$BASE/api/v1/me/trades" \
+  -H "Authorization: Bearer $WORTHTRACK_API_TOKEN" -H "content-type: application/json" \
+  -d '{"assetType":"stock","side":"sell","symbol":"AAPL","qty":2,"pricePerUnit":230,"cashAccountId":"<cash id>"}'
+```
+
+**Response `201`**
+
+```json
+{
+  "ok": true,
+  "assetCreated": false,
+  "trade": { "assetType": "stock", "side": "sell", "symbol": "AAPL", "date": "2026-11-19", "qty": 2,
+             "pricePerUnit": 230, "fee": null, "inputMode": "unit", "cashAccountId": "<cash id>", "notes": null },
+  "holding": { "symbol": "AAPL", "currency": "USD", "qty": 8, "avgCost": 182.4 }
+}
+```
+
+**Errors** return `{ "message", "code", "details"? }`:
+
+| Status | `code` | When |
+|--------|--------|------|
+| 400 | `insufficient_holding` | Sell qty exceeds the holding (`details: { held, requested }`). |
+| 400 | `invalid_asset_type`, `invalid_side`, `invalid_symbol`, `invalid_qty`, `invalid_price`, `invalid_fee`, `invalid_total_amount`, `invalid_date`, `invalid_number`, `invalid_input_mode`, `invalid_quote_currency` | Request validation. |
+| 400 | `asset_type_mismatch` | The symbol is already held as the other asset type. |
+| 400 | `trade_rejected` | Rejected while recording, e.g. cash account not found or currency mismatch. |
+| 404 | `unknown_symbol` | New asset with an unknown stock symbol or no USDT/USDC Coinbase market. |
 
 ## Security and operations
 

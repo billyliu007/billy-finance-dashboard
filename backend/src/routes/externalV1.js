@@ -20,9 +20,22 @@ import { buildCashUsdDetailForApi } from '../services/netWorthService.js';
 import { getLiveFxRates } from '../services/marketDataService.js';
 import { resolveProfitabilityPayload, normalizeTradingSymbolParam } from '../services/profitabilityService.js';
 import { parseIncludeHistoricalSellsQuery } from '../lib/externalV1Query.js';
+import { createTradeService } from '../services/tradeService.js';
 
 const router = Router();
 router.use(requireAuth);
+const trades = createTradeService();
+
+/**
+ * Record a stock or crypto buy/sell. See docs/EXTERNAL_API_V1.md ("Record a trade").
+ */
+router.post(
+  '/me/trades',
+  asyncHandler(async (req, res) => {
+    const result = await trades.recordTrade(req.auth.user.userId, req.body || {});
+    return res.status(201).json(result);
+  }),
+);
 
 router.get(
   '/me/net-worth',

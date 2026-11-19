@@ -692,3 +692,49 @@ export async function deletePosition(userId, symbol) {
     return { symbol: normalizedSymbol, deletedTransactions: deletedTx.rowCount };
   });
 }
+
+/**
+ * Current holding for one position (base qty plus BUY minus SELL transactions that affect
+ * holdings), using the same math as createPositionTransaction. Null if the position doesn't exist.
+ * @returns {Promise<{ symbol: string, category: string, currency: string, qty: number, avgCost: number } | null>}
+ */
+export async function getPositionHolding(userId, symbol) {
+  const resolvedUserId = String(userId || '').trim();
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!resolvedUserId || !sym) return null;
+  const result = await query(
+    `SELECT p.symbol,
+            p.category,
+            upper(p.currency) AS currency,
+            p.qty::float8 AS "baseQty",
+            p.purchase_price::float8 AS "baseAvg",
+            COALESCE(t."buyQty", 0) AS "buyQty",
+            COALESCE(t."buyCost", 0) AS "buyCost",
+            COALESCE(t."sellQty", 0) AS "sellQty",
+            COALESCE(t."sellCost", 0) AS "sellCost"
+     FROM portfolio_positions p
+     LEFT JOIN LATERAL (
+       SELECT
+         SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty ELSE 0 END)::float8 AS "buyQty",
+         SUM(CASE WHEN affects_holdings = TRUE AND type = 'BUY' THEN qty * avg_cost_per_unit ELSE 0 END)::float8 AS "buyCost",
+         SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty ELSE 0 END)::float8 AS "sellQty",
+         SUM(CASE WHEN affects_holdings = TRUE AND type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8 AS "sellCost"
+       FROM portfolio_position_transactions
+       WHERE user_id = p.user_id AND upper(symbol) = upper(p.symbol)
+     ) t ON TRUE
+     WHERE p.user_id = $1 AND upper(p.symbol) = $2`,
+    [resolvedUserId, sym],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const baseQty = Number(row.baseQty) || 0;
+  const qty = baseQty + Number(row.buyQty) - Number(row.sellQty);
+  const cost = baseQty * (Number(row.baseAvg) || 0) + Number(row.buyCost) - Number(row.sellCost);
+  return {
+    symbol: String(row.symbol).toUpperCase(),
+    category: row.category,
+    currency: row.currency,
+    qty,
+    avgCost: qty > 0 ? cost / qty : 0,
+  };
+}

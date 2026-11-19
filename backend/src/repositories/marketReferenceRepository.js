@@ -112,3 +112,41 @@ export async function findCoinbaseQuoteCurrenciesByIds(productIds) {
   );
   return new Map(result.rows.map((r) => [r.product_id, r.quote_currency]));
 }
+
+/**
+ * Exact (case-insensitive) US stock symbol lookup; null if unknown.
+ * @param {string} symbol
+ */
+export async function findUsStockSymbol(symbol) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!sym) return null;
+  const result = await query(
+    `SELECT upper(symbol) AS symbol, security_name AS "securityName", exchange
+     FROM us_stock_symbols
+     WHERE upper(symbol) = $1 AND COALESCE(test_issue, FALSE) = FALSE
+     LIMIT 1`,
+    [sym],
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Coinbase products for a base asset (e.g. BTC) quoted in USDT or USDC.
+ * @param {string} baseCurrency
+ * @returns {Promise<{ productId: string, baseCurrency: string, quoteCurrency: string, status: string }[]>}
+ */
+export async function listCoinbaseStableProductsForBase(baseCurrency) {
+  const base = String(baseCurrency || '').trim().toUpperCase();
+  if (!base) return [];
+  const result = await query(
+    `SELECT product_id AS "productId",
+            base_currency AS "baseCurrency",
+            quote_currency AS "quoteCurrency",
+            status
+     FROM coinbase_products
+     WHERE upper(base_currency) = $1 AND upper(quote_currency) IN ('USDT', 'USDC')
+     ORDER BY product_id`,
+    [base],
+  );
+  return result.rows;
+}
