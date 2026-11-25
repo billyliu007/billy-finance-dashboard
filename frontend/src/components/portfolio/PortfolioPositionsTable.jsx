@@ -10,6 +10,7 @@ import { useLanguage } from '../../contexts/LanguageContext.jsx';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { deleteJson, fetchJson } from '../../utils/api.js';
 import RecordPurchaseModal from './RecordPurchaseModal.jsx';
+import RecurringBuyModal from './RecurringBuyModal.jsx';
 import RecordSaleModal from './RecordSaleModal.jsx';
 import SalesHistoryDialog from './SalesHistoryDialog.jsx';
 
@@ -34,6 +35,7 @@ export default function PortfolioPositionsTable({
   const [recordModalOpen, setRecordModalOpen] = useState(false);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [recordPosition, setRecordPosition] = useState(null);
+  const [recurringBuy, setRecurringBuy] = useState(null); // { position, transaction } | null
   const [deleteTxConfirm, setDeleteTxConfirm] = useState(null); // { symbol, txId, txType, hasCashLink, adjustCash } | null
   const [salesHistoryState, setSalesHistoryState] = useState(() => ({
     open: false,
@@ -202,7 +204,14 @@ export default function PortfolioPositionsTable({
     if (!sym || !id) return;
     const kind = String(txType || '').trim().toUpperCase() || 'BUY';
     const hasCashLink = Boolean(tx?.deductCashId || tx?.creditCashId);
-    setDeleteTxConfirm({ symbol: sym, txId: id, txType: kind, hasCashLink, adjustCash: hasCashLink });
+    setDeleteTxConfirm({
+      symbol: sym,
+      txId: id,
+      txType: kind,
+      isRecurring: Boolean(tx?.isRecurring),
+      hasCashLink,
+      adjustCash: hasCashLink,
+    });
   }
 
   async function handleDeleteTxConfirmed(symbol, txId, adjustCash = false) {
@@ -257,6 +266,19 @@ export default function PortfolioPositionsTable({
     }
     return { buys, sells };
   }
+
+  const renderRecurringEdit = (item, tx) =>
+    tx.isRecurring ? (
+      <button
+        type="button"
+        className="headerIconBtn positionActionBtn"
+        onClick={() => setRecurringBuy({ position: item, transaction: tx })}
+        aria-label={`${t('portfolio.edit')} ${tx.notes || ''}`}
+        title={t('portfolio.edit')}
+      >
+        ✎
+      </button>
+    ) : null;
 
   const renderExpandedPanel = (item) => (
     <div className="positionTxPanel positionTxPanel--mobile">
@@ -340,15 +362,24 @@ export default function PortfolioPositionsTable({
       <section className="positionTxSection positionTxSection--purchases">
         <div className="positionTxSectionHeader">
           <strong>{t('portfolio.purchases')}</strong>
-          <button
-            type="button"
-            className="headerIconBtn positionActionBtn"
-            onClick={() => openRecordPurchase(item)}
-            aria-label="Add New Transaction"
-            title="Add New Transaction"
-          >
-            +
-          </button>
+          <span className="positionInlineActions">
+            <button
+              type="button"
+              className="modalBtn secondary recurringAddBtn"
+              onClick={() => setRecurringBuy({ position: item, transaction: null })}
+            >
+              {t('recurring.add')}
+            </button>
+            <button
+              type="button"
+              className="headerIconBtn positionActionBtn"
+              onClick={() => openRecordPurchase(item)}
+              aria-label="Add New Transaction"
+              title="Add New Transaction"
+            >
+              +
+            </button>
+          </span>
         </div>
         {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>{t('app.loading')}</p>}
         {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
@@ -372,7 +403,12 @@ export default function PortfolioPositionsTable({
                 return (
                   <div key={tx.id} className="positionTxCard">
                     <div className="positionTxCardTitleRow">
-                      <strong>{tx.txDate}</strong>
+                      <strong>
+                        {tx.txDate}
+                        {tx.isRecurring && <span className="recurringName">↻ {tx.notes}</span>}
+                      </strong>
+                      <span className="positionInlineActions">
+                      {renderRecurringEdit(item, tx)}
                       <button
                         type="button"
                         className="headerIconBtn positionActionBtn positionActionBtnDanger"
@@ -382,6 +418,7 @@ export default function PortfolioPositionsTable({
                       >
                         ✕
                       </button>
+                      </span>
                     </div>
                     <div className="positionTxCardGrid">
                       <div>
@@ -653,15 +690,24 @@ export default function PortfolioPositionsTable({
               <section className="positionTxSection positionTxSection--purchases">
                 <div className="positionTxSectionHeader">
                   <strong>{t('portfolio.purchases')}</strong>
-                  <button
-                    type="button"
-                    className="headerIconBtn positionActionBtn"
-                    onClick={() => openRecordPurchase(item)}
-                    aria-label="Add New Transaction"
-                    title="Add New Transaction"
-                  >
-                    +
-                  </button>
+                  <span className="positionInlineActions">
+                    <button
+                      type="button"
+                      className="modalBtn secondary recurringAddBtn"
+                      onClick={() => setRecurringBuy({ position: item, transaction: null })}
+                    >
+                      {t('recurring.add')}
+                    </button>
+                    <button
+                      type="button"
+                      className="headerIconBtn positionActionBtn"
+                      onClick={() => openRecordPurchase(item)}
+                      aria-label="Add New Transaction"
+                      title="Add New Transaction"
+                    >
+                      +
+                    </button>
+                  </span>
                 </div>
               {txLoadingBySymbol.get(String(item.symbol || item.key).toUpperCase()) && <p>{t('app.loading')}</p>}
               {txErrorBySymbol.get(String(item.symbol || item.key).toUpperCase()) && (
@@ -694,7 +740,10 @@ export default function PortfolioPositionsTable({
                         ) : (
                         buys.map((tx) => (
                           <tr key={tx.id}>
-                            <td>{tx.txDate}</td>
+                            <td>
+                              {tx.txDate}
+                              {tx.isRecurring && <span className="recurringName">↻ {tx.notes}</span>}
+                            </td>
                             <td>{formatMaybeHidden(hideValues, formatQty, tx.qty)}</td>
                             <td>{formatMaybeHidden(hideValues, formatMoney, tx.avgCostPerUnit)}</td>
                             {(() => {
@@ -715,6 +764,8 @@ export default function PortfolioPositionsTable({
                               );
                             })()}
                             <td>
+                              <span className="positionInlineActions">
+                              {renderRecurringEdit(item, tx)}
                               <button
                                 type="button"
                                 className="headerIconBtn positionActionBtn positionActionBtnDanger"
@@ -724,6 +775,7 @@ export default function PortfolioPositionsTable({
                               >
                                 ✕
                               </button>
+                              </span>
                             </td>
                           </tr>
                         ))
@@ -895,6 +947,19 @@ export default function PortfolioPositionsTable({
         }}
       />
 
+      {recurringBuy && (
+        <RecurringBuyModal
+          position={recurringBuy.position}
+          transaction={recurringBuy.transaction}
+          cashComponents={cashComponents}
+          onClose={() => setRecurringBuy(null)}
+          onSaved={async () => {
+            await loadTransactionsFor(recurringBuy.position.symbol || recurringBuy.position.key);
+            onRefresh?.({ mode: 'silent' });
+          }}
+        />
+      )}
+
       <RecordSaleModal
         open={saleModalOpen}
         position={recordPosition}
@@ -947,7 +1012,9 @@ export default function PortfolioPositionsTable({
               </label>
               {!deleteTxConfirm.hasCashLink ? (
                 <p className="modalHint">
-                  Legacy transaction: no linked cash account. Cash won’t be adjusted.
+                  {deleteTxConfirm.isRecurring
+                    ? t('recurring.deleteHint')
+                    : 'Legacy transaction: no linked cash account. Cash won’t be adjusted.'}
                 </p>
               ) : null}
             </div>

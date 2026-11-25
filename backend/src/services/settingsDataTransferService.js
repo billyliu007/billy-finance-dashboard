@@ -106,13 +106,14 @@ function normalizeTransactionRows(list) {
         ? null
         : asFiniteNumber(row.costBasisPerUnit, `transactions[${idx}].costBasisPerUnit`, { min: 0 });
     const notes = asOptionalString(row.notes);
+    const isRecurring = type === 'BUY' && (row.isRecurring === true || row.isRecurring === 'true');
     const deductCashId = asOptionalString(row.deductCashId);
     const creditCashId = asOptionalString(row.creditCashId);
     if (!symbol) throw new Error(`transactions[${idx}].symbol is required.`);
     if (type !== 'BUY' && type !== 'SELL') throw new Error(`transactions[${idx}].type must be BUY or SELL.`);
     if (qty <= 0) throw new Error(`transactions[${idx}].qty must be > 0.`);
     if (deductCashId && creditCashId) throw new Error(`transactions[${idx}] cannot set both deductCashId and creditCashId.`);
-    return { symbol, type, affectsHoldings, txDate, qty, avgCostPerUnit, feeFlat, costBasisPerUnit, notes, deductCashId, creditCashId };
+    return { symbol, type, affectsHoldings, txDate, qty, avgCostPerUnit, feeFlat, costBasisPerUnit, notes, isRecurring, deductCashId, creditCashId };
   });
 }
 
@@ -327,6 +328,7 @@ export function buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRow
       feeFlat: row.feeFlat == null ? null : Number(row.feeFlat),
       costBasisPerUnit: row.costBasisPerUnit == null ? null : Number(row.costBasisPerUnit),
       notes: row.notes ?? null,
+      isRecurring: Boolean(row.isRecurring),
       deductCashId: row.deductCashId ?? null,
       creditCashId: row.creditCashId ?? null,
       createdAtUtc: row.createdAtUtc ?? null,
@@ -412,17 +414,18 @@ export async function importSettingsDataReplaceAll({ userId, backup }) {
         creditCashId: mappedCreditCashId,
         costBasisPerUnit: row.costBasisPerUnit,
         notes: row.notes,
+        isRecurring: row.isRecurring,
       };
     });
     if (mappedTransactions.length > 0) {
       await client.query(
         `INSERT INTO portfolio_position_transactions (
-          user_id, symbol, type, affects_holdings, tx_date, qty, avg_cost_per_unit, fee_flat_total, deduct_cash_id, credit_cash_id, cost_basis_per_unit, notes
+          user_id, symbol, type, affects_holdings, tx_date, qty, avg_cost_per_unit, fee_flat_total, deduct_cash_id, credit_cash_id, cost_basis_per_unit, notes, is_recurring
         )
          SELECT $1, upper(x.symbol), upper(x.type), coalesce(x."affectsHoldings", TRUE), (x."txDate")::date, x.qty, x."avgCostPerUnit", x."feeFlat",
-                (x."deductCashId")::uuid, (x."creditCashId")::uuid, x."costBasisPerUnit", x.notes
+                (x."deductCashId")::uuid, (x."creditCashId")::uuid, x."costBasisPerUnit", x.notes, coalesce(x."isRecurring", FALSE)
          FROM jsonb_to_recordset($2::jsonb) AS x(
-           symbol text, type text, "affectsHoldings" boolean, "txDate" text, qty float8, "avgCostPerUnit" float8, "feeFlat" float8, "deductCashId" text, "creditCashId" text, "costBasisPerUnit" float8, notes text
+           symbol text, type text, "affectsHoldings" boolean, "txDate" text, qty float8, "avgCostPerUnit" float8, "feeFlat" float8, "deductCashId" text, "creditCashId" text, "costBasisPerUnit" float8, notes text, "isRecurring" boolean
          )`,
         [uid, JSON.stringify(mappedTransactions)],
       );

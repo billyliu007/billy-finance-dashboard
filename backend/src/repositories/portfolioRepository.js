@@ -1,6 +1,7 @@
 import { query, withTransaction } from '../db/client.js';
 import { findCoinbaseProduct, findCoinbaseQuoteCurrenciesByIds } from './marketReferenceRepository.js';
 import { computePositionTxCashReverseDelta } from '../services/portfolioCashAdjustments.js';
+import { recurringBuyCashDelta } from '../lib/recurringBuy.js';
 
 /**
  * List portfolio positions for a user (symbol as name).
@@ -66,6 +67,7 @@ export async function listPositionTransactions(userId, symbol) {
             credit_cash_id AS "creditCashId",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
+            is_recurring AS "isRecurring",
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
      FROM portfolio_position_transactions
      WHERE user_id = $1 AND upper(symbol) = $2 AND affects_holdings = TRUE
@@ -112,6 +114,7 @@ export async function listAllPositionTransactions(userId, { from = null, to = nu
             credit_cash_id AS "creditCashId",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
+            is_recurring AS "isRecurring",
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "createdAtUtc"
      FROM portfolio_position_transactions
      WHERE ${filters.join(' AND ')}
@@ -363,6 +366,7 @@ export async function listHistoricalSaleTransactions(userId, symbol) {
             COALESCE(fee_flat_total::float8, (COALESCE(fee_per_unit, 0)::float8 * qty::float8)) AS "feeFlat",
             cost_basis_per_unit::float8 AS "costBasisPerUnit",
             notes,
+            is_recurring AS "isRecurring",
             to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "createdAtUtc"
      FROM portfolio_position_transactions
      WHERE user_id = $1
@@ -737,4 +741,117 @@ export async function getPositionHolding(userId, symbol) {
     qty,
     avgCost: qty > 0 ? cost / qty : 0,
   };
+}
+
+async function applyRecurringBuyCash(client, { userId, symbol, positionCurrency, cashId, delta }) {
+  if (!cashId || delta === 0) return;
+  const cash = await client.query(
+    `SELECT upper(currency) AS currency FROM cash WHERE user_id = $1 AND id = $2 FOR UPDATE`,
+    [userId, cashId],
+  );
+  if (cash.rowCount === 0) throw new Error('Selected cash item not found.');
+  const currency = cash.rows[0].currency;
+  const isStable = (code) => code === 'USDT' || code === 'USDC';
+  if (isStable(positionCurrency) ? !isStable(currency) : currency !== positionCurrency) {
+    throw new Error(`Cash currency mismatch: expected ${isStable(positionCurrency) ? 'USDT or USDC' : positionCurrency} for ${symbol}.`);
+  }
+  await client.query(
+    `UPDATE cash SET balance = balance + $3, updated_at = NOW() WHERE user_id = $1 AND id = $2`,
+    [userId, cashId, delta],
+  );
+}
+
+async function lockRecurringBuyPosition(client, userId, symbol, name, excludeId = null) {
+  const position = await client.query(
+    `SELECT upper(COALESCE(NULLIF(TRIM(currency), ''), 'USD')) AS currency, qty::float8 AS qty
+     FROM portfolio_positions
+     WHERE user_id = $1 AND upper(symbol) = $2
+     FOR UPDATE`,
+    [userId, symbol],
+  );
+  if (position.rowCount === 0) throw new Error('Position not found.');
+  const duplicate = await client.query(
+    `SELECT 1 FROM portfolio_position_transactions
+     WHERE user_id = $1 AND upper(symbol) = $2 AND is_recurring = TRUE
+       AND lower(notes) = lower($3) AND ($4::uuid IS NULL OR id <> $4::uuid)`,
+    [userId, symbol, name, excludeId],
+  );
+  if (duplicate.rowCount > 0) {
+    throw new Error(`A recurring buy named "${name}" already exists for ${symbol}. Edit it instead.`);
+  }
+  return position.rows[0];
+}
+
+/**
+ * Add a recurring buy. The row keeps no cash link: later edits may or may not move cash, so
+ * deleting it must not refund the full cost.
+ */
+export async function createRecurringBuy({ userId, symbol, buy }) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!userId || !sym) throw new Error('User id and symbol are required.');
+  return withTransaction(async (client) => {
+    const position = await lockRecurringBuyPosition(client, userId, sym, buy.name);
+    const inserted = await client.query(
+      `INSERT INTO portfolio_position_transactions
+         (user_id, symbol, type, tx_date, qty, avg_cost_per_unit, notes, is_recurring)
+       VALUES ($1, $2, 'BUY', $3::date, $4, $5, $6, TRUE)
+       RETURNING id`,
+      [userId, sym, buy.txDate, buy.qty, buy.avgCostPerUnit, buy.name],
+    );
+    await applyRecurringBuyCash(client, {
+      userId,
+      symbol: sym,
+      positionCurrency: position.currency,
+      cashId: buy.cashId,
+      delta: recurringBuyCashDelta(0, buy.totalInvested),
+    });
+    return { id: inserted.rows[0].id };
+  });
+}
+
+/** Overwrite a recurring buy's totals; only the difference in invested money moves in cash. */
+export async function updateRecurringBuy({ userId, transactionId, buy }) {
+  if (!userId || !/^[0-9a-f-]{36}$/i.test(String(transactionId || ''))) throw new Error('Recurring buy not found.');
+  return withTransaction(async (client) => {
+    const found = await client.query(
+      `SELECT upper(symbol) AS symbol FROM portfolio_position_transactions
+       WHERE user_id = $1 AND id = $2 AND is_recurring = TRUE AND type = 'BUY'`,
+      [userId, transactionId],
+    );
+    if (found.rowCount === 0) throw new Error('Recurring buy not found.');
+    const { symbol } = found.rows[0];
+    const position = await lockRecurringBuyPosition(client, userId, symbol, buy.name, transactionId);
+    // Read the totals after taking the lock so two edits can't move the same difference twice.
+    const current = await client.query(
+      `SELECT qty::float8 AS qty, round(qty * avg_cost_per_unit, 6)::float8 AS invested
+       FROM portfolio_position_transactions
+       WHERE user_id = $1 AND id = $2 AND is_recurring = TRUE
+       FOR UPDATE`,
+      [userId, transactionId],
+    );
+    if (current.rowCount === 0) throw new Error('Recurring buy not found.');
+    const others = await client.query(
+      `SELECT COALESCE(SUM(CASE WHEN type = 'BUY' THEN qty ELSE -qty END), 0)::float8 AS qty
+       FROM portfolio_position_transactions
+       WHERE user_id = $1 AND upper(symbol) = $2 AND affects_holdings = TRUE AND id <> $3`,
+      [userId, symbol, transactionId],
+    );
+    const remaining = Number(position.qty) + Number(others.rows[0].qty) + buy.qty;
+    if (remaining < -1e-8) throw new Error(`This total is lower than the ${symbol} you have already sold.`);
+
+    await client.query(
+      `UPDATE portfolio_position_transactions
+       SET tx_date = $3::date, qty = $4, avg_cost_per_unit = $5, notes = $6, updated_at = NOW()
+       WHERE user_id = $1 AND id = $2`,
+      [userId, transactionId, buy.txDate, buy.qty, buy.avgCostPerUnit, buy.name],
+    );
+    await applyRecurringBuyCash(client, {
+      userId,
+      symbol,
+      positionCurrency: position.currency,
+      cashId: buy.cashId,
+      delta: recurringBuyCashDelta(current.rows[0].invested, buy.totalInvested),
+    });
+    return { id: transactionId };
+  });
 }

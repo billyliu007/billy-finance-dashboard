@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS portfolio_position_transactions (
   credit_cash_id UUID REFERENCES cash (id) ON DELETE SET NULL,
   cost_basis_per_unit NUMERIC(20, 8),
   notes TEXT,
+  is_recurring BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

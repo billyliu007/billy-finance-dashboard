@@ -15,11 +15,14 @@ import {
   listPositionTransactions,
   createPositionTransaction,
   deletePositionTransaction,
+  createRecurringBuy,
+  updateRecurringBuy,
   listHistoricalSaleTransactions,
   importHistoricalSaleTransactions,
   clearHistoricalSaleTransactions,
   getHistoricalSaleCount,
 } from '../repositories/financeRepository.js';
+import { parseRecurringBuyInput } from '../lib/recurringBuy.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
@@ -144,6 +147,33 @@ router.post(
       return res.status(201).json({ ok: true });
     } catch (error) {
       rethrowAsBadRequest(error);
+    }
+  }),
+);
+
+// Recurring buys: one editable BUY row per plan, holding its running totals.
+router.post(
+  '/positions/:symbol/recurring-buys',
+  asyncHandler(async (req, res) => {
+    try {
+      const buy = parseRecurringBuyInput(req.body);
+      const result = await createRecurringBuy({ userId: req.auth.user.userId, symbol: req.params.symbol, buy });
+      return res.status(201).json({ ok: true, ...result });
+    } catch (error) {
+      rethrowAsNotFoundOr400(error);
+    }
+  }),
+);
+
+router.patch(
+  '/recurring-buys/:id',
+  asyncHandler(async (req, res) => {
+    try {
+      const buy = parseRecurringBuyInput(req.body);
+      const result = await updateRecurringBuy({ userId: req.auth.user.userId, transactionId: req.params.id, buy });
+      return res.json({ ok: true, ...result });
+    } catch (error) {
+      rethrowAsNotFoundOr400(error);
     }
   }),
 );
