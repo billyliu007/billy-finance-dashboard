@@ -3580,11 +3580,6 @@ tbody tr.cashSubtotalRow:hover td {
   line-height: 1.7;
 }
 
-.recurringAddBtn {
-  padding: 5px 10px;
-  font-size: 0.78rem;
-}
-
 .recurringName {
   display: block;
   color: #93c5fd;

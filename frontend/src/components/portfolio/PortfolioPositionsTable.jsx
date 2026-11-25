@@ -365,10 +365,12 @@ export default function PortfolioPositionsTable({
           <span className="positionInlineActions">
             <button
               type="button"
-              className="modalBtn secondary recurringAddBtn"
+              className="headerIconBtn positionActionBtn"
               onClick={() => setRecurringBuy({ position: item, transaction: null })}
+              aria-label={t('recurring.add')}
+              title={t('recurring.add')}
             >
-              {t('recurring.add')}
+              ↻
             </button>
             <button
               type="button"
@@ -693,10 +695,12 @@ export default function PortfolioPositionsTable({
                   <span className="positionInlineActions">
                     <button
                       type="button"
-                      className="modalBtn secondary recurringAddBtn"
+                      className="headerIconBtn positionActionBtn"
                       onClick={() => setRecurringBuy({ position: item, transaction: null })}
+                      aria-label={t('recurring.add')}
+                      title={t('recurring.add')}
                     >
-                      {t('recurring.add')}
+                      ↻
                     </button>
                     <button
                       type="button"
