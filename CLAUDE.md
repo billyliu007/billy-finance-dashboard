@@ -80,9 +80,12 @@ Deep-dive docs live in `docs/` — consult before non-trivial changes:
 
 ## MCP server
 
-The WorthTrack MCP server lives in `mcp-server/worthtrack.py`. It wraps the `/api/v1/` external API for use with Claude Desktop (stdio transport). Configure via env vars:
-- `WORTHTRACK_API_TOKEN` — a `bfpat_` personal access token (create via Settings page)
-- `WORTHTRACK_API_BASE_URL` — defaults to `https://api.myworthtrack.com`
+The WorthTrack MCP server lives in `mcp-server/worthtrack.py`. It wraps the `/api/v1/` external API for use with Claude Desktop (stdio transport). Read tools (net worth, cash, holdings, scenario plan, transactions, performance, history) are annotated read-only; write tools `buy_stock`, `sell_stock`, `buy_crypto` (unit price or total amount) and `sell_crypto` call `POST /api/v1/me/trades`. The same file can be registered once per account. Configure via env vars:
+- `WORTHTRACK_TOKEN` — a `bfpat_` personal access token (create via Settings page); the server exits if it's missing
+- `WORTHTRACK_SERVER_NAME` — advertised server name (default `worthtrack`); use a distinct name per registered account
+- `WORTHTRACK_BASE_URL` — defaults to `https://api.myworthtrack.com`
+
+The installed copy Claude Desktop runs is `~/.claude/mcp-servers/worthtrack.py`; keep it in sync with this file.
 
 ## CI
 
