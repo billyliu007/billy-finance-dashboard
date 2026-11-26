@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   formatMaybeHidden,
   formatMoney,
+  formatMoneyPrecise,
   formatPercent,
   formatPercentUnsigned,
   formatQty,
@@ -160,6 +161,14 @@ export default function PortfolioPositionsTable({
     </div>
   );
 
+  // Crypto unit prices can be small (e.g. ADA ~ $0.4), so show avg cost with 3 decimals.
+  const isCryptoItem = (item) => /crypto/i.test(String(item?.category || ''));
+  const formatAvgCost = (item, value) =>
+    formatMaybeHidden(
+      hideValues,
+      (v) => (isCryptoItem(item) ? formatMoneyPrecise(v, { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : formatMoney(v)),
+      value,
+    );
   const priceUnavailable = (item) => (item.currentPrice === 0 && item.priceSource === 'unavailable');
   const formatPrice = (item, value) =>
     !hideValues && priceUnavailable(item) && value === 0 ? '—' : formatMaybeHidden(hideValues, formatMoney, value);
@@ -304,7 +313,7 @@ export default function PortfolioPositionsTable({
                   </div>
                   <div>
                     <span>{t('portfolio.avgCostPerUnit')}</span>
-                    <strong>{formatMaybeHidden(hideValues, formatMoney, baseAvg)}</strong>
+                    <strong>{formatAvgCost(item, baseAvg)}</strong>
                   </div>
                   <div>
                     <span>{t('portfolio.costBasis')}</span>
@@ -429,7 +438,7 @@ export default function PortfolioPositionsTable({
                       </div>
                       <div>
                         <span>{t('portfolio.avgCostPerUnit')}</span>
-                        <strong>{formatMaybeHidden(hideValues, formatMoney, avgCost)}</strong>
+                        <strong>{formatAvgCost(item, avgCost)}</strong>
                       </div>
                       <div>
                         <span>{t('portfolio.costBasis')}</span>
@@ -531,11 +540,11 @@ export default function PortfolioPositionsTable({
                         </div>
                         <div>
                           <span>{t('modals.historyTableSellPrice')}</span>
-                          <strong>{formatMaybeHidden(hideValues, formatMoney, sellPrice)}</strong>
+                          <strong>{formatAvgCost(item, sellPrice)}</strong>
                         </div>
                         <div>
                           <span>{t('modals.historyTableCostPerUnit')}</span>
-                          <strong>{formatMaybeHidden(hideValues, formatMoney, basisPerUnit)}</strong>
+                          <strong>{formatAvgCost(item, basisPerUnit)}</strong>
                         </div>
                         <div>
                           <span>{t('modals.historyTableSaleAmount')}</span>
@@ -580,7 +589,7 @@ export default function PortfolioPositionsTable({
         </td>
       <td data-label={t('portfolio.currency')}>{item.currency || 'USD'}</td>
       <td data-label={t('portfolio.quantity')}>{formatMaybeHidden(hideValues, formatQty, item.qty)}</td>
-      <td data-label={t('portfolio.avgCostPerUnit')}>{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</td>
+      <td data-label={t('portfolio.avgCostPerUnit')}>{formatAvgCost(item, item.purchasePrice)}</td>
       <td data-label={t('portfolio.costBasis')}>{formatMaybeHidden(hideValues, formatMoney, item.totalPurchaseCost)}</td>
       <td data-label={t('portfolio.marketPrice')}>{formatPrice(item, item.currentPrice)}</td>
       <td data-label={t('portfolio.marketValue')}>{formatPrice(item, item.currentValue)}</td>
@@ -643,7 +652,7 @@ export default function PortfolioPositionsTable({
                             <>
                               <td aria-hidden="true" className="positionTxColDate" />
                               <td>{formatMaybeHidden(hideValues, formatQty, baseQty)}</td>
-                              <td>{formatMaybeHidden(hideValues, formatMoney, baseAvg)}</td>
+                              <td>{formatAvgCost(item, baseAvg)}</td>
                               <td>{formatMaybeHidden(hideValues, formatMoney, baseCost)}</td>
                               <td>{formatPrice(item, marketValue)}</td>
                               <td className={pnl >= 0 ? 'pos' : 'neg'}>{formatMaybeHidden(hideValues, formatMoney, pnl)}</td>
@@ -749,7 +758,7 @@ export default function PortfolioPositionsTable({
                               {tx.isRecurring && <span className="recurringName">↻ {tx.notes}</span>}
                             </td>
                             <td>{formatMaybeHidden(hideValues, formatQty, tx.qty)}</td>
-                            <td>{formatMaybeHidden(hideValues, formatMoney, tx.avgCostPerUnit)}</td>
+                            <td>{formatAvgCost(item, tx.avgCostPerUnit)}</td>
                             {(() => {
                               const qty = Number(tx.qty) || 0;
                               const avgCost = Number(tx.avgCostPerUnit) || 0;
@@ -866,8 +875,8 @@ export default function PortfolioPositionsTable({
                                 <tr key={tx.id}>
                                   <td>{tx.txDate}</td>
                                   <td>{formatMaybeHidden(hideValues, formatQty, qty)}</td>
-                                  <td>{formatMaybeHidden(hideValues, formatMoney, sellPrice)}</td>
-                                  <td>{formatMaybeHidden(hideValues, formatMoney, basisPerUnit)}</td>
+                                  <td>{formatAvgCost(item, sellPrice)}</td>
+                                  <td>{formatAvgCost(item, basisPerUnit)}</td>
                                   <td>{formatMaybeHidden(hideValues, formatMoney, proceeds)}</td>
                                   <td className={realized >= 0 ? 'pos' : 'neg'}>
                                     {formatMaybeHidden(hideValues, formatMoney, realized)}
@@ -1139,7 +1148,7 @@ export default function PortfolioPositionsTable({
                         </div>
                         <div className="positionQuickItem">
                           <span>{t('portfolio.avgCostPerUnit')}</span>
-                          <strong>{formatMaybeHidden(hideValues, formatMoney, item.purchasePrice)}</strong>
+                          <strong>{formatAvgCost(item, item.purchasePrice)}</strong>
                         </div>
                       </div>
                       <dl className="positionMetaList">
