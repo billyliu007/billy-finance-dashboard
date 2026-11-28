@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { deleteJson, fetchJson, postJson } from '../../utils/api.js';
@@ -136,6 +138,9 @@ export default function ExchangeConnectionsCard() {
                     {t('exchange.keyEnding', { last4: c.keyLast4 })} · {t('exchange.lastChecked')}: {formatTs(c.lastSyncedAt, locale)}
                   </div>
                   {c.lastError && <div className="exchangeConnError">{c.lastError}</div>}
+                  <Link className="exchangeViewLink" to="/portfolio?review=exchange">
+                    {t('exchange.viewTrades')}
+                  </Link>
                 </div>
                 <span className="positionInlineActions">
                   {confirmRemove === c.exchange ? (
@@ -177,7 +182,8 @@ export default function ExchangeConnectionsCard() {
         </ul>
       )}
 
-      {connectOpen && (
+      {/* Portal: the card's backdrop-filter would otherwise trap the fixed overlay inside the card. */}
+      {connectOpen && createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="exchange-connect-title">
           <section className="modalCard">
             <header className="modalHeader">
@@ -225,7 +231,8 @@ export default function ExchangeConnectionsCard() {
               </footer>
             </form>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </article>
   );

@@ -3665,6 +3665,20 @@ tbody tr.cashSubtotalRow:hover td {
   color: #fde68a;
 }
 
+.exchangeBanner.isQuiet {
+  border-color: var(--line-soft);
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--text-dim);
+  padding: 8px 14px;
+}
+
+.exchangeViewLink {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
 .exchangeBanner.isError {
   border-color: rgba(251, 113, 133, 0.4);
   background: rgba(127, 29, 29, 0.18);

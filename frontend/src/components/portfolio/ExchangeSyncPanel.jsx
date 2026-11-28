@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext.jsx';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { fetchJson, postJson } from '../../utils/api.js';
@@ -96,7 +98,7 @@ function AddTradeModal({ trade, cashComponents, onClose, onAdded }) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="exchange-add-title">
       <section className="modalCard">
         <header className="modalHeader">
@@ -186,7 +188,8 @@ function AddTradeModal({ trade, cashComponents, onClose, onAdded }) {
           </footer>
         </form>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -201,8 +204,9 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
   const [data, setData] = useState(null);
   const [days, setDays] = useState(7);
   const [checking, setChecking] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [showResolved, setShowResolved] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [reviewOpen, setReviewOpen] = useState(() => searchParams.get('review') === 'exchange');
+  const [showResolved, setShowResolved] = useState(null); // null = auto (open when nothing is pending)
   const [adding, setAdding] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
@@ -243,11 +247,21 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
     }
   }, [days, showToast, t]);
 
+  function closeReview() {
+    setReviewOpen(false);
+    if (searchParams.get('review')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('review');
+      setSearchParams(next, { replace: true });
+    }
+  }
+
   if (!data || !data.connections?.length) return null;
   const pending = data.trades || [];
   const resolved = data.resolved || [];
   const counts = data.counts || {};
   const syncError = (data.sync || []).find((r) => r.error);
+  const resolvedOpen = showResolved ?? pending.length === 0;
 
   async function act(trade, action) {
     setBusyId(trade.id);
@@ -270,12 +284,14 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
 
   return (
     <>
-      {(pending.length > 0 || syncError) && (
-        <div className={`exchangeBanner ${syncError && pending.length === 0 ? 'isError' : ''}`}>
+      {(
+        <div className={`exchangeBanner ${pending.length > 0 ? '' : syncError ? 'isError' : 'isQuiet'}`}>
           <span>
             {pending.length > 0
               ? t(pending.length === 1 ? 'exchange.bannerCountOne' : 'exchange.bannerCount', { count: pending.length, days: data.days })
-              : t('exchange.bannerError', { message: syncError.error })}
+              : syncError
+                ? t('exchange.bannerError', { message: syncError.error })
+                : t('exchange.bannerCaughtUp', { days: data.days, recorded: (counts.matched || 0) + (counts.added || 0) })}
           </span>
           <span className="positionInlineActions">
             <button
@@ -288,21 +304,19 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
             >
               {checking ? '…' : '⟳'}
             </button>
-            {pending.length > 0 && (
-              <button type="button" className="modalBtn" onClick={() => setReviewOpen(true)}>
-                {t('exchange.review')}
-              </button>
-            )}
+            <button type="button" className={`modalBtn ${pending.length > 0 ? '' : 'secondary'}`} onClick={() => setReviewOpen(true)}>
+              {pending.length > 0 ? t('exchange.review') : t('exchange.viewTrades')}
+            </button>
           </span>
         </div>
       )}
 
-      {reviewOpen && !adding && (
+      {reviewOpen && !adding && createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="exchange-review-title">
           <section className="modalCard modalCard--wide">
             <header className="modalHeader">
               <h2 id="exchange-review-title">{t('exchange.reviewTitle')}</h2>
-              <button type="button" className="modalCloseBtn" onClick={() => setReviewOpen(false)} aria-label={t('modals.close')}>
+              <button type="button" className="modalCloseBtn" onClick={closeReview} aria-label={t('modals.close')}>
                 ✕
               </button>
             </header>
@@ -339,12 +353,12 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
                   {t('exchange.resolvedSummary', { recorded: (counts.matched || 0) + (counts.added || 0), ignored: counts.ignored || 0 })}
                 </span>
                 {resolved.length > 0 && (
-                  <button type="button" className="passkeyCancelBtn" onClick={() => setShowResolved((v) => !v)}>
-                    {showResolved ? t('exchange.hide') : t('exchange.show')}
+                  <button type="button" className="passkeyCancelBtn" onClick={() => setShowResolved(!resolvedOpen)}>
+                    {resolvedOpen ? t('exchange.hide') : t('exchange.show')}
                   </button>
                 )}
               </div>
-              {showResolved && (
+              {resolvedOpen && (
                 <ul className="exchangeTradeList isResolved">
                   {resolved.map((trade) => (
                     <li key={trade.id} className="exchangeTradeRow">
@@ -365,7 +379,8 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
               )}
             </div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {adding && (
