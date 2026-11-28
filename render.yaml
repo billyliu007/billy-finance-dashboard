@@ -100,6 +100,78 @@ services:
       - key: CRYPTO_PROVIDER
         value: coinbase
 
+  # Backend API (Node) – Singapore copy, next to the Neon database (ap-southeast-1) and
+  # outside the US, so Binance's API is reachable. Runs alongside the Oregon service until
+  # api.myworthtrack.com is switched over; then the Oregon service is deleted.
+  - type: web
+    name: netpulse-backend-sg
+    region: singapore
+    plan: free
+    env: node
+    rootDir: .
+    buildCommand: npm ci --prefix backend
+    startCommand: npm run start --prefix backend
+    healthCheckPath: /api/health
+    envVars:
+      - fromGroup: netpulse-secrets
+
+      # Database tuning (DATABASE_URL comes from the group)
+      - key: DATABASE_SSL
+        value: "true"
+      # Optional: cap pg pool size per instance (Neon / small max_connections)
+      # - key: PGPOOL_MAX
+      #   value: "5"
+      # Postgres resiliency for transient connection issues (cron + managed DBs)
+      - key: PG_RETRY_ATTEMPTS
+        value: "3"
+      - key: PG_RETRY_BASE_DELAY_MS
+        value: "750"
+      - key: PG_CONNECTION_TIMEOUT_MS
+        value: "30000"
+      - key: PG_IDLE_TIMEOUT_MS
+        value: "30000"
+
+      # App & auth (FRONTEND_BASE_URL comes from the group)
+      # Hashes API tokens. Must be the SAME value as on the Oregon service, or every
+      # existing API token (incl. the MCP server's) stops working.
+      - key: API_TOKEN_PEPPER
+        sync: false
+      - key: TRUST_PROXY
+        value: "true"
+      - key: AUTH_SESSION_TTL_MS
+        value: "1209600000"
+      # Token for POST /api/internal/snapshot/daily; random value generated at creation.
+      - key: SNAPSHOT_CRON_TOKEN
+        generateValue: true
+
+      # OAuth – Microsoft (personal accounts); see docs/MICROSOFT_LOGIN.md
+      - key: MICROSOFT_OAUTH_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_OAUTH_CLIENT_SECRET
+        sync: false
+      # Not a secret, so the Blueprint sets it; must match the Entra app's redirect URI.
+      - key: MICROSOFT_OAUTH_CALLBACK_URL
+        value: https://api.myworthtrack.com/api/auth/microsoft/callback
+
+      # Passkeys: bound to the parent domain so they work for app.myworthtrack.com (the origin
+      # defaults to FRONTEND_BASE_URL). Never change this later: existing passkeys would stop working.
+      - key: WEBAUTHN_RP_ID
+        value: myworthtrack.com
+
+      # OAuth – Apple (optional; button hidden while APPLE_CLIENT_ID is empty)
+      - key: APPLE_CLIENT_ID
+        sync: false
+      - key: APPLE_CLIENT_SECRET
+        sync: false
+      - key: APPLE_CALLBACK_URL
+        sync: false
+
+      # Market data providers (FINNHUB_API_KEY comes from the group)
+      - key: FX_PROVIDER
+        value: frankfurter
+      - key: CRYPTO_PROVIDER
+        value: coinbase
+
   # Frontend (static SPA)
   - type: web
     name: netpulse-frontend
