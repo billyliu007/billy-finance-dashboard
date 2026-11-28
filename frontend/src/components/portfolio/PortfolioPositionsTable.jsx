@@ -90,7 +90,8 @@ export default function PortfolioPositionsTable({
   ) : null;
 
   const renderArchiveBtn = (item) =>
-    onArchivePosition && isSmallAsset(item) ? (
+    // Only assets with something to seal (initial holding, purchases or sales); empty ones are deleted instead.
+    onArchivePosition && isSmallAsset(item) && (Number(item.activeTxCount) > 0 || Number(item.baseQty) > 0) ? (
       <button
         type="button"
         className="headerIconBtn positionActionBtn"

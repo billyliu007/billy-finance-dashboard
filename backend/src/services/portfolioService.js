@@ -50,6 +50,7 @@ function normalizePositionsWithConfig(positions, configuredAssetMap) {
       purchasePrice: Number(position?.purchasePrice || 0),
       // Archived (sealed) assets are hidden from holdings but still count in realized P/L.
       archivedAt: position?.archivedAt || null,
+      activeTxCount: Number(position?.activeTxCount) || 0,
     };
   });
 }

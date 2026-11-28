@@ -37,6 +37,7 @@ export function applyTransactionAggregatesToPositions(positions, txAggRows) {
         realizedSellQty: Number(r.realizedSellQty) || 0,
         realizedSellProceeds: Number(r.realizedSellProceeds) || 0,
         realizedSellCost: Number(r.realizedSellCost) || 0,
+        activeTxCount: Number(r.activeTxCount) || 0,
       },
     ]),
   );
@@ -89,6 +90,8 @@ export function applyTransactionAggregatesToPositions(positions, txAggRows) {
       totalAvgCost: avgCost,
       qty: totalQty,
       purchasePrice: avgCost,
+      // Purchases and sales in the current (non-archived) round.
+      activeTxCount: Number(tx.activeTxCount) || 0,
     };
   });
 }

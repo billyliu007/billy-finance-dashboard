@@ -45,7 +45,8 @@ export async function listPositionTransactionAggregates(userId) {
               -
               COALESCE(SUM(CASE WHEN type = 'SELL' THEN COALESCE(fee_flat_total, COALESCE(fee_per_unit, 0) * qty) ELSE 0 END)::float8, 0)
             ) AS "realizedSellProceeds",
-            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "realizedSellCost"
+            COALESCE(SUM(CASE WHEN type = 'SELL' THEN qty * cost_basis_per_unit ELSE 0 END)::float8, 0) AS "realizedSellCost",
+            (COUNT(*) FILTER (WHERE archive_id IS NULL))::int AS "activeTxCount"
      FROM portfolio_position_transactions
      WHERE user_id = $1
      GROUP BY upper(symbol)`,
@@ -924,13 +925,8 @@ export async function archivePosition(userId, symbol) {
       [userId, sym],
     );
     if (active.rows[0].n === 0 && !(Number(p.qty) > 0)) {
-      // Nothing to seal (no purchases, sales or initial holding): just hide it, no empty round.
-      await client.query(
-        `UPDATE portfolio_positions SET qty = 0, purchase_price = 0, archived_at = NOW(), updated_at = NOW()
-         WHERE user_id = $1 AND symbol = $2`,
-        [userId, sym],
-      );
-      return { id: null, symbol: sym, archivedAt: null, transactions: 0, hiddenOnly: true };
+      // Nothing to seal (no initial holding, purchases or sales): delete it instead.
+      throw new Error(`${sym} has no initial holding, purchases or sales to archive. Delete it instead.`);
     }
     const archive = await client.query(
       `INSERT INTO position_archives (user_id, symbol, category, currency, base_qty, base_avg_cost)

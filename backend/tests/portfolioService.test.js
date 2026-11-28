@@ -51,3 +51,15 @@ test('archived assets are hidden from holdings but keep their realized P/L in to
   const slice = buildTradingPerformanceHoldingsSlice({ positions });
   assert.equal(slice.tableRows.some((r) => r.symbol === 'ADA'), false);
 });
+
+test('applyTransactionAggregatesToPositions carries the current round transaction count', async () => {
+  const { applyTransactionAggregatesToPositions } = await import('../src/services/dashboardService.js');
+  const [withTx, empty] = applyTransactionAggregatesToPositions(
+    [{ symbol: 'ADA', qty: 0, purchasePrice: 0 }, { symbol: 'NVDA', qty: 0, purchasePrice: 0 }],
+    [{ symbol: 'ADA', activeTxCount: 3 }, { symbol: 'NVDA', activeTxCount: 0 }],
+  );
+  assert.equal(withTx.activeTxCount, 3);
+  assert.equal(empty.activeTxCount, 0);
+  const payload = buildPortfolioPayload({ positions: [{ ...withTx, category: 'Crypto Assets', realizedPnl: 5 }], stockQuotes: {}, cryptoQuotes: {} });
+  assert.equal(payload.tableRows[0].activeTxCount, 3);
+});
