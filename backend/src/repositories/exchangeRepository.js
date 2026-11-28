@@ -126,13 +126,62 @@ export async function getExchangeTrade(userId, id) {
 /** Change status; only from `fromStatuses` so two clicks can't record a trade twice. */
 export async function setExchangeTradeStatus(userId, id, status, { fromStatuses = ['new'], matchedTransactionId = null } = {}) {
   if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return false;
+  // Back on the review list ('new') or ignored: no longer linked to a WorthTrack transaction.
   const result = await query(
     `UPDATE exchange_trades
-     SET status = $3, matched_transaction_id = COALESCE($5::uuid, matched_transaction_id), updated_at = NOW()
+     SET status = $3,
+         matched_transaction_id = CASE WHEN $3 IN ('new', 'ignored') THEN NULL
+                                       ELSE COALESCE($5::uuid, matched_transaction_id) END,
+         updated_at = NOW()
      WHERE user_id = $1 AND id = $2 AND status = ANY($4::text[])`,
     [userId, id, status, fromStatuses, matchedTransactionId],
   );
   return result.rowCount > 0;
+}
+
+/** Link a trade to the WorthTrack transaction (or recurring plan row) that records it. */
+export async function linkExchangeTrade(userId, id, transactionId) {
+  await query(
+    `UPDATE exchange_trades SET matched_transaction_id = $3, updated_at = NOW() WHERE user_id = $1 AND id = $2`,
+    [userId, id, transactionId],
+  );
+}
+
+/** Newest transaction for a symbol whose notes are exactly "Order <ref>" (written by exchange sync). */
+export async function findTransactionIdByOrderNote(userId, symbol, orderRef) {
+  const result = await query(
+    `SELECT id FROM portfolio_position_transactions
+     WHERE user_id = $1 AND upper(symbol) = upper($2) AND notes = $3
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId, symbol, `Order ${orderRef}`],
+  );
+  return result.rows[0]?.id || null;
+}
+
+/**
+ * Recorded / matched trades whose WorthTrack transaction was deleted go back on the review list.
+ * Added trades are first relinked by their "Order <ref>" note (older rows may lack a link).
+ * Returns how many trades were put back.
+ */
+export async function reopenOrphanedExchangeTrades(userId) {
+  await query(
+    `UPDATE exchange_trades e
+     SET matched_transaction_id = p.id, updated_at = NOW()
+     FROM portfolio_position_transactions p
+     WHERE e.user_id = $1 AND e.status = 'added'
+       AND NOT EXISTS (SELECT 1 FROM portfolio_position_transactions x WHERE x.id = e.matched_transaction_id)
+       AND p.user_id = e.user_id AND upper(p.symbol) = e.base_asset AND p.notes = 'Order ' || e.order_ref`,
+    [userId],
+  );
+  const result = await query(
+    `UPDATE exchange_trades e
+     SET status = 'new', matched_transaction_id = NULL, updated_at = NOW()
+     WHERE e.user_id = $1 AND e.status IN ('added', 'matched')
+       AND e.matched_transaction_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM portfolio_position_transactions p WHERE p.id = e.matched_transaction_id)`,
+    [userId],
+  );
+  return result.rowCount;
 }
 
 // --- WorthTrack transactions used for matching -------------------------------------------------

@@ -216,6 +216,13 @@ function fakeRepo(initialTrades = []) {
     },
     listTransactionsForMatching: async () => [{ id: 'x1', symbol: 'ETH', type: 'SELL', txDate: '2026-11-27', qty: 0.5, notes: null }],
     listRecurringPlans: async () => [{ id: 'plan-1', name: 'ADA DCA', txDate: '2026-10-01', qty: 1000, invested: 400 }],
+    links: [],
+    linkExchangeTrade: async (_u, id, txId) => {
+      const t = trades.find((x) => x.id === id);
+      if (t) t.matchedTransactionId = txId;
+    },
+    findTransactionIdByOrderNote: async () => 'tx-new',
+    reopenOrphanedExchangeTrades: async () => 0,
   };
 }
 
@@ -277,6 +284,7 @@ test('add records the trade with the order number and cash account, once', async
   assert.equal(recorded[0].cashAccountId, 'cash-1');
   assert.equal(recorded[0].quoteCurrency, 'USDC');
   assert.equal(repo.trades[0].status, 'added');
+  assert.equal(repo.trades[0].matchedTransactionId, 'tx-new'); // linked, so deleting it reopens the trade
   await assert.rejects(svc.add(USER, 'id-1', { date: '2026-11-26', qty: 1, pricePerUnit: 1 }), { code: 'already_handled' });
 });
 
@@ -300,6 +308,7 @@ test('add to a recurring plan increases the plan totals', async () => {
   assert.equal(updates[0].buy.totalInvested, 450);
   assert.equal(updates[0].buy.cashId, 'cash-9');
   assert.equal(updates[0].buy.name, 'ADA DCA');
+  assert.equal(repo.trades[0].matchedTransactionId, 'plan-1');
 });
 
 test('ignore and restore move a trade between lists', async () => {

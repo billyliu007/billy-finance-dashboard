@@ -219,6 +219,7 @@ export function createExchangeSyncService({
         results.push({ exchange: conn.exchange, error: message, code: error?.code || null });
       }
     }
+    await repo.reopenOrphanedExchangeTrades(userId);
     await autoMatch(userId, sinceMs);
     return { results };
   }
@@ -226,6 +227,7 @@ export function createExchangeSyncService({
   /** Trades in the window, split by status; new ones carry a suggested input and recurring plans. */
   async function listTrades(userId, { days = 7 } = {}) {
     const sinceMs = now() - clampDays(days) * DAY_MS;
+    await repo.reopenOrphanedExchangeTrades(userId);
     const [connections, rows] = await Promise.all([
       repo.listExchangeConnections(userId),
       repo.listExchangeTrades(userId, { since: new Date(sinceMs).toISOString() }),
@@ -319,9 +321,12 @@ export function createExchangeSyncService({
           cashId: parsed.cashAccountId,
         });
         await finance.updateRecurringBuy({ userId, transactionId: plan.id, buy });
+        await repo.linkExchangeTrade(userId, id, plan.id);
         return { ok: true, addedTo: 'plan', planName: plan.name };
       }
       const result = await tradeService.recordTrade(userId, request, { now: new Date(now()) });
+      const txId = await repo.findTransactionIdByOrderNote(userId, trade.baseAsset, trade.orderRef);
+      if (txId) await repo.linkExchangeTrade(userId, id, txId);
       return { ok: true, addedTo: 'transaction', ...result };
     } catch (error) {
       await repo.setExchangeTradeStatus(userId, id, 'new', { fromStatuses: ['added'] }).catch(() => {});
