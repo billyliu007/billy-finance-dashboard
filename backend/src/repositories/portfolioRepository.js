@@ -918,6 +918,20 @@ export async function archivePosition(userId, symbol) {
     if (pos.rowCount === 0) throw new Error(`Position not found for ${sym}.`);
     const p = pos.rows[0];
     if (p.archivedAt) throw new Error(`${sym} is already archived.`);
+    const active = await client.query(
+      `SELECT COUNT(*)::int AS n FROM portfolio_position_transactions
+       WHERE user_id = $1 AND upper(symbol) = $2 AND archive_id IS NULL`,
+      [userId, sym],
+    );
+    if (active.rows[0].n === 0 && !(Number(p.qty) > 0)) {
+      // Nothing to seal (no purchases, sales or initial holding): just hide it, no empty round.
+      await client.query(
+        `UPDATE portfolio_positions SET qty = 0, purchase_price = 0, archived_at = NOW(), updated_at = NOW()
+         WHERE user_id = $1 AND symbol = $2`,
+        [userId, sym],
+      );
+      return { id: null, symbol: sym, archivedAt: null, transactions: 0, hiddenOnly: true };
+    }
     const archive = await client.query(
       `INSERT INTO position_archives (user_id, symbol, category, currency, base_qty, base_avg_cost)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -979,15 +993,19 @@ export async function restorePositionArchive(userId, archiveId) {
   if (!userId || !/^[0-9a-f-]{36}$/i.test(String(archiveId || ''))) throw new Error('Archive not found.');
   return withTransaction(async (client) => {
     const found = await client.query(
-      `SELECT id, upper(symbol) AS symbol, base_qty::float8 AS "baseQty", base_avg_cost::float8 AS "baseAvgCost", archived_at
+      `SELECT id, upper(symbol) AS symbol, base_qty::float8 AS "baseQty", base_avg_cost::float8 AS "baseAvgCost"
        FROM position_archives WHERE user_id = $1 AND id = $2 FOR UPDATE`,
       [userId, archiveId],
     );
     if (found.rowCount === 0) throw new Error('Archive not found.');
     const a = found.rows[0];
+    // Compare in SQL: JS Dates drop microseconds, which made a round look newer than itself.
     const newer = await client.query(
-      `SELECT 1 FROM position_archives WHERE user_id = $1 AND upper(symbol) = $2 AND archived_at > $3 LIMIT 1`,
-      [userId, a.symbol, a.archived_at],
+      `SELECT 1 FROM position_archives o
+       WHERE o.user_id = $1 AND upper(o.symbol) = $2 AND o.id <> $3
+         AND o.archived_at > (SELECT archived_at FROM position_archives WHERE id = $3)
+       LIMIT 1`,
+      [userId, a.symbol, archiveId],
     );
     if (newer.rowCount > 0) throw new Error(`Only the latest archived ${a.symbol} round can be restored.`);
     const pos = await client.query(
