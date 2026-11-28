@@ -3802,10 +3802,17 @@ tbody tr.cashSubtotalRow:hover td {
 }
 
 /* Holdings: hide assets worth less than $5 (switch) */
+.hideSmallRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 12px;
+}
+
 .hideSmallToggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: var(--text-dim);
   font-size: 0.82rem;
   cursor: pointer;
@@ -3856,12 +3863,7 @@ tbody tr.cashSubtotalRow:hover td {
 }
 
 .hideSmallCount {
-  display: inline-block;
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.16);
-  font-size: 0.72rem;
-  line-height: 18px;
-  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  opacity: 0.75;
 }

@@ -79,11 +79,13 @@ export default function PortfolioPositionsTable({
   }
 
   const hideSmallToggle = smallCount > 0 ? (
-    <label className="hideSmallToggle" title={t('portfolio.hideSmallTitle', { amount: SMALL_ASSET_USD })}>
-      <span>{t('portfolio.hideSmall', { amount: SMALL_ASSET_USD })}</span>
-      <input type="checkbox" role="switch" className="hideSmallSwitch" checked={hideSmall} onChange={toggleHideSmall} />
-      {hideSmall ? <span className="hideSmallCount">{smallCount}</span> : null}
-    </label>
+    <div className="hideSmallRow">
+      <label className="hideSmallToggle">
+        <input type="checkbox" role="switch" className="hideSmallSwitch" checked={hideSmall} onChange={toggleHideSmall} />
+        <span>{t('portfolio.hideSmall', { amount: SMALL_ASSET_USD })}</span>
+      </label>
+      {hideSmall ? <span className="hideSmallCount">{t('portfolio.smallHiddenCount', { count: smallCount })}</span> : null}
+    </div>
   ) : null;
 
   useEffect(() => {
@@ -160,7 +162,6 @@ export default function PortfolioPositionsTable({
     <div className="tableHeaderRow">
       <h2>{t('portfolio.positions')}</h2>
       <div className="tableHeaderActions">
-        {hideSmallToggle}
         {(onAddStock || onAddCrypto) && (
           <>
             <button
@@ -959,6 +960,7 @@ export default function PortfolioPositionsTable({
     <>
       <article className="tableCard portfolioPositionsCard">
         {tableHeaderRow}
+        {hideSmallToggle}
         <div className="portfolioDesktopTables">
           {groupedRows.map(([assetClass, classRows]) => (
             <section key={`desktop-${assetClass}`} className="portfolioAssetClassTable">
@@ -1100,7 +1102,6 @@ export default function PortfolioPositionsTable({
         <div className="detailsHeaderRow">
           <h2>{t('portfolio.positions')}</h2>
           <div className="detailsHeaderActions">
-            {hideSmallToggle}
             {(onAddStock || onAddCrypto) && (
               <>
                 <button
@@ -1142,6 +1143,8 @@ export default function PortfolioPositionsTable({
             )}
           </div>
         </div>
+
+        {hideSmallToggle}
 
         {showMobileDetails && (
           <div className="positionCardStack">
