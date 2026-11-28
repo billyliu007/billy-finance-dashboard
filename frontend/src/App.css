@@ -3800,3 +3800,21 @@ tbody tr.cashSubtotalRow:hover td {
     grid-template-columns: 1fr;
   }
 }
+
+/* Holdings: hide assets worth less than $5 */
+.hideSmallToggle {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hideSmallToggle.isOn {
+  border-color: rgba(94, 234, 212, 0.45);
+  color: var(--accent);
+}

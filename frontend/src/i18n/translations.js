@@ -312,6 +312,9 @@ export const translations = {
       deleteHint: "Cash won't be adjusted, because a recurring buy isn't linked to one cash account.",
     },
     portfolio: {
+      hideSmall: 'Hide < ${amount}',
+      smallHidden: '{count} under ${amount} hidden · Show',
+      hideSmallTitle: 'Hide holdings worth less than ${amount}',
       title: 'Holdings',
       noPositionsFound: 'No portfolio positions found yet.',
       positions: 'Holdings',
@@ -1131,6 +1134,9 @@ export const translations = {
       deleteHint: '定投未关联单一现金账户，因此不会调整现金。',
     },
     portfolio: {
+      hideSmall: '隐藏 < ${amount}',
+      smallHidden: '已隐藏 {count} 个低于 ${amount} 的资产 · 显示',
+      hideSmallTitle: '隐藏市值低于 ${amount} 的资产',
       title: '持仓',
       noPositionsFound: '暂无持仓。',
       positions: '持仓',

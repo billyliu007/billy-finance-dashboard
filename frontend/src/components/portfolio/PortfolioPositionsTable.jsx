@@ -15,6 +15,25 @@ import RecurringBuyModal from './RecurringBuyModal.jsx';
 import RecordSaleModal from './RecordSaleModal.jsx';
 import SalesHistoryDialog from './SalesHistoryDialog.jsx';
 
+const SMALL_ASSET_USD = 5;
+const HIDE_SMALL_KEY = 'holdings_hide_small_assets';
+
+function readHideSmall() {
+  try {
+    const v = window.localStorage.getItem(HIDE_SMALL_KEY);
+    return v === null ? true : v === '1';
+  } catch {
+    return true;
+  }
+}
+
+/** Market value below $5 (e.g. dust or a sold-out coin). Assets without a price are never hidden. */
+function isSmallAsset(item) {
+  if (item?.priceSource === 'unavailable') return false;
+  const value = Number(item?.currentValue);
+  return Number.isFinite(value) && Math.abs(value) < SMALL_ASSET_USD;
+}
+
 export default function PortfolioPositionsTable({
   hideValues,
   rows,
@@ -44,6 +63,34 @@ export default function PortfolioPositionsTable({
     isCrypto: false,
   }));
   const [historyCountBySymbol, setHistoryCountBySymbol] = useState(() => new Map());
+  const [hideSmall, setHideSmall] = useState(readHideSmall);
+  const smallCount = useMemo(() => (rows || []).filter(isSmallAsset).length, [rows]);
+
+  function toggleHideSmall() {
+    setHideSmall((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(HIDE_SMALL_KEY, next ? '1' : '0');
+      } catch {
+        // Preference just won't be remembered.
+      }
+      return next;
+    });
+  }
+
+  const hideSmallToggle = smallCount > 0 ? (
+    <button
+      type="button"
+      className={`hideSmallToggle ${hideSmall ? 'isOn' : ''}`}
+      onClick={toggleHideSmall}
+      aria-pressed={hideSmall}
+      title={t('portfolio.hideSmallTitle', { amount: SMALL_ASSET_USD })}
+    >
+      {hideSmall
+        ? t('portfolio.smallHidden', { count: smallCount, amount: SMALL_ASSET_USD })
+        : t('portfolio.hideSmall', { amount: SMALL_ASSET_USD })}
+    </button>
+  ) : null;
 
   useEffect(() => {
     const symbols = Array.from(
@@ -95,6 +142,7 @@ export default function PortfolioPositionsTable({
   const groupedRows = useMemo(() => {
     const grouped = new Map();
     rows.forEach((item) => {
+      if (hideSmall && isSmallAsset(item)) return;
       const classKey = item.category || 'Other';
       if (!grouped.has(classKey)) {
         grouped.set(classKey, []);
@@ -102,7 +150,7 @@ export default function PortfolioPositionsTable({
       grouped.get(classKey).push(item);
     });
     return Array.from(grouped.entries());
-  }, [rows]);
+  }, [rows, hideSmall]);
 
   /** Display label for asset class. "Stock Assets" (legacy) → "US Stock Assets"; others shown as-is for future classes. */
   const getAssetClassDisplayLabel = (category) => {
@@ -118,6 +166,7 @@ export default function PortfolioPositionsTable({
     <div className="tableHeaderRow">
       <h2>{t('portfolio.positions')}</h2>
       <div className="tableHeaderActions">
+        {hideSmallToggle}
         {(onAddStock || onAddCrypto) && (
           <>
             <button
@@ -1057,6 +1106,7 @@ export default function PortfolioPositionsTable({
         <div className="detailsHeaderRow">
           <h2>{t('portfolio.positions')}</h2>
           <div className="detailsHeaderActions">
+            {hideSmallToggle}
             {(onAddStock || onAddCrypto) && (
               <>
                 <button
