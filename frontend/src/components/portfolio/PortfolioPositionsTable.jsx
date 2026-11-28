@@ -79,17 +79,11 @@ export default function PortfolioPositionsTable({
   }
 
   const hideSmallToggle = smallCount > 0 ? (
-    <button
-      type="button"
-      className={`hideSmallToggle ${hideSmall ? 'isOn' : ''}`}
-      onClick={toggleHideSmall}
-      aria-pressed={hideSmall}
-      title={t('portfolio.hideSmallTitle', { amount: SMALL_ASSET_USD })}
-    >
-      {hideSmall
-        ? t('portfolio.smallHidden', { count: smallCount, amount: SMALL_ASSET_USD })
-        : t('portfolio.hideSmall', { amount: SMALL_ASSET_USD })}
-    </button>
+    <label className="hideSmallToggle" title={t('portfolio.hideSmallTitle', { amount: SMALL_ASSET_USD })}>
+      <span>{t('portfolio.hideSmall', { amount: SMALL_ASSET_USD })}</span>
+      <input type="checkbox" role="switch" className="hideSmallSwitch" checked={hideSmall} onChange={toggleHideSmall} />
+      {hideSmall ? <span className="hideSmallCount">{smallCount}</span> : null}
+    </label>
   ) : null;
 
   useEffect(() => {
