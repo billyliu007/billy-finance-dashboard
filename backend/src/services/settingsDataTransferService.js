@@ -83,7 +83,8 @@ function normalizeHoldingRows(list) {
     const marketInstrumentId = asOptionalString(row.marketInstrumentId);
     if (!symbol) throw new Error(`holdings[${idx}].symbol is required.`);
     if (!category) throw new Error(`holdings[${idx}].category is required.`);
-    return { symbol, category, currency, qty, purchasePrice, marketProvider, marketInstrumentId };
+    const archivedAt = row.archivedAt ? assertIsoDateTime(row.archivedAt, `holdings[${idx}].archivedAt`) : null;
+    return { symbol, category, currency, qty, purchasePrice, marketProvider, marketInstrumentId, archivedAt };
   });
 }
 
@@ -113,7 +114,29 @@ function normalizeTransactionRows(list) {
     if (type !== 'BUY' && type !== 'SELL') throw new Error(`transactions[${idx}].type must be BUY or SELL.`);
     if (qty <= 0) throw new Error(`transactions[${idx}].qty must be > 0.`);
     if (deductCashId && creditCashId) throw new Error(`transactions[${idx}] cannot set both deductCashId and creditCashId.`);
-    return { symbol, type, affectsHoldings, txDate, qty, avgCostPerUnit, feeFlat, costBasisPerUnit, notes, isRecurring, deductCashId, creditCashId };
+    const archiveId = asOptionalString(row.archiveId);
+    return { symbol, type, affectsHoldings, txDate, qty, avgCostPerUnit, feeFlat, costBasisPerUnit, notes, isRecurring, deductCashId, creditCashId, archiveId };
+  });
+}
+
+function normalizeArchiveRows(list) {
+  return list.map((row, idx) => {
+    if (!isObject(row)) throw new Error(`positionArchives[${idx}] must be an object.`);
+    const id = asString(row.id);
+    const symbol = asString(row.symbol).toUpperCase();
+    const category = asString(row.category);
+    if (!id) throw new Error(`positionArchives[${idx}].id is required.`);
+    if (!symbol) throw new Error(`positionArchives[${idx}].symbol is required.`);
+    if (!category) throw new Error(`positionArchives[${idx}].category is required.`);
+    return {
+      id,
+      symbol,
+      category,
+      currency: asString(row.currency || 'USD').toUpperCase(),
+      baseQty: asFiniteNumber(row.baseQty ?? 0, `positionArchives[${idx}].baseQty`, { min: 0 }),
+      baseAvgCost: asFiniteNumber(row.baseAvgCost ?? 0, `positionArchives[${idx}].baseAvgCost`, { min: 0 }),
+      archivedAt: assertIsoDateTime(row.archivedAt, `positionArchives[${idx}].archivedAt`),
+    };
   });
 }
 
@@ -293,7 +316,7 @@ export async function listScenarioPlanningExportRows(userId) {
   return Array.from(map.values());
 }
 
-export function buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRows, transactionRows, scenarios = [] }) {
+export function buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRows, transactionRows, archiveRows = [], scenarios = [] }) {
   return {
     version: SETTINGS_BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
@@ -317,6 +340,16 @@ export function buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRow
       purchasePrice: Number(row.purchasePrice ?? 0),
       marketProvider: row.marketProvider ?? null,
       marketInstrumentId: row.marketInstrumentId ?? null,
+      archivedAt: row.archivedAt ? new Date(row.archivedAt).toISOString() : null,
+    })),
+    positionArchives: (archiveRows || []).map((row) => ({
+      id: row.id,
+      symbol: String(row.symbol || '').toUpperCase(),
+      category: String(row.category || ''),
+      currency: String(row.currency || 'USD').toUpperCase(),
+      baseQty: Number(row.baseQty ?? 0),
+      baseAvgCost: Number(row.baseAvgCost ?? 0),
+      archivedAt: row.archivedAt,
     })),
     transactions: (transactionRows || []).map((row) => ({
       symbol: String(row.symbol || '').toUpperCase(),
@@ -331,6 +364,7 @@ export function buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRow
       isRecurring: Boolean(row.isRecurring),
       deductCashId: row.deductCashId ?? null,
       creditCashId: row.creditCashId ?? null,
+      archiveId: row.archiveId ?? null,
       createdAtUtc: row.createdAtUtc ?? null,
     })),
     scenarioPlanning: {
@@ -351,7 +385,9 @@ export function normalizeSettingsImportPayload(input) {
   const holdings = normalizeHoldingRows(getArrayField(payload, 'holdings'));
   const transactions = normalizeTransactionRows(getArrayField(payload, 'transactions'));
   const scenarios = normalizeScenarioRows(payload?.scenarioPlanning?.scenarios || []);
-  return { version, cash, netWorthHistory, holdings, transactions, scenarioPlanning: { scenarios } };
+  // Optional (added with archived rounds); older backups simply have none.
+  const positionArchives = normalizeArchiveRows(Array.isArray(payload.positionArchives) ? payload.positionArchives : []);
+  return { version, cash, netWorthHistory, holdings, transactions, positionArchives, scenarioPlanning: { scenarios } };
 }
 
 export async function importSettingsDataReplaceAll({ userId, backup }) {
@@ -366,14 +402,16 @@ export async function importSettingsDataReplaceAll({ userId, backup }) {
     await client.query(`DELETE FROM whatif_scenarios WHERE user_id = $1`, [uid]);
     await client.query(`DELETE FROM portfolio_position_transactions WHERE user_id = $1`, [uid]);
     await client.query(`DELETE FROM portfolio_positions WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM position_archives WHERE user_id = $1`, [uid]);
     await client.query(`DELETE FROM cash WHERE user_id = $1`, [uid]);
     await client.query(`DELETE FROM networth_history WHERE user_id = $1`, [uid]);
 
     if (normalized.holdings.length > 0) {
       await client.query(
-        `INSERT INTO portfolio_positions (user_id, symbol, category, currency, qty, purchase_price, market_provider, market_instrument_id)
-         SELECT $1, upper(x.symbol), x.category, upper(coalesce(x.currency, 'USD')), x.qty, x."purchasePrice", x."marketProvider", x."marketInstrumentId"
-         FROM jsonb_to_recordset($2::jsonb) AS x(symbol text, category text, currency text, qty float8, "purchasePrice" float8, "marketProvider" text, "marketInstrumentId" text)`,
+        `INSERT INTO portfolio_positions (user_id, symbol, category, currency, qty, purchase_price, market_provider, market_instrument_id, archived_at)
+         SELECT $1, upper(x.symbol), x.category, upper(coalesce(x.currency, 'USD')), x.qty, x."purchasePrice", x."marketProvider", x."marketInstrumentId",
+                (x."archivedAt")::timestamptz
+         FROM jsonb_to_recordset($2::jsonb) AS x(symbol text, category text, currency text, qty float8, "purchasePrice" float8, "marketProvider" text, "marketInstrumentId" text, "archivedAt" text)`,
         [uid, JSON.stringify(normalized.holdings)],
       );
     }
@@ -393,6 +431,21 @@ export async function importSettingsDataReplaceAll({ userId, backup }) {
       );
     }
 
+    const archiveIdMap = new Map();
+    const archiveInsertRows = normalized.positionArchives.map((row) => {
+      const newId = randomUUID();
+      archiveIdMap.set(row.id, newId);
+      return { ...row, id: newId };
+    });
+    if (archiveInsertRows.length > 0) {
+      await client.query(
+        `INSERT INTO position_archives (id, user_id, symbol, category, currency, base_qty, base_avg_cost, archived_at)
+         SELECT (x.id)::uuid, $1, upper(x.symbol), x.category, upper(x.currency), x."baseQty", x."baseAvgCost", (x."archivedAt")::timestamptz
+         FROM jsonb_to_recordset($2::jsonb) AS x(id text, symbol text, category text, currency text, "baseQty" float8, "baseAvgCost" float8, "archivedAt" text)`,
+        [uid, JSON.stringify(archiveInsertRows)],
+      );
+    }
+
     const mappedTransactions = normalized.transactions.map((row, index) => {
       const mappedDeductCashId = row.deductCashId ? cashIdMap.get(row.deductCashId) : null;
       const mappedCreditCashId = row.creditCashId ? cashIdMap.get(row.creditCashId) : null;
@@ -401,6 +454,10 @@ export async function importSettingsDataReplaceAll({ userId, backup }) {
       }
       if (row.creditCashId && !mappedCreditCashId) {
         throw new Error(`transactions[${index}].creditCashId does not match any cash.id in this backup.`);
+      }
+      const mappedArchiveId = row.archiveId ? archiveIdMap.get(row.archiveId) : null;
+      if (row.archiveId && !mappedArchiveId) {
+        throw new Error(`transactions[${index}].archiveId does not match any positionArchives.id in this backup.`);
       }
       return {
         symbol: row.symbol,
@@ -415,17 +472,18 @@ export async function importSettingsDataReplaceAll({ userId, backup }) {
         costBasisPerUnit: row.costBasisPerUnit,
         notes: row.notes,
         isRecurring: row.isRecurring,
+        archiveId: mappedArchiveId,
       };
     });
     if (mappedTransactions.length > 0) {
       await client.query(
         `INSERT INTO portfolio_position_transactions (
-          user_id, symbol, type, affects_holdings, tx_date, qty, avg_cost_per_unit, fee_flat_total, deduct_cash_id, credit_cash_id, cost_basis_per_unit, notes, is_recurring
+          user_id, symbol, type, affects_holdings, tx_date, qty, avg_cost_per_unit, fee_flat_total, deduct_cash_id, credit_cash_id, cost_basis_per_unit, notes, is_recurring, archive_id
         )
          SELECT $1, upper(x.symbol), upper(x.type), coalesce(x."affectsHoldings", TRUE), (x."txDate")::date, x.qty, x."avgCostPerUnit", x."feeFlat",
-                (x."deductCashId")::uuid, (x."creditCashId")::uuid, x."costBasisPerUnit", x.notes, coalesce(x."isRecurring", FALSE)
+                (x."deductCashId")::uuid, (x."creditCashId")::uuid, x."costBasisPerUnit", x.notes, coalesce(x."isRecurring", FALSE), (x."archiveId")::uuid
          FROM jsonb_to_recordset($2::jsonb) AS x(
-           symbol text, type text, "affectsHoldings" boolean, "txDate" text, qty float8, "avgCostPerUnit" float8, "feeFlat" float8, "deductCashId" text, "creditCashId" text, "costBasisPerUnit" float8, notes text, "isRecurring" boolean
+           symbol text, type text, "affectsHoldings" boolean, "txDate" text, qty float8, "avgCostPerUnit" float8, "feeFlat" float8, "deductCashId" text, "creditCashId" text, "costBasisPerUnit" float8, notes text, "isRecurring" boolean, "archiveId" text
          )`,
         [uid, JSON.stringify(mappedTransactions)],
       );

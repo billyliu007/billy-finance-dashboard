@@ -3,7 +3,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { rethrowAsBadRequest } from '../lib/mapRouteErrors.js';
 import { listCashComponents } from '../repositories/cashRepository.js';
 import { listNetWorthHistory } from '../repositories/netWorthHistoryRepository.js';
-import { listAllPositionTransactions, listPortfolioPositions } from '../repositories/portfolioRepository.js';
+import { listAllPositionTransactions, listPortfolioPositions, listPositionArchives } from '../repositories/portfolioRepository.js';
 import {
   buildSettingsExportPayload,
   importSettingsDataReplaceAll,
@@ -18,14 +18,15 @@ router.get(
   '/export',
   asyncHandler(async (req, res) => {
     const userId = req.auth.user.userId;
-    const [cashRows, netWorthRows, holdingsRows, transactionRows, scenarios] = await Promise.all([
+    const [cashRows, netWorthRows, holdingsRows, transactionRows, archiveRows, scenarios] = await Promise.all([
       listCashComponents(userId),
       listNetWorthHistory(userId),
       listPortfolioPositions(userId),
       listAllPositionTransactions(userId),
+      listPositionArchives(userId),
       listScenarioPlanningExportRows(userId),
     ]);
-    const backup = buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRows, transactionRows, scenarios });
+    const backup = buildSettingsExportPayload({ cashRows, netWorthRows, holdingsRows, transactionRows, archiveRows, scenarios });
     return res.status(200).json(backup);
   }),
 );

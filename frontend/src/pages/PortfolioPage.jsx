@@ -7,10 +7,11 @@ import AddCryptoPositionModal from '../components/portfolio/AddCryptoPositionMod
 import AddStockPositionModal from '../components/portfolio/AddStockPositionModal.jsx';
 import EditCryptoPositionModal from '../components/portfolio/EditCryptoPositionModal.jsx';
 import ExchangeSyncPanel from '../components/portfolio/ExchangeSyncPanel.jsx';
+import ArchivedHistory from '../components/portfolio/ArchivedHistory.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
-import { deleteJson } from '../utils/api.js';
+import { deleteJson, postJson } from '../utils/api.js';
 
 export default function PortfolioPage({ hideValues }) {
   const { t } = useLanguage();
@@ -21,6 +22,9 @@ export default function PortfolioPage({ hideValues }) {
   const [editPosition, setEditPosition] = useState(null);
   const [holdingToDelete, setHoldingToDelete] = useState(null);
   const [isDeletingHolding, setIsDeletingHolding] = useState(false);
+  const [holdingToArchive, setHoldingToArchive] = useState(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveReloadKey, setArchiveReloadKey] = useState(0);
   const rows = useMemo(() => data?.tableRows || [], [data]);
   const allocationData = useMemo(() => data?.allocationData || [], [data]);
   const chartData = useMemo(() => data?.chartData || [], [data]);
@@ -81,8 +85,67 @@ export default function PortfolioPage({ hideValues }) {
               onAddStock={() => setIsAddStockOpen(true)}
               onEditPosition={(position) => setEditPosition(position)}
               onDeletePosition={(position) => setHoldingToDelete(position)}
+              onArchivePosition={(position) => setHoldingToArchive(position)}
             />
           </>
+        )}
+
+        {!isLoading && !error && data && (
+          <ArchivedHistory
+            activeSymbols={rows.map((r) => r.symbol)}
+            reloadKey={archiveReloadKey}
+            onRestored={() => refresh?.({ mode: 'silent' })}
+          />
+        )}
+
+        {holdingToArchive && (
+          <div className="modalOverlay" role="presentation" onMouseDown={() => !isArchiving && setHoldingToArchive(null)}>
+            <div className="modalCard" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="modalHeader">
+                <h2>{t('archive.confirmTitle', { symbol: holdingToArchive.name })}</h2>
+                <button type="button" className="modalCloseBtn" onClick={() => setHoldingToArchive(null)} aria-label={t('modals.close')}>
+                  ✕
+                </button>
+              </div>
+              <div className="modalBody">
+                <p className="modalHint">{t('archive.confirmBody', { symbol: holdingToArchive.name })}</p>
+                <p className="modalHint">
+                  {t('archive.confirmDust', {
+                    qty: Number(holdingToArchive.qty || 0).toLocaleString('en-US', { maximumFractionDigits: 8 }),
+                    symbol: holdingToArchive.name,
+                    value: Number(holdingToArchive.currentValue || 0).toFixed(2),
+                  })}
+                </p>
+              </div>
+              <div className="modalFooter">
+                <button type="button" className="modalBtn secondary" onClick={() => setHoldingToArchive(null)} disabled={isArchiving}>
+                  {t('modals.cancel')}
+                </button>
+                <button
+                  type="button"
+                  className="modalBtn"
+                  disabled={isArchiving}
+                  onClick={async () => {
+                    const position = holdingToArchive;
+                    setIsArchiving(true);
+                    try {
+                      await postJson(`/api/portfolio/positions/${encodeURIComponent(position.symbol)}/archive`, {});
+                      setHoldingToArchive(null);
+                      showToast(t('archive.archivedToast', { symbol: position.name }), { variant: 'success' });
+                      setArchiveReloadKey((k) => k + 1);
+                      refresh?.({ mode: 'silent' });
+                    } catch (err) {
+                      showToast(err?.message || t('archive.archiveFailed'), { variant: 'error' });
+                    } finally {
+                      setIsArchiving(false);
+                    }
+                  }}
+                >
+                  {isArchiving ? t('archive.archiving') : t('archive.archive')}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         <AddCryptoPositionModal

@@ -206,7 +206,7 @@ export async function listRecurringPlans(userId, symbol) {
     `SELECT id, notes AS name, to_char(tx_date, 'YYYY-MM-DD') AS "txDate", qty::float8 AS qty,
             round(qty * avg_cost_per_unit, 6)::float8 AS invested
      FROM portfolio_position_transactions
-     WHERE user_id = $1 AND upper(symbol) = upper($2) AND is_recurring = TRUE AND type = 'BUY'
+     WHERE user_id = $1 AND upper(symbol) = upper($2) AND is_recurring = TRUE AND type = 'BUY' AND archive_id IS NULL
      ORDER BY created_at`,
     [userId, symbol],
   );
@@ -255,7 +255,7 @@ export async function listExchangePlans(userId) {
             t.qty::float8 AS "recurringQty", round(t.qty * t.avg_cost_per_unit, 6)::float8 AS "recurringInvested"
      FROM exchange_plans e
      LEFT JOIN portfolio_position_transactions t
-       ON t.id = e.linked_transaction_id AND t.user_id = e.user_id AND t.is_recurring = TRUE
+       ON t.id = e.linked_transaction_id AND t.user_id = e.user_id AND t.is_recurring = TRUE AND t.archive_id IS NULL
      WHERE e.user_id = $1
      ORDER BY e.target_asset, e.name`,
     [userId],
@@ -303,7 +303,7 @@ export async function getRecurringPlanById(userId, id) {
     `SELECT id, upper(symbol) AS symbol, notes AS name, to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
             qty::float8 AS qty, round(qty * avg_cost_per_unit, 6)::float8 AS invested
      FROM portfolio_position_transactions
-     WHERE user_id = $1 AND id = $2 AND is_recurring = TRUE AND type = 'BUY'`,
+     WHERE user_id = $1 AND id = $2 AND is_recurring = TRUE AND type = 'BUY' AND archive_id IS NULL`,
     [userId, id],
   );
   return result.rows[0] || null;

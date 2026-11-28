@@ -86,6 +86,7 @@ test('buildSettingsExportPayload returns expected shape with scenarios', () => {
     'exportedAt',
     'holdings',
     'netWorthHistory',
+    'positionArchives',
     'scenarioPlanning',
     'transactions',
     'version',

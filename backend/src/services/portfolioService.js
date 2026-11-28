@@ -48,6 +48,8 @@ function normalizePositionsWithConfig(positions, configuredAssetMap) {
       currency,
       qty: Number(position?.qty || 0),
       purchasePrice: Number(position?.purchasePrice || 0),
+      // Archived (sealed) assets are hidden from holdings but still count in realized P/L.
+      archivedAt: position?.archivedAt || null,
     };
   });
 }
@@ -61,10 +63,10 @@ function computePositionMetrics(asset, priceResolution) {
   const realizedPnl = Number(asset?.realizedPnl) || 0;
   const realizedCost = Number(asset?.sellCost) || 0;
   const found =
-    (!isNonPositiveOrInvalidQuantity(asset.qty) &&
+    !asset.archivedAt && ((!isNonPositiveOrInvalidQuantity(asset.qty) &&
       (Number.isFinite(asset.qty) || Number.isFinite(asset.purchasePrice))) ||
     Math.abs(realizedPnl) > 1e-12 ||
-    realizedCost > 1e-12;
+    realizedCost > 1e-12);
   return {
     ...asset,
     found,

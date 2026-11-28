@@ -21,12 +21,47 @@ import {
   importHistoricalSaleTransactions,
   clearHistoricalSaleTransactions,
   getHistoricalSaleCount,
+  archivePosition,
+  listPositionArchives,
+  restorePositionArchive,
 } from '../repositories/financeRepository.js';
 import { parseRecurringBuyInput } from '../lib/recurringBuy.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 router.use(requireAuth);
+
+// --- Archived rounds ---------------------------------------------------------------------------
+
+router.get(
+  '/archives',
+  asyncHandler(async (req, res) => {
+    return res.json({ archives: await listPositionArchives(req.auth.user.userId) });
+  }),
+);
+
+router.post(
+  '/positions/:symbol/archive',
+  asyncHandler(async (req, res) => {
+    try {
+      const result = await archivePosition(req.auth.user.userId, req.params.symbol);
+      return res.status(201).json({ ok: true, archive: result });
+    } catch (error) {
+      rethrowAsNotFoundOr400(error);
+    }
+  }),
+);
+
+router.post(
+  '/archives/:id/restore',
+  asyncHandler(async (req, res) => {
+    try {
+      return res.json(await restorePositionArchive(req.auth.user.userId, req.params.id));
+    } catch (error) {
+      rethrowAsNotFoundOr400(error);
+    }
+  }),
+);
 
 router.post(
   '/positions/crypto',

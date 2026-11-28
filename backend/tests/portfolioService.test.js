@@ -38,3 +38,16 @@ test('buildTradingPerformanceHoldingsSlice returns minimal rows and matches visi
   assert.strictEqual(btc.currency, 'USD');
   assert.ok(!('currentPrice' in btc));
 });
+
+test('archived assets are hidden from holdings but keep their realized P/L in totals', () => {
+  const positions = [
+    ...samplePositions(),
+    // ADA after archiving: emptied row, archived round's sales still in the realized aggregates.
+    { symbol: 'ADA', name: 'ADA', category: 'Crypto Assets', qty: 0, purchasePrice: 0, archivedAt: '2026-11-29T00:00:00Z', realizedPnl: -120, sellCost: 500 },
+  ];
+  const payload = buildPortfolioPayload({ positions, stockQuotes: {}, cryptoQuotes: { ADA: { price: 0.4, source: 'coinbase', timestamp: Date.now() } } });
+  assert.equal(payload.tableRows.some((r) => r.symbol === 'ADA'), false);
+  assert.equal(payload.totals.realizedPnl, -120);
+  const slice = buildTradingPerformanceHoldingsSlice({ positions });
+  assert.equal(slice.tableRows.some((r) => r.symbol === 'ADA'), false);
+});

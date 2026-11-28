@@ -3867,3 +3867,107 @@ tbody tr.cashSubtotalRow:hover td {
   font-size: 0.78rem;
   opacity: 0.75;
 }
+
+/* Holdings: archived history */
+.archiveCardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.archiveCardHead h2 {
+  margin: 0;
+}
+
+.archiveCount {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.archiveChevron {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.archiveHint {
+  margin: 8px 0 4px;
+}
+
+.archiveList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.archiveRound {
+  border-top: 1px solid var(--line-soft);
+  padding: 10px 0;
+}
+
+.archiveRoundHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.archiveRoundTitle {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.archiveRoundMeta {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.archiveRoundPnl {
+  margin-left: auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.archiveRoundPnl.pos {
+  color: var(--good);
+}
+
+.archiveRoundPnl.neg {
+  color: var(--bad);
+}
+
+.archiveRoundBody {
+  padding: 8px 0 0 32px;
+}
+
+.archiveRoundBody h4 {
+  margin: 10px 0 6px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.archiveTable td.pos {
+  color: var(--good);
+}
+
+.archiveTable td.neg {
+  color: var(--bad);
+}
+
+@media (max-width: 560px) {
+  .archiveRoundBody {
+    padding-left: 0;
+  }
+}

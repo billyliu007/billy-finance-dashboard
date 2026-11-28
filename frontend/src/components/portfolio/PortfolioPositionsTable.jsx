@@ -41,6 +41,7 @@ export default function PortfolioPositionsTable({
   onAddStock,
   onEditPosition,
   onDeletePosition,
+  onArchivePosition,
   cashComponents,
   onRefresh,
 }) {
@@ -87,6 +88,19 @@ export default function PortfolioPositionsTable({
       {hideSmall ? <span className="hideSmallCount">{t('portfolio.smallHiddenCount', { count: smallCount })}</span> : null}
     </div>
   ) : null;
+
+  const renderArchiveBtn = (item) =>
+    onArchivePosition && isSmallAsset(item) ? (
+      <button
+        type="button"
+        className="headerIconBtn positionActionBtn"
+        onClick={() => onArchivePosition(item)}
+        aria-label={`${t('archive.archive')} ${item.name}`}
+        title={t('archive.archive')}
+      >
+        ⤓
+      </button>
+    ) : null;
 
   useEffect(() => {
     const symbols = Array.from(
@@ -646,6 +660,7 @@ export default function PortfolioPositionsTable({
       </td>
       {(onEditPosition || onDeletePosition) && (
         <td data-label={t('netWorth.actions')} className="positionActionsCell">
+          {renderArchiveBtn(item)}
           {onDeletePosition && (
             <button
               type="button"
@@ -1206,6 +1221,7 @@ export default function PortfolioPositionsTable({
                           </div>
                           {onDeletePosition && (
                             <div className="positionCardActionIcons">
+                              {renderArchiveBtn(item)}
                               <button
                                 type="button"
                                 className="headerIconBtn positionActionBtn positionActionBtnDanger"
