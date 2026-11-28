@@ -12,6 +12,7 @@ import profitabilityRouter from './profitability.js';
 import whatIfRouter from './whatif.js';
 import externalV1Router from './externalV1.js';
 import userDataTransferRouter from './userDataTransfer.js';
+import exchangeRouter from './exchange.js';
 
 export function mountRoutes(app) {
   app.use('/api/auth', authRouter);
@@ -24,6 +25,7 @@ export function mountRoutes(app) {
   app.use('/api/user', userRouter);
   app.use('/api/user/data-transfer', userDataTransferRouter);
   app.use('/api/cash', cashRouter);
+  app.use('/api/exchange', exchangeRouter);
   app.use('/api/currencies', currenciesRouter);
   app.use('/api/internal', internalRouter);
   app.use('/api/dev', devRouter);

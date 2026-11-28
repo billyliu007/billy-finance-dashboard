@@ -3,6 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
 import { deleteJson, fetchJson, postJson } from '../utils/api.js';
 import PasskeysCard from '../components/settings/PasskeysCard.jsx';
+import ExchangeConnectionsCard from '../components/settings/ExchangeConnectionsCard.jsx';
 
 function formatTs(value, locale) {
   if (value == null || value === '') return '—';
@@ -200,6 +201,7 @@ export default function SettingsPage() {
 
       <div className="dashboardPanel">
         <PasskeysCard />
+        <ExchangeConnectionsCard />
 
         <article className="tableCard settingsCard">
           <div className="settingsCardHeader">

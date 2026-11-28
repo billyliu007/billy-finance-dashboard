@@ -1,0 +1,163 @@
+import { query } from '../db/client.js';
+
+// --- Connections -----------------------------------------------------------------------------
+
+const CONNECTION_COLUMNS = `id, exchange, key_last4 AS "keyLast4", created_at AS "createdAt",
+  last_synced_at AS "lastSyncedAt", last_error AS "lastError"`;
+
+/** Public view of a user's connections (never includes the encrypted secrets). */
+export async function listExchangeConnections(userId) {
+  const result = await query(
+    `SELECT ${CONNECTION_COLUMNS} FROM exchange_connections WHERE user_id = $1 ORDER BY exchange`,
+    [userId],
+  );
+  return result.rows;
+}
+
+/** Connections including encrypted credentials, for the sync service only. */
+export async function listExchangeConnectionsWithSecrets(userId) {
+  const result = await query(
+    `SELECT ${CONNECTION_COLUMNS}, api_key_enc AS "apiKeyEnc", api_secret_enc AS "apiSecretEnc"
+     FROM exchange_connections WHERE user_id = $1 ORDER BY exchange`,
+    [userId],
+  );
+  return result.rows;
+}
+
+/** Insert or replace the user's key for one exchange. */
+export async function upsertExchangeConnection({ userId, exchange, apiKeyEnc, apiSecretEnc, keyLast4 }) {
+  const result = await query(
+    `INSERT INTO exchange_connections (user_id, exchange, api_key_enc, api_secret_enc, key_last4)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (user_id, exchange) DO UPDATE
+       SET api_key_enc = EXCLUDED.api_key_enc,
+           api_secret_enc = EXCLUDED.api_secret_enc,
+           key_last4 = EXCLUDED.key_last4,
+           created_at = NOW(),
+           last_synced_at = NULL,
+           last_error = NULL
+     RETURNING ${CONNECTION_COLUMNS}`,
+    [userId, exchange, apiKeyEnc, apiSecretEnc, keyLast4],
+  );
+  return result.rows[0];
+}
+
+/** Remove a key and the trades fetched with it. Returns true if a key was removed. */
+export async function deleteExchangeConnection(userId, exchange) {
+  const result = await query(
+    `DELETE FROM exchange_connections WHERE user_id = $1 AND exchange = $2`,
+    [userId, exchange],
+  );
+  await query(`DELETE FROM exchange_trades WHERE user_id = $1 AND exchange = $2`, [userId, exchange]);
+  return result.rowCount > 0;
+}
+
+export async function markExchangeConnectionSynced(userId, exchange, { error = null } = {}) {
+  await query(
+    `UPDATE exchange_connections
+     SET last_synced_at = CASE WHEN $3::text IS NULL THEN NOW() ELSE last_synced_at END,
+         last_error = $3
+     WHERE user_id = $1 AND exchange = $2`,
+    [userId, exchange, error],
+  );
+}
+
+// --- Trades ----------------------------------------------------------------------------------
+
+const TRADE_COLUMNS = `id, exchange, external_id AS "externalId", source, order_ref AS "orderRef",
+  base_asset AS "baseAsset", quote_asset AS "quoteAsset", side, qty::float8 AS qty,
+  quote_qty::float8 AS "quoteQty", fee::float8 AS fee, fee_asset AS "feeAsset",
+  to_char(executed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "executedAt",
+  status, matched_transaction_id AS "matchedTransactionId"`;
+
+/**
+ * Store fetched trades. Existing rows keep their status (a decision is never undone by a re-sync);
+ * returns the number of rows that were new.
+ */
+export async function upsertExchangeTrades(userId, trades) {
+  let inserted = 0;
+  for (const t of trades) {
+    const result = await query(
+      `INSERT INTO exchange_trades
+         (user_id, exchange, external_id, source, order_ref, base_asset, quote_asset, side, qty,
+          quote_qty, fee, fee_asset, executed_at, raw)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       ON CONFLICT (user_id, exchange, external_id) DO NOTHING`,
+      [
+        userId,
+        t.exchange,
+        t.externalId,
+        t.source,
+        t.orderRef,
+        t.baseAsset,
+        t.quoteAsset,
+        t.side,
+        t.qty,
+        t.quoteQty,
+        t.fee || 0,
+        t.feeAsset || null,
+        t.executedAt,
+        t.raw ? JSON.stringify(t.raw) : null,
+      ],
+    );
+    inserted += result.rowCount;
+  }
+  return inserted;
+}
+
+export async function listExchangeTrades(userId, { since, statuses } = {}) {
+  const result = await query(
+    `SELECT ${TRADE_COLUMNS} FROM exchange_trades
+     WHERE user_id = $1
+       AND ($2::timestamptz IS NULL OR executed_at >= $2::timestamptz)
+       AND ($3::text[] IS NULL OR status = ANY($3::text[]))
+     ORDER BY executed_at DESC`,
+    [userId, since || null, statuses || null],
+  );
+  return result.rows;
+}
+
+export async function getExchangeTrade(userId, id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return null;
+  const result = await query(`SELECT ${TRADE_COLUMNS} FROM exchange_trades WHERE user_id = $1 AND id = $2`, [userId, id]);
+  return result.rows[0] || null;
+}
+
+/** Change status; only from `fromStatuses` so two clicks can't record a trade twice. */
+export async function setExchangeTradeStatus(userId, id, status, { fromStatuses = ['new'], matchedTransactionId = null } = {}) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return false;
+  const result = await query(
+    `UPDATE exchange_trades
+     SET status = $3, matched_transaction_id = COALESCE($5::uuid, matched_transaction_id), updated_at = NOW()
+     WHERE user_id = $1 AND id = $2 AND status = ANY($4::text[])`,
+    [userId, id, status, fromStatuses, matchedTransactionId],
+  );
+  return result.rowCount > 0;
+}
+
+// --- WorthTrack transactions used for matching -------------------------------------------------
+
+/** BUY/SELL transactions (incl. imported history) on or after a date, for duplicate matching. */
+export async function listTransactionsForMatching(userId, sinceDate) {
+  const result = await query(
+    `SELECT id, upper(symbol) AS symbol, upper(type) AS type, to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
+            qty::float8 AS qty, avg_cost_per_unit::float8 AS "avgCostPerUnit", notes, is_recurring AS "isRecurring"
+     FROM portfolio_position_transactions
+     WHERE user_id = $1 AND tx_date >= $2::date`,
+    [userId, sinceDate],
+  );
+  return result.rows;
+}
+
+/** Recurring-buy plans for one symbol (running totals), for "add to plan". */
+export async function listRecurringPlans(userId, symbol) {
+  const result = await query(
+    `SELECT id, notes AS name, to_char(tx_date, 'YYYY-MM-DD') AS "txDate", qty::float8 AS qty,
+            round(qty * avg_cost_per_unit, 6)::float8 AS invested
+     FROM portfolio_position_transactions
+     WHERE user_id = $1 AND upper(symbol) = upper($2) AND is_recurring = TRUE AND type = 'BUY'
+     ORDER BY created_at`,
+    [userId, symbol],
+  );
+  return result.rows;
+}

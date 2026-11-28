@@ -6,6 +6,7 @@ import PortfolioPositionsTable from '../components/portfolio/PortfolioPositionsT
 import AddCryptoPositionModal from '../components/portfolio/AddCryptoPositionModal.jsx';
 import AddStockPositionModal from '../components/portfolio/AddStockPositionModal.jsx';
 import EditCryptoPositionModal from '../components/portfolio/EditCryptoPositionModal.jsx';
+import ExchangeSyncPanel from '../components/portfolio/ExchangeSyncPanel.jsx';
 import { useDashboard } from '../contexts/DashboardContext.jsx';
 import { useLanguage } from '../contexts/LanguageContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
@@ -41,6 +42,12 @@ export default function PortfolioPage({ hideValues }) {
       <div className="dashboardPanel">
         {isLoading && <p>{t('app.loadingDashboard')}</p>}
         {!isLoading && error && <p className="error">{error}</p>}
+        {!isLoading && !error && data && (
+          <ExchangeSyncPanel
+            cashComponents={netWorth?.overview?.cashComponents ?? []}
+            onRecorded={() => refresh()}
+          />
+        )}
         {!isLoading && !error && data?.isEmpty && (
           <div className="portfolioEmptyState">
             <p>{t('portfolio.noPositionsFound')}</p>

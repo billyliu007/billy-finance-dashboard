@@ -136,6 +136,10 @@ services:
       # existing API token (incl. the MCP server's) stops working.
       - key: API_TOKEN_PEPPER
         sync: false
+      # Encrypts exchange API keys (exchange sync). Generated once; never change it, or saved
+      # exchange keys can no longer be read and must be connected again.
+      - key: EXCHANGE_KEY_ENCRYPTION_KEY
+        generateValue: true
       - key: TRUST_PROXY
         value: "true"
       - key: AUTH_SESSION_TTL_MS

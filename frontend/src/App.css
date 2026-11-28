@@ -3587,3 +3587,160 @@ tbody tr.cashSubtotalRow:hover td {
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+/* --- Exchange sync ------------------------------------------------------------------------ */
+.exchangeConnList,
+.exchangeTradeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.exchangeConnRow,
+.exchangeTradeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.exchangeConnRow:first-child,
+.exchangeTradeRow:first-child {
+  border-top: 0;
+}
+
+.exchangeConnMeta,
+.exchangeTradeMeta {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin-top: 3px;
+}
+
+.exchangeConnError {
+  color: #ffb4c4;
+  font-size: 0.82rem;
+  margin-top: 3px;
+}
+
+.exchangeSeg {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.exchangeSeg button {
+  flex: 1;
+  padding: 9px;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.exchangeSeg button.on {
+  background: rgba(94, 234, 212, 0.12);
+  color: var(--accent);
+}
+
+.exchangeSeg button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.exchangeBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(120, 80, 10, 0.18);
+  border-radius: 14px;
+  color: #fde68a;
+}
+
+.exchangeBanner.isError {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(127, 29, 29, 0.18);
+  color: #ffb4c4;
+}
+
+.exchangeSide {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.exchangeSide.buy {
+  background: rgba(94, 234, 212, 0.15);
+  color: var(--accent);
+}
+
+.exchangeSide.sell {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--bad);
+}
+
+.exchangeTradeActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.exchangeTradeActions .modalBtn {
+  padding: 7px 12px;
+}
+
+.exchangeUnsupported {
+  font-size: 0.8rem;
+}
+
+.exchangeReviewBar,
+.exchangeResolvedBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.exchangeResolvedBar {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
+.exchangeDays {
+  width: auto;
+}
+
+.exchangeTradeList.isResolved {
+  opacity: 0.8;
+}
+
+.exchangeFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 560px) {
+  .exchangeTradeRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .exchangeTradeActions {
+    justify-content: flex-end;
+  }
+}
