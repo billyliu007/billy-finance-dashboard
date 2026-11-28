@@ -12,7 +12,9 @@ import {
   matchRecordedTrades,
   normalizeBinanceAsset,
   normalizeBinanceAutoInvest,
+  normalizeBinanceAutoInvestPlans,
   normalizeBinanceConvert,
+  planTotalsDiffer,
   suggestTradeInput,
 } from '../lib/exchangeTrades.js';
 import { parseRecurringBuyInput } from '../lib/recurringBuy.js';
@@ -241,6 +243,10 @@ export function createExchangeSyncService({
         const { trades, warnings } = await fetchBinanceTrades(client, { sinceMs, nowMs, positionSymbols: cryptoSymbols });
         const inserted = await repo.upsertExchangeTrades(userId, trades);
         const autoInvestPlans = await probeAutoInvestPlans(client);
+        if (autoInvestPlans) {
+          const names = await repo.listAutoInvestPlanNames(userId);
+          await repo.upsertExchangePlans(userId, normalizeBinanceAutoInvestPlans(autoInvestPlans, names));
+        }
         await repo.markExchangeConnectionSynced(userId, conn.exchange, { details: { warnings, autoInvestPlans } });
         results.push({ exchange: conn.exchange, fetched: trades.length, inserted, warnings });
       } catch (error) {
@@ -262,10 +268,12 @@ export function createExchangeSyncService({
       repo.listExchangeConnections(userId),
       repo.listExchangeTrades(userId, { since: new Date(sinceMs).toISOString() }),
     ]);
+    // Auto-Invest purchases are summarized by their plan (see plans below), not listed one by one.
+    const tradeRows = rows.filter((r) => r.source !== 'auto_invest');
     const counts = { new: 0, added: 0, ignored: 0, matched: 0 };
-    rows.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
+    tradeRows.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
 
-    const pending = rows.filter((r) => r.status === 'new');
+    const pending = tradeRows.filter((r) => r.status === 'new');
     const publicClient = makeBinanceClient({ apiKey: '', apiSecret: '' });
     const priceCache = new Map();
     const plansCache = new Map();
@@ -285,8 +293,101 @@ export function createExchangeSyncService({
       }
       enriched.push({ ...trade, suggestion: suggestTradeInput(trade, { feeAssetPrice }), plans });
     }
-    const others = rows.filter((r) => r.status !== 'new');
-    return { days: clampDays(days), connections, counts, trades: enriched, resolved: others };
+    const others = tradeRows.filter((r) => r.status !== 'new');
+    const plans = await listPlans(userId);
+    counts.plans = plans.filter((p) => p.needsUpdate).length;
+    return { days: clampDays(days), connections, counts, trades: enriched, resolved: others, plans };
+  }
+
+  /**
+   * Exchange recurring plans with their WorthTrack link. needsUpdate: not ignored and either not
+   * linked yet or the linked recurring buy's totals differ from the exchange's.
+   */
+  async function listPlans(userId) {
+    const rows = await repo.listExchangePlans(userId);
+    const choicesCache = new Map();
+    const out = [];
+    for (const p of rows) {
+      const recurring = p.recurringId
+        ? { id: p.recurringId, name: p.recurringName, txDate: p.recurringTxDate, qty: p.recurringQty, invested: p.recurringInvested }
+        : null;
+      if (!choicesCache.has(p.targetAsset)) choicesCache.set(p.targetAsset, await repo.listRecurringPlans(userId, p.targetAsset));
+      out.push({
+        id: p.id,
+        exchange: p.exchange,
+        externalPlanId: p.externalPlanId,
+        name: p.name,
+        targetAsset: p.targetAsset,
+        sourceAsset: p.sourceAsset,
+        planStatus: p.planStatus,
+        totalQty: p.totalQty,
+        totalInvested: p.totalInvested,
+        firstExecutionDate: p.firstExecutionDate,
+        ignored: p.ignored,
+        linked: recurring,
+        needsUpdate: !p.ignored && planTotalsDiffer(p, recurring),
+        choices: choicesCache.get(p.targetAsset),
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Bring a WorthTrack recurring buy up to the exchange plan's totals.
+   * body: { recurringId } to use an existing recurring buy, or { create: true, name } for a new one;
+   * cashAccountId moves the difference in invested money (or the full amount for a new plan).
+   */
+  async function applyPlan(userId, id, body = {}) {
+    const plan = await repo.getExchangePlan(userId, id);
+    if (!plan) throw new ApiError('Plan not found.', 404);
+    if (!(plan.totalQty > 0) || !(plan.totalInvested > 0)) {
+      throw new ApiError('This plan has not bought anything yet.', 400, { code: 'empty_plan' });
+    }
+    const cashId = body.cashAccountId || null;
+    const recurringId = body.recurringId || plan.linkedTransactionId || null;
+    if (recurringId && !body.create) {
+      const recurring = await repo.getRecurringPlanById(userId, recurringId);
+      if (!recurring || recurring.symbol !== plan.targetAsset) throw new ApiError('Recurring buy not found.', 404);
+      const buy = parseRecurringBuyInput({
+        name: recurring.name,
+        txDate: recurring.txDate,
+        totalQty: plan.totalQty,
+        totalInvested: plan.totalInvested,
+        cashId,
+      });
+      try {
+        await finance.updateRecurringBuy({ userId, transactionId: recurring.id, buy });
+      } catch (error) {
+        throw new ApiError(error?.message || 'Could not update the recurring buy.', 400);
+      }
+      await repo.setExchangePlanLink(userId, id, recurring.id);
+      return { ok: true, recurringId: recurring.id, name: recurring.name, created: false };
+    }
+
+    const name = String(body.name || plan.name).trim().slice(0, 100) || plan.name;
+    const quote = SUPPORTED_QUOTES.includes(plan.sourceAsset) ? plan.sourceAsset : null;
+    await tradeService.ensureCryptoAsset(userId, plan.targetAsset, quote);
+    const buy = parseRecurringBuyInput({
+      name,
+      txDate: (plan.firstExecutionAt || new Date(now()).toISOString()).slice(0, 10),
+      totalQty: plan.totalQty,
+      totalInvested: plan.totalInvested,
+      cashId,
+    });
+    let created;
+    try {
+      created = await finance.createRecurringBuy({ userId, symbol: plan.targetAsset, buy });
+    } catch (error) {
+      throw new ApiError(error?.message || 'Could not create the recurring buy.', 400);
+    }
+    await repo.setExchangePlanLink(userId, id, created.id);
+    return { ok: true, recurringId: created.id, name, created: true };
+  }
+
+  async function ignorePlan(userId, id, ignored = true) {
+    const ok = await repo.setExchangePlanIgnored(userId, id, ignored);
+    if (!ok) throw new ApiError('Plan not found.', 404);
+    return { ok: true };
   }
 
   async function ignore(userId, id) {
@@ -364,5 +465,16 @@ export function createExchangeSyncService({
     }
   }
 
-  return { connect, disconnect, sync, listTrades, ignore, restore, add, listConnections: (u) => repo.listExchangeConnections(u) };
+  return {
+    connect,
+    disconnect,
+    sync,
+    listTrades,
+    ignore,
+    restore,
+    add,
+    applyPlan,
+    ignorePlan,
+    listConnections: (u) => repo.listExchangeConnections(u),
+  };
 }

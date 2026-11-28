@@ -241,3 +241,48 @@ export function matchRecordedTrades(trades, transactions) {
   }
   return matches;
 }
+
+/**
+ * Binance Auto-Invest plan data (probeAutoInvestPlans output) → one entry per plan and coin with
+ * the plan's running totals. Uses per-coin holdings when available (portfolio plans), else the
+ * plan list's totals (single-coin plans).
+ * @param {{ lists: object, holdings: object }} probe
+ * @param {Map<string,string>|Record<string,string>} [names] planId → plan name (from history items)
+ */
+export function normalizeBinanceAutoInvestPlans(probe, names = {}) {
+  const nameOf = (id) => (names instanceof Map ? names.get(String(id)) : names[String(id)]) || null;
+  const out = [];
+  for (const list of Object.values(probe?.lists || {})) {
+    for (const plan of Array.isArray(list?.plans) ? list.plans : []) {
+      const planId = String(plan.planId ?? '');
+      if (!planId) continue;
+      const holding = probe?.holdings?.[planId];
+      const details = Array.isArray(holding?.details) && holding.details.length > 0
+        ? holding.details.map((d) => ({ asset: d.targetAsset, qty: d.purchasedAmount, invested: d.totalInvestedInUSD }))
+        : [{ asset: plan.targetAsset, qty: plan.totalTargetAmount, invested: plan.totalInvestedInUSD }];
+      for (const d of details) {
+        const asset = String(d.asset || '').toUpperCase();
+        if (!asset) continue;
+        out.push({
+          exchange: 'binance',
+          externalPlanId: planId,
+          targetAsset: asset,
+          sourceAsset: String(plan.sourceAsset || 'USDT').toUpperCase(),
+          name: nameOf(planId) || `${asset} Auto-Invest #${planId}`,
+          planStatus: plan.status ? String(plan.status).toUpperCase() : null,
+          totalQty: round8(num(d.qty)),
+          totalInvested: Math.round(num(d.invested) * 1e6) / 1e6,
+          firstExecutionAt: num(plan.firstExecutionDateTime) > 0 ? iso(plan.firstExecutionDateTime) : null,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** True when a WorthTrack recurring buy's totals differ from the exchange plan's totals. */
+export function planTotalsDiffer(plan, recurring) {
+  if (!recurring) return true;
+  return Math.abs(num(plan.totalQty) - num(recurring.qty)) > 1e-8
+    || Math.abs(num(plan.totalInvested) - num(recurring.invested)) > 0.01;
+}

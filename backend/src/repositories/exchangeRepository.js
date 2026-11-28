@@ -49,6 +49,7 @@ export async function deleteExchangeConnection(userId, exchange) {
     [userId, exchange],
   );
   await query(`DELETE FROM exchange_trades WHERE user_id = $1 AND exchange = $2`, [userId, exchange]);
+  await query(`DELETE FROM exchange_plans WHERE user_id = $1 AND exchange = $2`, [userId, exchange]);
   return result.rowCount > 0;
 }
 
@@ -210,4 +211,100 @@ export async function listRecurringPlans(userId, symbol) {
     [userId, symbol],
   );
   return result.rows;
+}
+
+// --- Recurring plans (Auto-Invest) ------------------------------------------------------------
+
+const PLAN_COLUMNS = `id, exchange, external_plan_id AS "externalPlanId", target_asset AS "targetAsset",
+  source_asset AS "sourceAsset", name, plan_status AS "planStatus", total_qty::float8 AS "totalQty",
+  total_invested::float8 AS "totalInvested",
+  to_char(first_execution_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS "firstExecutionAt",
+  linked_transaction_id AS "linkedTransactionId", ignored`;
+
+/** Store the latest plan totals; the link and ignore choice are kept. */
+export async function upsertExchangePlans(userId, plans) {
+  for (const p of plans) {
+    await query(
+      `INSERT INTO exchange_plans
+         (user_id, exchange, external_plan_id, target_asset, source_asset, name, plan_status, total_qty,
+          total_invested, first_execution_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (user_id, exchange, external_plan_id, target_asset) DO UPDATE
+         SET source_asset = EXCLUDED.source_asset,
+             name = EXCLUDED.name,
+             plan_status = EXCLUDED.plan_status,
+             total_qty = EXCLUDED.total_qty,
+             total_invested = EXCLUDED.total_invested,
+             first_execution_at = EXCLUDED.first_execution_at,
+             updated_at = NOW()`,
+      [userId, p.exchange, p.externalPlanId, p.targetAsset, p.sourceAsset, p.name, p.planStatus, p.totalQty,
+        p.totalInvested, p.firstExecutionAt],
+    );
+  }
+}
+
+/** Plans with their linked WorthTrack recurring buy's current totals (null if unlinked or deleted). */
+export async function listExchangePlans(userId) {
+  const result = await query(
+    `SELECT e.id, e.exchange, e.external_plan_id AS "externalPlanId", e.target_asset AS "targetAsset",
+            e.source_asset AS "sourceAsset", e.name, e.plan_status AS "planStatus", e.total_qty::float8 AS "totalQty",
+            e.total_invested::float8 AS "totalInvested",
+            to_char(e.first_execution_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "firstExecutionDate",
+            e.linked_transaction_id AS "linkedTransactionId", e.ignored,
+            t.id AS "recurringId", t.notes AS "recurringName", to_char(t.tx_date, 'YYYY-MM-DD') AS "recurringTxDate",
+            t.qty::float8 AS "recurringQty", round(t.qty * t.avg_cost_per_unit, 6)::float8 AS "recurringInvested"
+     FROM exchange_plans e
+     LEFT JOIN portfolio_position_transactions t
+       ON t.id = e.linked_transaction_id AND t.user_id = e.user_id AND t.is_recurring = TRUE
+     WHERE e.user_id = $1
+     ORDER BY e.target_asset, e.name`,
+    [userId],
+  );
+  return result.rows;
+}
+
+export async function getExchangePlan(userId, id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return null;
+  const result = await query(`SELECT ${PLAN_COLUMNS} FROM exchange_plans WHERE user_id = $1 AND id = $2`, [userId, id]);
+  return result.rows[0] || null;
+}
+
+export async function setExchangePlanLink(userId, id, transactionId) {
+  await query(
+    `UPDATE exchange_plans SET linked_transaction_id = $3, ignored = FALSE, updated_at = NOW() WHERE user_id = $1 AND id = $2`,
+    [userId, id, transactionId],
+  );
+}
+
+export async function setExchangePlanIgnored(userId, id, ignored) {
+  const result = await query(
+    `UPDATE exchange_plans SET ignored = $3, updated_at = NOW() WHERE user_id = $1 AND id = $2`,
+    [userId, id, Boolean(ignored)],
+  );
+  return result.rowCount > 0;
+}
+
+/** planId → plan name, from Auto-Invest history items already fetched (the plan list has no names). */
+export async function listAutoInvestPlanNames(userId) {
+  const result = await query(
+    `SELECT DISTINCT ON (raw->>'planId') raw->>'planId' AS "planId", raw->>'planName' AS name
+     FROM exchange_trades
+     WHERE user_id = $1 AND source = 'auto_invest' AND raw ? 'planName'
+     ORDER BY raw->>'planId', executed_at DESC`,
+    [userId],
+  );
+  return new Map(result.rows.filter((r) => r.name).map((r) => [String(r.planId), r.name]));
+}
+
+/** One recurring-buy row by id (totals), or null. */
+export async function getRecurringPlanById(userId, id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) return null;
+  const result = await query(
+    `SELECT id, upper(symbol) AS symbol, notes AS name, to_char(tx_date, 'YYYY-MM-DD') AS "txDate",
+            qty::float8 AS qty, round(qty * avg_cost_per_unit, 6)::float8 AS invested
+     FROM portfolio_position_transactions
+     WHERE user_id = $1 AND id = $2 AND is_recurring = TRUE AND type = 'BUY'`,
+    [userId, id],
+  );
+  return result.rows[0] || null;
 }

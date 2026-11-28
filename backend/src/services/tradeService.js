@@ -260,5 +260,22 @@ export function createTradeService({ repo = financeRepo } = {}) {
     };
   }
 
-  return { recordTrade };
+  /**
+   * Make sure a crypto asset exists (0 initial holding if new). Returns true if it was created.
+   * Throws asset_type_mismatch if the symbol is held as a stock.
+   */
+  async function ensureCryptoAsset(userId, symbol, quoteCurrency = null) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    const existing = await repo.getPositionHolding(userId, sym);
+    if (existing) {
+      if (!isCryptoCategory(existing.category)) {
+        throw bad(`${sym} is held as a stock, not crypto.`, 'asset_type_mismatch');
+      }
+      return false;
+    }
+    await createAssetForBuy(userId, { assetType: 'crypto', symbol: sym, quoteCurrency });
+    return true;
+  }
+
+  return { recordTrade, ensureCryptoAsset };
 }

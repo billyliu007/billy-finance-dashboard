@@ -4,6 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { assertReadOnlyBinanceKey, createBinanceClient, signQuery } from '../src/lib/binanceClient.js';
 import {
   groupBinanceSpotFills,
+  normalizeBinanceAutoInvestPlans,
+  planTotalsDiffer,
   matchRecordedTrades,
   normalizeBinanceAsset,
   normalizeBinanceAutoInvest,
@@ -318,4 +320,97 @@ test('ignore and restore move a trade between lists', async () => {
   assert.equal(repo.trades[0].status, 'ignored');
   await svc.restore(USER, 'id-1');
   assert.equal(repo.trades[0].status, 'new');
+});
+
+// --- Recurring plans --------------------------------------------------------------------------
+
+const PROBE = {
+  lists: {
+    SINGLE: {
+      plans: [
+        { planId: 12485784, status: 'ONGOING', sourceAsset: 'USDT', targetAsset: 'BTC', totalTargetAmount: '0.09247879', totalInvestedInUSD: '6972.24028757', firstExecutionDateTime: 1789261995000 },
+        { planId: 9986769, status: 'PAUSED', sourceAsset: 'USDT', targetAsset: 'BTC', totalTargetAmount: '0.02937226', totalInvestedInUSD: '2490.76828572', firstExecutionDateTime: 1731373200000 },
+      ],
+    },
+    PORTFOLIO: {
+      plans: [{ planId: 55, status: 'ONGOING', sourceAsset: 'USDC', totalTargetAmount: '0', totalInvestedInUSD: '300' }],
+    },
+    INDEX: { plans: [] },
+  },
+  holdings: {
+    55: {
+      details: [
+        { targetAsset: 'BTC', purchasedAmount: '0.001', totalInvestedInUSD: '100' },
+        { targetAsset: 'ETH', purchasedAmount: '0.1', totalInvestedInUSD: '200' },
+      ],
+    },
+  },
+};
+
+test('Auto-Invest plans normalize to one entry per plan and coin, named from history', () => {
+  const plans = normalizeBinanceAutoInvestPlans(PROBE, new Map([['12485784', 'BTC Recurring Plan 202609']]));
+  assert.equal(plans.length, 4);
+  const active = plans.find((p) => p.externalPlanId === '12485784');
+  assert.deepEqual(
+    [active.name, active.targetAsset, active.totalQty, active.totalInvested, active.planStatus, active.firstExecutionAt.slice(0, 10)],
+    ['BTC Recurring Plan 202609', 'BTC', 0.09247879, 6972.240288, 'ONGOING', '2026-09-13'],
+  );
+  assert.equal(plans.find((p) => p.externalPlanId === '9986769').name, 'BTC Auto-Invest #9986769');
+  const portfolio = plans.filter((p) => p.externalPlanId === '55');
+  assert.deepEqual(portfolio.map((p) => [p.targetAsset, p.totalQty, p.totalInvested, p.sourceAsset]), [['BTC', 0.001, 100, 'USDC'], ['ETH', 0.1, 200, 'USDC']]);
+});
+
+test('planTotalsDiffer ignores rounding noise', () => {
+  assert.equal(planTotalsDiffer({ totalQty: 1, totalInvested: 100 }, null), true);
+  assert.equal(planTotalsDiffer({ totalQty: 1, totalInvested: 100 }, { qty: 1, invested: 100.004 }), false);
+  assert.equal(planTotalsDiffer({ totalQty: 1.1, totalInvested: 100 }, { qty: 1, invested: 100 }), true);
+});
+
+function planRepo({ linked = null } = {}) {
+  const plan = {
+    id: 'p-1', exchange: 'binance', externalPlanId: '12485784', name: 'BTC Recurring Plan 202609', targetAsset: 'BTC', sourceAsset: 'USDT',
+    totalQty: 0.09247879, totalInvested: 6972.240288, firstExecutionAt: '2026-09-13T01:13:15Z', linkedTransactionId: linked, ignored: false,
+  };
+  return {
+    plan,
+    getExchangePlan: async (_u, id) => (id === plan.id ? plan : null),
+    getRecurringPlanById: async (_u, id) => (id === 'r-1' ? { id: 'r-1', symbol: 'BTC', name: 'BTC DCA', txDate: '2026-09-13', qty: 0.09, invested: 6800 } : null),
+    setExchangePlanLink: async (_u, _id, txId) => { plan.linkedTransactionId = txId; },
+    setExchangePlanIgnored: async (_u, _id, v) => { plan.ignored = v; return true; },
+  };
+}
+
+test('apply to an existing recurring buy replaces its totals and links it', async () => {
+  const repo = planRepo();
+  const updates = [];
+  const finance = { updateRecurringBuy: async (a) => { updates.push(a); } };
+  const svc = createExchangeSyncService({ repo, finance, now: () => NOW });
+  const res = await svc.applyPlan(USER, 'p-1', { recurringId: 'r-1', cashAccountId: 'cash-1' });
+  assert.equal(res.created, false);
+  assert.equal(updates[0].transactionId, 'r-1');
+  assert.deepEqual([updates[0].buy.name, updates[0].buy.txDate, updates[0].buy.qty, updates[0].buy.totalInvested, updates[0].buy.cashId], ['BTC DCA', '2026-09-13', 0.09247879, 6972.240288, 'cash-1']);
+  assert.equal(repo.plan.linkedTransactionId, 'r-1');
+});
+
+test('apply with create makes a new recurring buy (asset created if needed) and links it', async () => {
+  const repo = planRepo();
+  const created = [];
+  const ensured = [];
+  const finance = { createRecurringBuy: async (a) => { created.push(a); return { id: 'r-new' }; } };
+  const trades = { ensureCryptoAsset: async (...a) => { ensured.push(a); return true; } };
+  const svc = createExchangeSyncService({ repo, finance, trades, now: () => NOW });
+  const res = await svc.applyPlan(USER, 'p-1', { create: true });
+  assert.deepEqual(ensured[0], [USER, 'BTC', 'USDT']);
+  assert.equal(created[0].symbol, 'BTC');
+  assert.deepEqual([created[0].buy.name, created[0].buy.txDate, created[0].buy.cashId], ['BTC Recurring Plan 202609', '2026-09-13', null]);
+  assert.equal(res.recurringId, 'r-new');
+  assert.equal(repo.plan.linkedTransactionId, 'r-new');
+});
+
+test('a linked plan updates its own recurring buy without asking again', async () => {
+  const repo = planRepo({ linked: 'r-1' });
+  const updates = [];
+  const svc = createExchangeSyncService({ repo, finance: { updateRecurringBuy: async (a) => updates.push(a) }, now: () => NOW });
+  await svc.applyPlan(USER, 'p-1', {});
+  assert.equal(updates[0].transactionId, 'r-1');
 });

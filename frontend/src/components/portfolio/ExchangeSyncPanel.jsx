@@ -193,6 +193,154 @@ function AddTradeModal({ trade, cashComponents, onClose, onAdded }) {
   );
 }
 
+/** Link an exchange recurring plan to a WorthTrack recurring buy and copy its latest totals. */
+function PlanUpdateModal({ plan, cashComponents, onClose, onDone }) {
+  const { t } = useLanguage();
+  const choices = plan.choices || [];
+  const sameName = choices.find((c) => String(c.name).toLowerCase() === String(plan.name).toLowerCase());
+  const [target, setTarget] = useState(plan.linked ? plan.linked.id : sameName ? sameName.id : 'new');
+  const [name, setName] = useState(plan.name);
+  const creating = target === 'new';
+  const current = creating ? null : plan.linked && plan.linked.id === target ? plan.linked : choices.find((c) => c.id === target);
+  const eligibleCash = useMemo(() => {
+    const list = (cashComponents || []).filter((c) => ['USDT', 'USDC'].includes(String(c?.currency || '').toUpperCase()));
+    const quote = String(plan.sourceAsset).toUpperCase();
+    return [...list].sort((a, b) => (String(b.currency).toUpperCase() === quote) - (String(a.currency).toUpperCase() === quote));
+  }, [cashComponents, plan.sourceAsset]);
+  // A new plan's full history usually predates the cash balance, so don't move cash unless asked.
+  const [cashId, setCashId] = useState(plan.linked && eligibleCash[0] ? String(eligibleCash[0].id) : '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const oldQty = current ? Number(current.qty) : 0;
+  const oldInvested = current ? Number(current.invested) : 0;
+  const cashMove = Number(plan.totalInvested) - oldInvested;
+  const cash = eligibleCash.find((c) => String(c.id) === cashId);
+
+  async function submit(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const body = creating ? { create: true, name } : { recurringId: target };
+      body.cashAccountId = cashId || null;
+      const result = await postJson(`/api/exchange/plans/${plan.id}/apply`, body);
+      onDone(result);
+    } catch (err) {
+      setError(err?.message || t('exchange.planFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return createPortal(
+    <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="exchange-plan-title">
+      <section className="modalCard">
+        <header className="modalHeader">
+          <h2 id="exchange-plan-title">↻ {plan.name}</h2>
+          <button type="button" className="modalCloseBtn" onClick={() => !saving && onClose()} aria-label={t('modals.close')}>
+            ✕
+          </button>
+        </header>
+        <form onSubmit={submit}>
+          <div className="modalBody">
+            {!plan.linked && (
+              <label className="modalLabel">
+                {t('exchange.planKeepUpdated', { asset: plan.targetAsset })}
+                <select className="modalInput" value={target} onChange={(e) => setTarget(e.target.value)}>
+                  {choices.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      ↻ {c.name}
+                    </option>
+                  ))}
+                  <option value="new">{t('exchange.planCreateNew')}</option>
+                </select>
+              </label>
+            )}
+            {creating && (
+              <label className="modalLabel">
+                {t('exchange.planName')}
+                <input className="modalInput" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required />
+              </label>
+            )}
+            <div className="exchangePlanCompare">
+              <div>
+                <span>{t('exchange.planBought')}</span>
+                <strong>
+                  {current ? `${fmtQty(oldQty)} → ` : ''}
+                  {fmtQty(plan.totalQty)} {plan.targetAsset}
+                </strong>
+              </div>
+              <div>
+                <span>{t('exchange.planInvested')}</span>
+                <strong>
+                  {current ? `${fmtMoney(oldInvested)} → ` : ''}
+                  {fmtMoney(plan.totalInvested)} {plan.sourceAsset}
+                </strong>
+              </div>
+              <div>
+                <span>{t('exchange.planAvgCost')}</span>
+                <strong>{fmtPrice(plan.totalQty ? plan.totalInvested / plan.totalQty : 0)}</strong>
+              </div>
+            </div>
+            <label className="modalLabel">
+              {cashMove >= 0 ? t('exchange.payFrom') : t('exchange.creditTo')}
+              <select className="modalInput" value={cashId} onChange={(e) => setCashId(e.target.value)}>
+                <option value="">{t('exchange.noCash')}</option>
+                {eligibleCash.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {String(c.currency).toUpperCase()} — {c.name}
+                    {Number.isFinite(Number(c.balance)) ? ` (${fmtMoney(c.balance)})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {cash && (
+              <p className="hintText">
+                {t('exchange.planCashMove', {
+                  amount: fmtMoney(Math.abs(cashMove)),
+                  currency: String(cash.currency).toUpperCase(),
+                  after: fmtMoney(Number(cash.balance) - cashMove),
+                })}
+              </p>
+            )}
+            <p className="hintText">{t('exchange.planHint')}</p>
+            {error && <p className="error" role="alert">{error}</p>}
+          </div>
+          <footer className="modalFooter">
+            <button type="button" className="modalBtn secondary" onClick={onClose} disabled={saving}>
+              {t('modals.cancel')}
+            </button>
+            <button type="submit" className="modalBtn" disabled={saving}>
+              {saving ? t('exchange.adding') : creating ? t('exchange.planCreate') : t('exchange.planUpdate')}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+function PlanSummary({ plan, t }) {
+  return (
+    <div>
+      <span className="exchangeSide buy">↻ {t('exchange.sourceAutoInvest')}</span> <strong>{plan.name}</strong>
+      <div className="exchangeTradeMeta">
+        Binance{plan.planStatus === 'PAUSED' ? ` · ${t('exchange.planPaused')}` : ''} · {fmtQty(plan.totalQty)} {plan.targetAsset} ·{' '}
+        {t('exchange.planInvestedShort', { amount: fmtMoney(plan.totalInvested), currency: plan.sourceAsset })}
+      </div>
+      <div className="exchangeTradeMeta">
+        {plan.ignored
+          ? t('exchange.planIgnored')
+          : plan.linked
+            ? t('exchange.planLinked', { name: plan.linked.name, qty: fmtQty(plan.linked.qty), amount: fmtMoney(plan.linked.invested) })
+            : t('exchange.planNotLinked')}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Holdings: checks connected exchanges (server limits this to once per 10 minutes), shows a
  * banner when trades from the last 7 days are not recorded, and lets the user add or ignore them.
@@ -208,6 +356,7 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
   const [reviewOpen, setReviewOpen] = useState(() => searchParams.get('review') === 'exchange');
   const [showResolved, setShowResolved] = useState(null); // null = auto (open when nothing is pending)
   const [adding, setAdding] = useState(null);
+  const [planEditing, setPlanEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
   const runSync = useCallback(async ({ force = false, windowDays = 7 } = {}) => {
@@ -258,16 +407,32 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
 
   if (!data || !data.connections?.length) return null;
   const pending = data.trades || [];
+  const plans = data.plans || [];
+  const pendingPlans = plans.filter((p) => p.needsUpdate);
+  const settledPlans = plans.filter((p) => !p.needsUpdate);
+  const attention = pending.length + pendingPlans.length;
   const resolved = data.resolved || [];
   const counts = data.counts || {};
   const syncError = (data.sync || []).find((r) => r.error);
-  const resolvedOpen = showResolved ?? pending.length === 0;
+  const resolvedOpen = showResolved ?? attention === 0;
 
   async function act(trade, action) {
     setBusyId(trade.id);
     try {
       await postJson(`/api/exchange/trades/${trade.id}/${action}`, {});
       if (action === 'ignore') showToast(t('exchange.ignoredToast'), { variant: 'success' });
+      await reload();
+    } catch (error) {
+      showToast(error?.message || t('exchange.actionFailed'), { variant: 'error' });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function planAction(plan, action) {
+    setBusyId(plan.id);
+    try {
+      await postJson(`/api/exchange/plans/${plan.id}/${action}`, {});
       await reload();
     } catch (error) {
       showToast(error?.message || t('exchange.actionFailed'), { variant: 'error' });
@@ -285,10 +450,17 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
   return (
     <>
       {(
-        <div className={`exchangeBanner ${pending.length > 0 ? '' : syncError ? 'isError' : 'isQuiet'}`}>
+        <div className={`exchangeBanner ${attention > 0 ? '' : syncError ? 'isError' : 'isQuiet'}`}>
           <span>
-            {pending.length > 0
-              ? t(pending.length === 1 ? 'exchange.bannerCountOne' : 'exchange.bannerCount', { count: pending.length, days: data.days })
+            {attention > 0
+              ? [
+                pending.length > 0
+                  ? t(pending.length === 1 ? 'exchange.bannerCountOne' : 'exchange.bannerCount', { count: pending.length, days: data.days })
+                  : null,
+                pendingPlans.length > 0
+                  ? t(pendingPlans.length === 1 ? 'exchange.bannerPlansOne' : 'exchange.bannerPlans', { count: pendingPlans.length })
+                  : null,
+              ].filter(Boolean).join(' · ')
               : syncError
                 ? t('exchange.bannerError', { message: syncError.error })
                 : t('exchange.bannerCaughtUp', { days: data.days, recorded: (counts.matched || 0) + (counts.added || 0) })}
@@ -304,14 +476,14 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
             >
               {checking ? '…' : '⟳'}
             </button>
-            <button type="button" className={`modalBtn ${pending.length > 0 ? '' : 'secondary'}`} onClick={() => setReviewOpen(true)}>
-              {pending.length > 0 ? t('exchange.review') : t('exchange.viewTrades')}
+            <button type="button" className={`modalBtn ${attention > 0 ? '' : 'secondary'}`} onClick={() => setReviewOpen(true)}>
+              {attention > 0 ? t('exchange.review') : t('exchange.viewTrades')}
             </button>
           </span>
         </div>
       )}
 
-      {reviewOpen && !adding && createPortal(
+      {reviewOpen && !adding && !planEditing && createPortal(
         <div className="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="exchange-review-title">
           <section className="modalCard modalCard--wide">
             <header className="modalHeader">
@@ -328,7 +500,28 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
                 </select>
                 {checking && <span className="settingsMuted">{t('exchange.checking')}</span>}
               </div>
-              {pending.length === 0 && <p className="settingsMuted">{t('exchange.allCaughtUp')}</p>}
+              {pendingPlans.length > 0 && (
+                <>
+                  <h3 className="exchangeSectionTitle">{t('exchange.plansTitle')}</h3>
+                  <ul className="exchangeTradeList">
+                    {pendingPlans.map((plan) => (
+                      <li key={plan.id} className="exchangeTradeRow">
+                        <PlanSummary plan={plan} t={t} />
+                        <span className="exchangeTradeActions">
+                          <button type="button" className="modalBtn secondary" onClick={() => planAction(plan, 'ignore')} disabled={busyId === plan.id}>
+                            {t('exchange.ignore')}
+                          </button>
+                          <button type="button" className="modalBtn" onClick={() => setPlanEditing(plan)} disabled={busyId === plan.id}>
+                            {plan.linked ? t('exchange.planUpdate') : t('exchange.planSetUp')}
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {pending.length > 0 && <h3 className="exchangeSectionTitle">{t('exchange.tradesTitle')}</h3>}
+                </>
+              )}
+              {attention === 0 && <p className="settingsMuted">{t('exchange.allCaughtUp')}</p>}
               <ul className="exchangeTradeList">
                 {pending.map((trade) => (
                   <li key={trade.id} className="exchangeTradeRow">
@@ -352,7 +545,7 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
                 <span className="settingsMuted">
                   {t('exchange.resolvedSummary', { recorded: (counts.matched || 0) + (counts.added || 0), ignored: counts.ignored || 0 })}
                 </span>
-                {resolved.length > 0 && (
+                {resolved.length + settledPlans.length > 0 && (
                   <button type="button" className="passkeyCancelBtn" onClick={() => setShowResolved(!resolvedOpen)}>
                     {resolvedOpen ? t('exchange.hide') : t('exchange.show')}
                   </button>
@@ -360,6 +553,21 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
               </div>
               {resolvedOpen && (
                 <ul className="exchangeTradeList isResolved">
+                  {settledPlans.map((plan) => (
+                    <li key={plan.id} className="exchangeTradeRow">
+                      <PlanSummary plan={plan} t={t} />
+                      <span className="exchangeTradeActions">
+                        <span className={`settingsBadge ${plan.ignored ? 'settingsBadgeRevoked' : 'settingsBadgeActive'}`}>
+                          {plan.ignored ? t('exchange.status.ignored') : t('exchange.planUpToDate')}
+                        </span>
+                        {plan.ignored && (
+                          <button type="button" className="passkeyCancelBtn" onClick={() => planAction(plan, 'restore')} disabled={busyId === plan.id}>
+                            {t('exchange.restore')}
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  ))}
                   {resolved.map((trade) => (
                     <li key={trade.id} className="exchangeTradeRow">
                       <TradeSummary trade={trade} t={t} locale={locale} />
@@ -381,6 +589,23 @@ export default function ExchangeSyncPanel({ cashComponents, onRecorded }) {
           </section>
         </div>,
         document.body,
+      )}
+
+      {planEditing && (
+        <PlanUpdateModal
+          plan={planEditing}
+          cashComponents={cashComponents}
+          onClose={() => setPlanEditing(null)}
+          onDone={async (result) => {
+            setPlanEditing(null);
+            showToast(
+              result?.created ? t('exchange.planCreatedToast', { name: result.name }) : t('exchange.planUpdatedToast', { name: result?.name }),
+              { variant: 'success' },
+            );
+            await reload();
+            onRecorded?.();
+          }}
+        />
       )}
 
       {adding && (

@@ -80,4 +80,25 @@ router.post(
   }),
 );
 
+router.post(
+  '/plans/:id/apply',
+  asyncHandler(async (req, res) => {
+    res.json(await service.applyPlan(req.auth.user.userId, req.params.id, req.body || {}));
+  }),
+);
+
+router.post(
+  '/plans/:id/ignore',
+  asyncHandler(async (req, res) => {
+    res.json(await service.ignorePlan(req.auth.user.userId, req.params.id, true));
+  }),
+);
+
+router.post(
+  '/plans/:id/restore',
+  asyncHandler(async (req, res) => {
+    res.json(await service.ignorePlan(req.auth.user.userId, req.params.id, false));
+  }),
+);
+
 export default router;

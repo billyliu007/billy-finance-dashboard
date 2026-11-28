@@ -3758,3 +3758,45 @@ tbody tr.cashSubtotalRow:hover td {
     justify-content: flex-end;
   }
 }
+
+.exchangeSectionTitle {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 8px 0 0;
+}
+
+.exchangePlanCompare {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+
+.exchangePlanCompare > div {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.exchangePlanCompare span {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.exchangePlanCompare strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .exchangePlanCompare {
+    grid-template-columns: 1fr;
+  }
+}
