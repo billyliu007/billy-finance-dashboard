@@ -111,6 +111,10 @@ export function createBinanceClient({
       if (Array.isArray(body)) return body;
       return Array.isArray(body?.list) ? body.list : [];
     },
+    /** Auto-Invest plans of one type ('SINGLE' | 'PORTFOLIO' | 'INDEX'), raw response. */
+    getAutoInvestPlans: (planType) => request('/sapi/v1/lending/auto-invest/plan/list', { planType }),
+    /** Holdings of one Auto-Invest plan (totals per coin), raw response. */
+    getAutoInvestPlanHoldings: (planId) => request('/sapi/v1/lending/auto-invest/plan/id', { planId }),
     /** Public last price for a pair, or null. */
     async getPrice(symbol) {
       try {

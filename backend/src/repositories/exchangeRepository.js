@@ -52,13 +52,14 @@ export async function deleteExchangeConnection(userId, exchange) {
   return result.rowCount > 0;
 }
 
-export async function markExchangeConnectionSynced(userId, exchange, { error = null } = {}) {
+export async function markExchangeConnectionSynced(userId, exchange, { error = null, details = null } = {}) {
   await query(
     `UPDATE exchange_connections
      SET last_synced_at = CASE WHEN $3::text IS NULL THEN NOW() ELSE last_synced_at END,
-         last_error = $3
+         last_error = $3,
+         last_sync_details = COALESCE($4::jsonb, last_sync_details)
      WHERE user_id = $1 AND exchange = $2`,
-    [userId, exchange, error],
+    [userId, exchange, error, details ? JSON.stringify(details) : null],
   );
 }
 

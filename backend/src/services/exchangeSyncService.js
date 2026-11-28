@@ -117,6 +117,35 @@ export async function fetchBinanceTrades(client, { sinceMs, nowMs, positionSymbo
   return { trades, warnings };
 }
 
+/**
+ * Raw Auto-Invest plan data (plan lists and per-plan holdings), kept with the connection so the
+ * response shape can be checked before plan totals are relied on. Errors are recorded, not thrown.
+ */
+export async function probeAutoInvestPlans(client) {
+  if (typeof client.getAutoInvestPlans !== 'function') return null;
+  const out = { lists: {}, holdings: {} };
+  const planIds = [];
+  for (const planType of ['SINGLE', 'PORTFOLIO', 'INDEX']) {
+    try {
+      const body = await client.getAutoInvestPlans(planType);
+      out.lists[planType] = body;
+      for (const p of Array.isArray(body?.plans) ? body.plans : []) {
+        if (p?.planId != null) planIds.push(p.planId);
+      }
+    } catch (error) {
+      out.lists[planType] = { error: error?.message || 'failed', code: error?.code || null };
+    }
+  }
+  for (const planId of planIds.slice(0, 10)) {
+    try {
+      out.holdings[planId] = await client.getAutoInvestPlanHoldings(planId);
+    } catch (error) {
+      out.holdings[planId] = { error: error?.message || 'failed', code: error?.code || null };
+    }
+  }
+  return out;
+}
+
 function lastFour(value) {
   const s = String(value || '');
   return s.length <= 4 ? s : s.slice(-4);
@@ -211,7 +240,8 @@ export function createExchangeSyncService({
         const cryptoSymbols = positions.filter((p) => /crypto/i.test(String(p.category || ''))).map((p) => p.symbol);
         const { trades, warnings } = await fetchBinanceTrades(client, { sinceMs, nowMs, positionSymbols: cryptoSymbols });
         const inserted = await repo.upsertExchangeTrades(userId, trades);
-        await repo.markExchangeConnectionSynced(userId, conn.exchange);
+        const autoInvestPlans = await probeAutoInvestPlans(client);
+        await repo.markExchangeConnectionSynced(userId, conn.exchange, { details: { warnings, autoInvestPlans } });
         results.push({ exchange: conn.exchange, fetched: trades.length, inserted, warnings });
       } catch (error) {
         const message = error instanceof ExchangeError ? error.message : 'Could not check this exchange.';
