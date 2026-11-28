@@ -360,9 +360,19 @@ test('Auto-Invest plans normalize to one entry per plan and coin, named from his
   assert.deepEqual(portfolio.map((p) => [p.targetAsset, p.totalQty, p.totalInvested, p.sourceAsset]), [['BTC', 0.001, 100, 'USDC'], ['ETH', 0.1, 200, 'USDC']]);
 });
 
+test('USDT plan totals reported in USD are converted back to USDT', () => {
+  const plans = normalizeBinanceAutoInvestPlans(PROBE, {}, { usdPerSource: { USDT: 1.00075056 } });
+  const active = plans.find((p) => p.externalPlanId === '12485784');
+  assert.ok(Math.abs(active.totalInvested - 6967.0111) < 0.001); // matches the Binance app's 6,967.01110735
+  assert.ok(Math.abs(active.totalInvested / active.totalQty - 75336.31) < 0.01);
+  assert.equal(plans.find((p) => p.externalPlanId === '55' && p.targetAsset === 'ETH').totalInvested, 200); // USDC plan unchanged
+});
+
 test('planTotalsDiffer ignores rounding noise', () => {
   assert.equal(planTotalsDiffer({ totalQty: 1, totalInvested: 100 }, null), true);
   assert.equal(planTotalsDiffer({ totalQty: 1, totalInvested: 100 }, { qty: 1, invested: 100.004 }), false);
+  assert.equal(planTotalsDiffer({ totalQty: 1, totalInvested: 6967.01 }, { qty: 1, invested: 6967.5 }), false); // rate drift
+  assert.equal(planTotalsDiffer({ totalQty: 1, totalInvested: 6967.01 }, { qty: 1, invested: 6972.24 }), true);
   assert.equal(planTotalsDiffer({ totalQty: 1.1, totalInvested: 100 }, { qty: 1, invested: 100 }), true);
 });
 

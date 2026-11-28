@@ -248,8 +248,11 @@ export function matchRecordedTrades(trades, transactions) {
  * plan list's totals (single-coin plans).
  * @param {{ lists: object, holdings: object }} probe
  * @param {Map<string,string>|Record<string,string>} [names] planId → plan name (from history items)
+ * @param {{ usdPerSource?: Record<string, number> }} [opts] Binance reports invested amounts "in USD",
+ *   converted from the plan's source coin at the current rate (USDT: × USDCUSDT price). Dividing by
+ *   that rate gives the amount in the source coin, which is what the Binance app shows.
  */
-export function normalizeBinanceAutoInvestPlans(probe, names = {}) {
+export function normalizeBinanceAutoInvestPlans(probe, names = {}, { usdPerSource = {} } = {}) {
   const nameOf = (id) => (names instanceof Map ? names.get(String(id)) : names[String(id)]) || null;
   const out = [];
   for (const list of Object.values(probe?.lists || {})) {
@@ -271,7 +274,7 @@ export function normalizeBinanceAutoInvestPlans(probe, names = {}) {
           name: nameOf(planId) || `${asset} Auto-Invest #${planId}`,
           planStatus: plan.status ? String(plan.status).toUpperCase() : null,
           totalQty: round8(num(d.qty)),
-          totalInvested: Math.round(num(d.invested) * 1e6) / 1e6,
+          totalInvested: Math.round((num(d.invested) / (usdPerSource[String(plan.sourceAsset || 'USDT').toUpperCase()] || 1)) * 1e6) / 1e6,
           firstExecutionAt: num(plan.firstExecutionDateTime) > 0 ? iso(plan.firstExecutionDateTime) : null,
         });
       }
@@ -283,6 +286,9 @@ export function normalizeBinanceAutoInvestPlans(probe, names = {}) {
 /** True when a WorthTrack recurring buy's totals differ from the exchange plan's totals. */
 export function planTotalsDiffer(plan, recurring) {
   if (!recurring) return true;
+  // The invested amount drifts slightly with the stablecoin rate between checks, so only a change
+  // above 0.05% counts on its own; a new purchase always changes the quantity.
+  const invested = num(plan.totalInvested);
   return Math.abs(num(plan.totalQty) - num(recurring.qty)) > 1e-8
-    || Math.abs(num(plan.totalInvested) - num(recurring.invested)) > 0.01;
+    || Math.abs(invested - num(recurring.invested)) > Math.max(0.01, invested * 0.0005);
 }

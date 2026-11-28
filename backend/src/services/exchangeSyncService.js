@@ -245,7 +245,11 @@ export function createExchangeSyncService({
         const autoInvestPlans = await probeAutoInvestPlans(client);
         if (autoInvestPlans) {
           const names = await repo.listAutoInvestPlanNames(userId);
-          await repo.upsertExchangePlans(userId, normalizeBinanceAutoInvestPlans(autoInvestPlans, names));
+          // Binance's "InUSD" totals for USDT plans are USDT × USDCUSDT; convert back to USDT.
+          const usdcUsdt = typeof client.getPrice === 'function' ? await client.getPrice('USDCUSDT') : null;
+          const usdPerSource = usdcUsdt ? { USDT: usdcUsdt } : {};
+          autoInvestPlans.usdPerSource = usdPerSource;
+          await repo.upsertExchangePlans(userId, normalizeBinanceAutoInvestPlans(autoInvestPlans, names, { usdPerSource }));
         }
         await repo.markExchangeConnectionSynced(userId, conn.exchange, { details: { warnings, autoInvestPlans } });
         results.push({ exchange: conn.exchange, fetched: trades.length, inserted, warnings });
